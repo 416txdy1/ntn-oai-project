@@ -1,0 +1,37 @@
+# Build and runtime output
+cmake_targets/
+build/
+*.o
+*.a
+*.so
+__pycache__/
+*.pyc
+.venv/
+
+# Secrets and private runtime configuration
+.env
+*.secret
+*.key
+*.pem
+ue.local.conf
+ue.local.conf.*
+processes.json
+
+# Generated traces and large runtime logs
+stk_trace.csv
+stk_trace.json
+*.log
+*-dynamic-*.txt
+*-static-*.txt
+bridge-udp-speed-test.json
+
+# Docker data and local exports
+mysql-data/
+volumes/
+*.sql.gz
+
+# Editor/OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
