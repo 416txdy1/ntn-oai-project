@@ -1,0 +1,10 @@
+# External source repositories used by the local experiment
+oai.openairinterface5g.path=/home/kayoko/OAI/openairinterface5g
+oai.openairinterface5g.commit=c4125d1c74
+oai.openairinterface5g.upstream=https://gitlab.eurecom.fr/oai/openairinterface5g.git
+oai-cn5g-fed.path=/home/kayoko/oai-cn5g-fed
+oai-cn5g-fed.commit=212f92f
+oai-cn5g-fed.upstream=https://gitlab.eurecom.fr/oai/cn5g/oai-cn5g-fed.git
+
+# Apply the project-specific changes from oai_patch/ or the documented patch
+# workflow after checking the target source commit. Never commit credentials.
