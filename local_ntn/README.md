@@ -116,7 +116,7 @@ sudo python3 local_ntn/validate_dynamic.py
 
 动态验证结束不会自动停止 gNB/UE，可继续观察直到扫描失效/轨迹结束；最后执行 `experiment.py stop`。再次启动前也先停止。`stop` 只向记录且启动时间匹配的进程组发送 SIGTERM，避免 `pkill -f` 误杀其他实验。
 
-iperf 客户端和服务器均使用本机 `/usr/bin/iperf3`（3.9）；服务器仅进入 ext-DN 容器的**网络**命名空间，仍走相同数据网路径，测试后退出。原容器的 3.1.3 与客户端组合曾给出不可信抖动，未继续采用那组抖动结果。
+iperf 客户端和服务器使用同一个宿主机可见的 `iperf3`；服务器仅进入 ext-DN 容器的**网络**命名空间，仍走相同数据网路径，测试后退出。默认从 `PATH` 查找，也可用 `OAI_IPERF3_BIN` 和 `OAI_IPERF3_LIBRARY_PATH` 指定二进制及动态库。注意 `nsenter -n` 不会进入容器根文件系统，不能假设容器内的 `/usr/bin/iperf3` 在宿主机也存在。
 
 ### 4. 若想分窗口手动启动
 
