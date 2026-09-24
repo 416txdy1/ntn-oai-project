@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from paths import OAI_REPO
 
 def run(args):
     p=subprocess.run(args,text=True,capture_output=True)
@@ -16,7 +17,7 @@ def sql(q):
                 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -N -B "$MYSQL_DATABASE" -e "$1"',
                 'audit',q])
 
-conf=Path(sys.argv[1] if len(sys.argv)>1 else '/home/kayoko/OAI/openairinterface5g/ci-scripts/conf_files/nrue.uicc.ntn-leo.conf').read_text()
+conf=Path(sys.argv[1] if len(sys.argv)>1 else OAI_REPO/'ci-scripts/conf_files/nrue.uicc.ntn-leo.conf').read_text()
 conf=re.sub(r'#[^\n]*','',conf)
 fields={k.lower():v for k,v in re.findall(r'([A-Za-z0-9_]+)\s*=\s*"([^"\n]*)"',conf)}
 safe={k:v for k,v in fields.items() if k in ('imsi','dnn','nssai_sst','nssai_sd')}

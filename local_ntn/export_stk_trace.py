@@ -25,7 +25,11 @@ def main():
     p.add_argument('--out',type=Path,default=Path(__file__).with_name('stk_trace.csv'))
     a=p.parse_args()
     if a.stop<=a.start or a.step<=0: p.error('invalid interval')
-    desktop=STKDesktop.AttachToApplication(); r=desktop.Root; r.Isolate()
+    try:
+        desktop=STKDesktop.AttachToApplication()
+    except Exception as exc:
+        raise SystemExit('Cannot attach to STK 12. Open the target scenario and run Python at the same permission level as STK. Details: '+str(exc)) from None
+    r=desktop.Root; r.Isolate()
     for dim,unit in [('FrequencyUnit','Hz'),('PowerUnit','dBW'),('BitsUnit','b'),
                      ('TimeUnit','sec'),('BandwidthUnit','Hz'),('DistanceUnit','m'),
                      ('DateFormat','EpSec'),('AngleUnit','deg'),('RatioUnit','dB')]:
