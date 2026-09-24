@@ -15,8 +15,11 @@ while time.monotonic()<deadline:
     time.sleep(.25)
 else:
     cmd('status');raise SystemExit('No dynamic PDU within 35 wall seconds')
+failures=[]
 for action,extra_args in [('ping',[]),('iperf',[]),('iperf-dl',['--reverse'])]:
     with (b/f'{action}-dynamic-{args.tag}.txt').open('w') as f:
         p=cmd('ping' if action=='ping' else 'iperf',*extra_args,stdout=f,stderr=subprocess.STDOUT,timeout=50)
     print(action,'exit',p.returncode,flush=True)
+    if p.returncode:failures.append(action)
 cmd('status')
+if failures:raise SystemExit('Dynamic validation failed: '+', '.join(failures))

@@ -21,13 +21,26 @@ bool update_channel_model_from_stk(channel_desc_t *c,int n,uint64_t t){return fa
 static double energy(cf_t *s,int n){double e=0;for(int i=0;i<n;i++)e+=s[i].r*s[i].r+s[i].i*s[i].i;return e/n;}
 int main(int argc,char **argv)
 {
-  assert(argc==2);setenv("OAI_STK_TRACE",argv[1],1);setenv("OAI_STK_TRACE_NOISE","1",1);
+  assert(argc==2);
+  bool legacy=strcmp(argv[1],"--legacy")==0;
+  if(!legacy){setenv("OAI_STK_TRACE",argv[1],1);setenv("OAI_STK_TRACE_NOISE","1",1);}
   struct complexd tap={.r=1,.i=0};struct complexd *taps[]={&tap};float phase=0;
   channel_desc_t ch={.nb_tx=1,.nb_rx=1,.channel_length=1,.ch=taps,.Doppler_phase_cur=&phase,
     .sampling_rate=7680000,.modelid=SAT_LEO_TRANS,.center_freq=2488400000,
     .enable_dynamic_delay=true,.enable_dynamic_Doppler=true};
   enum {N=1024};c16_t in[N];cf_t out[N];c16_t *inputs[]={in};
   for(int i=0;i<N;i++)in[i]=(c16_t){.r=1000,.i=2000};
+  if(legacy) {
+#ifdef OAI_HAS_LEGACY_STK
+    ch.stk_n=1;ch.stk_visible=0;memset(out,0,sizeof(out));rxAddInput(inputs,out,0,&ch,N);
+    assert(energy(out,N)==0);
+    ch.stk_visible=1;memset(out,0,sizeof(out));rxAddInput(inputs,out,0,&ch,N);
+    assert(fabs(energy(out,N)/5000000.-1)<1e-6);
+    printf("PASS preserved legacy SAT_LEO_STK IQ visibility gate\n");return 0;
+#else
+    fprintf(stderr,"Legacy test requested on a source tree without SAT_LEO_STK\n");return 2;
+#endif
+  }
   update_channel_model(&ch,N,0);memset(out,0,sizeof(out));rxAddInput(inputs,out,0,&ch,N);
   double e0=energy(out,N);assert(fabs(e0/5000000.-1)<1e-6);
   int delay0=ch.channel_offset;
