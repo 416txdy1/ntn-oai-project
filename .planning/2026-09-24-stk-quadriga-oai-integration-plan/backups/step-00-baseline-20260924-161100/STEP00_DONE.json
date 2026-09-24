@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "completed_at": "2026-09-24T16:14:17.4015531+08:00",
+  "project_commit": "33c13d687e266d69a9246e84b88eeebc0fa2301d",
+  "oai_commit": "c4125d1c740181ab1f7da0e7dd1d04ed07c37670",
+  "regression_exit_code": 0,
+  "backup_root": "E:\\jingwenpeng\\2026autumn\\ntn-oai-project\\.planning\\2026-09-24-stk-quadriga-oai-integration-plan\\backups\\step-00-baseline-20260924-161100"
+}

@@ -1,0 +1,6 @@
+Rollback scope: files listed in baseline-manifest.json only.
+Stop gNB and UE before restoring runtime source files.
+Review every destination before copying; do not restore the whole OAI tree.
+Project backup root: E:\jingwenpeng\2026autumn\ntn-oai-project\.planning\2026-09-24-stk-quadriga-oai-integration-plan\backups\step-00-baseline-20260924-161100\project
+OAI backup root: E:\jingwenpeng\2026autumn\ntn-oai-project\.planning\2026-09-24-stk-quadriga-oai-integration-plan\backups\step-00-baseline-20260924-161100\oai
+No UE credential file, database content, raw UE log, build output, or private key is included.

@@ -1,10 +1,18 @@
 # External source repositories used by the local experiment
-oai.openairinterface5g.path=/home/kayoko/OAI/openairinterface5g
-oai.openairinterface5g.commit=c4125d1c74
+oai.openairinterface5g.path=/home/duyaya/OAI/openairinterface5g
+oai.openairinterface5g.commit=219576f68c
+oai.openairinterface5g.base_commit=c4125d1c740181ab1f7da0e7dd1d04ed07c37670
+oai.openairinterface5g.branch=zky
 oai.openairinterface5g.upstream=https://gitlab.eurecom.fr/oai/openairinterface5g.git
-oai-cn5g-fed.path=/home/kayoko/oai-cn5g-fed
+oai-cn5g-fed.path=/home/duyaya/OAI/oai-cn5g-fed
 oai-cn5g-fed.commit=212f92f
 oai-cn5g-fed.upstream=https://gitlab.eurecom.fr/oai/cn5g/oai-cn5g-fed.git
 
 # Apply the project-specific changes from oai_patch/ or the documented patch
 # workflow after checking the target source commit. Never commit credentials.
+
+# 2026-09-23 local runtime: existing containers, not the older fed compose.
+runtime.5gc.compose=/home/duyaya/OAI/openairinterface5g/doc/tutorial_resources/oai-cn5g/docker-compose.yaml
+runtime.5gc.image_version=v2.2.1
+runtime.5gc.mysql_image=mysql:9.6
+runtime.local_debug_notes=local_ntn/DEBUG-2026-09-23.md
