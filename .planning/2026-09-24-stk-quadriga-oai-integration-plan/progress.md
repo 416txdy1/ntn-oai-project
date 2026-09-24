@@ -36,3 +36,43 @@
 - Copied 14 verified STK/RFsim integration source files from the Step 0 backup and rechecked every SHA256 value.
 - OAI `zky` commit: `219576f68c` (`rfsimulator: preserve STK trace integration baseline`).
 - Excluded UE/core-network configuration, credentials, raw logs, build output, generated STK data, and complete backup source copies.
+
+## Session: 2026-09-24 - Step 1
+
+### Current Status
+- **Phase:** Step 1 complete - awaiting user review before Step 2
+
+### Actions Taken
+- Started read-only discovery in a visible PowerShell window.
+- Confirmed the project currently provides `test_trace.c`, `test_trace_validation.c`, and `test_real_iq.c`; there is no `test_stk_trace.c`.
+
+### Errors
+| Error | Resolution |
+|-------|------------|
+| An existing `STEP01_DISCOVERY_DONE.json` reported missing `local_ntn/test_stk_trace.c` | The marker belonged to an older script run; preserved it for audit and changed the current script to a unique completion marker before rerunning |
+| The saved internal apply-patch executable path no longer existed after a desktop update | Located the current executable and did not retry the stale path |
+| The first multi-file patch used a phase status line without its Markdown list marker | Re-read the current plan and applied a targeted patch matching the actual `- **Status:**` line |
+| Windows PowerShell exited without writing the new discovery marker | Used the current PowerShell 7 runtime and explicit `-NoExit -Command`; the visible rerun succeeded |
+
+### Files Added
+- `quadriga/README.md`: STK/QuaDRiGa responsibility boundary, formula, binary layout and timing rules.
+- `quadriga/schema/channel_bundle_v1.schema.json`: QDCHANNEL1 manifest schema.
+- `quadriga/tools/create_example_bundle.py`: deterministic SISO two-path example generator.
+- `quadriga/tools/validate_bundle.py`: dependency-free streaming validator.
+- `quadriga/tests/test_validate_bundle.py`: valid bundle, checksum, time ordering, path traversal and residual-gain tests.
+- `quadriga/examples/siso_two_path/`: generated reference manifest and four small binary arrays.
+
+### Verification Results
+| Command | Result |
+|---------|--------|
+| `python -m quadriga.tools.create_example_bundle quadriga/examples/siso_two_path` | PASS |
+| `python -m quadriga.tools.validate_bundle quadriga/examples/siso_two_path` | PASS; 3 snapshots, SISO, 2 paths, 0-0.002 s |
+| `python -m unittest -v quadriga.tests.test_validate_bundle` | PASS; 5 tests in 0.073 s |
+| `python -m json.tool quadriga/schema/channel_bundle_v1.schema.json` | PASS |
+| `python -m py_compile ...` | PASS |
+| `wsl.exe -d Ubuntu-22.04 -- bash -lc "cd /mnt/e/jingwenpeng/2026autumn/ntn-oai-project && GIT_PAGER=cat bash local_ntn/run_regressions.sh"` | PASS; exit 0 |
+| `git diff --check` | PASS; exit 0 |
+
+### Impact
+- No OAI source, RFsim behavior, STKTRACE2 parser, runtime configuration or experiment result was changed.
+- No new Python or system dependency was added.

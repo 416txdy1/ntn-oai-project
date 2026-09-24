@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
-本仓库的 NTN 实验入口：[local_ntn/README.md](local_ntn/README.md)。当前机器的运行方法、修复和验证记录：[2026-09-23 本地调试](local_ntn/DEBUG-2026-09-23.md)。下方保留上游 OAI 说明，不代表本仓库包含完整 OAI 源码。
+本仓库的 NTN 实验入口：[local_ntn/README.md](local_ntn/README.md)。STK 与 QuaDRiGa 的离线信道接口见 [quadriga/README.md](quadriga/README.md)。当前机器的运行方法、修复和验证记录：[2026-09-23 本地调试](local_ntn/DEBUG-2026-09-23.md)。下方保留上游 OAI 说明，不代表本仓库包含完整 OAI 源码。
 
 <h1 align="center">
     <a href="https://lfnetworking.org/projects/duranta/"><img src="https://raw.githubusercontent.com/duranta-project/governance/main/logos/Duranta-OAI-Combined.png" alt="Duranta OAI" width="550"></a>

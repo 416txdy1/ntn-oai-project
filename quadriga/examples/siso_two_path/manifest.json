@@ -1,0 +1,69 @@
+{
+  "format": "QDCHANNEL1",
+  "schema_version": 1,
+  "byte_order": "little",
+  "axes": [
+    "snapshot",
+    "rx",
+    "tx",
+    "path"
+  ],
+  "dimensions": {
+    "snapshots": 3,
+    "rx_antennas": 1,
+    "tx_antennas": 1,
+    "paths": 2
+  },
+  "radio": {
+    "center_frequency_hz": 2000000000.0
+  },
+  "time": {
+    "coordinate": "stk_trace_seconds",
+    "interpolation": "linear_complex_and_delay",
+    "out_of_range": "mute"
+  },
+  "composition": {
+    "bulk_delay_source": "STKTRACE2",
+    "bulk_doppler_source": "STKTRACE2",
+    "absolute_gain_source": "STKTRACE2",
+    "quadriga_delay": "relative_excess_seconds",
+    "quadriga_coefficients": "unit_snapshot_link_power",
+    "quadriga_large_scale_gain": "zero_mean_residual_db"
+  },
+  "provenance": {
+    "quadriga_version": "2.8.1",
+    "scenario": "deterministic_siso_two_path_example",
+    "random_seed": 20260924,
+    "stk_trace_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "files": {
+    "times": {
+      "path": "times.f64",
+      "dtype": "float64",
+      "count": 3,
+      "bytes": 24,
+      "sha256": "e4568f6e04f9c1d30a591198ca5e71ec0daa14a5f6c29867b0e4abfbf45d70e6"
+    },
+    "delays": {
+      "path": "delays.f64",
+      "dtype": "float64",
+      "count": 6,
+      "bytes": 48,
+      "sha256": "958cb00d55d0f39757fab26baeb5ca1a42defc6247627699859ddb60644be34a"
+    },
+    "coefficients": {
+      "path": "coefficients.cf32",
+      "dtype": "complex64_interleaved",
+      "count": 6,
+      "bytes": 48,
+      "sha256": "95697aa54349eeeae929e075aa3967fecc79a291c90e094e32057bd8d8b2b25a"
+    },
+    "residual_gain_db": {
+      "path": "residual_gain_db.f32",
+      "dtype": "float32",
+      "count": 3,
+      "bytes": 12,
+      "sha256": "12b85868e8464beb56aaa7815ae25417dce05bc6c3e8ab685d70ec6946df0bad"
+    }
+  }
+}
