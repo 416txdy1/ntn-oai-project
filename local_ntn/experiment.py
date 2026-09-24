@@ -1,6 +1,7 @@
 """Local experiment controller, run in WSL as root. Only stops its own recorded PIDs."""
-import argparse,json,os,re,signal,socket,subprocess,sys,time
+import argparse,json,math,os,re,shutil,signal,socket,subprocess,sys,time
 from pathlib import Path
+from paths import OAI_REPO, UE_CONFIG
 BASE=Path(__file__).resolve().parent
 STATE=BASE/'processes.json'
 p=argparse.ArgumentParser();p.add_argument('action',choices=['start','stop','status','ping','iperf'])
@@ -28,6 +29,12 @@ if a.action=='stop':
                 except ProcessLookupError:pass
 elif a.action=='start':
     if not re.fullmatch(r'[a-zA-Z0-9_-]+',a.label):p.error('invalid label')
+    if not math.isfinite(a.rate) or not 0 <= a.rate <= 1:p.error('--rate must be between 0 and 1')
+    required=[BASE/'stk_trace.csv',UE_CONFIG]
+    required += [OAI_REPO/'cmake_targets/ran_build/build'/n for n in ('nr-softmodem','nr-uesoftmodem','librfsimulator.so')]
+    missing=[str(path) for path in required if not path.is_file()]
+    if missing:raise SystemExit('Missing prerequisites:\n  '+'\n  '.join(missing)+'\nExport the STK trace, provision the private UE config, and build OAI before start.')
+    if os.geteuid()!=0:raise SystemExit('start requires root: use sudo python3 local_ntn/experiment.py start')
     if subprocess.run(['pgrep','-x','nr-softmodem'],stdout=subprocess.DEVNULL).returncode==0:
         raise SystemExit('gNB already running; use stop for this controller or stop your manual process')
     if subprocess.run(['pgrep','-x','nr-uesoftmodem'],stdout=subprocess.DEVNULL).returncode==0:
@@ -56,7 +63,10 @@ elif a.action=='status':
     if STATE.exists():
         for kind,v in json.loads(STATE.read_text()).items():
             print(kind,'alive=',v['start'] is not None and identity(v['pid'])==v['start']);safe_tail(v['log'])
-    call(['ip','-n','oai-stk-ue','-br','addr'])
+    if Path('/run/netns/oai-stk-ue').exists():
+        call(['ip','-n','oai-stk-ue','-br','addr'])
+    else:
+        print('UE namespace is not present. Keep a WSL terminal open, then start the experiment to create it.')
 else:
     call(['python3',str(BASE/'verify_network.py')])
     ns=['ip','netns','exec','oai-stk-ue']
@@ -66,16 +76,23 @@ else:
     print('UE source',addr,'destination ext-DN 192.168.70.135; through oaitun_ue1',flush=True)
     if a.action=='ping':call(ns+['ping','-n','-I','oaitun_ue1','-c','10','-W','5','192.168.70.135'])
     else:
-        # Same binary/version at both ends; enter only ext-DN's network namespace.
-        # This keeps the same data path without changing its old Ubuntu image.
+        # nsenter -n only changes the network namespace, not the container rootfs.
+        # Resolve one host-visible binary and use it at both ends so versions match.
+        iperf_bin=os.environ.get('OAI_IPERF3_BIN') or shutil.which('iperf3')
+        if not iperf_bin:
+            raise SystemExit('iperf3 not found; install it or export OAI_IPERF3_BIN to a host-visible executable')
+        iperf_prefix=[]
+        if library_path:=os.environ.get('OAI_IPERF3_LIBRARY_PATH'):
+            iperf_prefix=['env','LD_LIBRARY_PATH='+library_path]
+        iperf=iperf_prefix+[iperf_bin]
         container=json.loads(subprocess.check_output(['docker','inspect','oai-ext-dn']))[0]
         pid=container['State']['Pid']
-        server=subprocess.Popen(['nsenter','-t',str(pid),'-n','/usr/bin/iperf3','-s','-1','-p','5203'],
+        server=subprocess.Popen(['nsenter','-t',str(pid),'-n']+iperf+['-s','-1','-p','5203'],
             stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
         try:
             time.sleep(.3)
             if server.poll() is not None:raise RuntimeError(server.stderr.read().decode())
-            call(ns+['iperf3','-c','192.168.70.135','-p','5203','-B',addr,'-u','-b','100K','-t','15','-i','5']
+            call(ns+iperf+['-c','192.168.70.135','-p','5203','-B',addr,'-u','-b','100K','-t','15','-i','5']
                  +(['-R'] if a.reverse else []))
         finally:
             if server.poll() is None:server.terminate()

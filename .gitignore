@@ -16,6 +16,8 @@ __pycache__/
 ue.local.conf
 ue.local.conf.*
 processes.json
+gnb.local.conf
+initial_delay_ms.txt
 
 # Generated traces and large runtime logs
 stk_trace.csv
