@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import cmath
-import math
 import unittest
 
 from quadriga.tools.channel_math import ecef_to_enu, normalize_channel
@@ -27,7 +26,7 @@ class ChannelMathTest(unittest.TestCase):
         self.assertAlmostEqual(first_ratio.real, second_ratio.real, places=12)
         self.assertAlmostEqual(first_ratio.imag, second_ratio.imag, places=12)
 
-    def test_power_delay_and_residual_gain_contract(self) -> None:
+    def test_power_delay_and_no_duplicate_large_scale_gain_contract(self) -> None:
         result = normalize_channel(
             [2 + 0j, 1 + 0j, 4 + 0j, 2 + 0j],
             [3.0, 3.25, 8.0, 8.25],
@@ -41,12 +40,7 @@ class ChannelMathTest(unittest.TestCase):
                 sum(abs(value) ** 2 for value in result.coefficients[start : start + 2]), 1.0
             )
         self.assertEqual(result.excess_delays_s, (0.0, 0.25, 0.0, 0.25))
-        self.assertAlmostEqual(sum(result.residual_gain_db) / 2, 0.0, places=12)
-        self.assertAlmostEqual(
-            result.residual_gain_db[1] - result.residual_gain_db[0],
-            10 * math.log10(4),
-            places=12,
-        )
+        self.assertEqual(result.residual_gain_db, (0.0, 0.0))
 
     def test_zero_power_link_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "没有激活路径"):

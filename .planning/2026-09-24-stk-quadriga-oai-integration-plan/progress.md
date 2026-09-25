@@ -144,3 +144,33 @@
 - Deterministic downlink repeat and reciprocal uplink both validated at 1387 snapshots, SISO, 11 paths, t=7614..9000 s. All four binary SHA256 values match the original downlink export.
 - Final verification passed: 11 Python unit tests, py_compile, JSON schema parsing, generated example validation, isolated WSL trace/IQ regressions, and main-worktree git diff --check.
 - Runtime validation evidence is stored in step02-runtime-direction-final-check.txt and step02-runtime-full-regression.txt; generated channel bundles remain untracked.
+
+## Session: 2026-09-25 - Step 2A Link-Budget Audit
+
+### Current Status
+- **Phase:** Auditing path-loss, delay, Doppler, and gain composition for duplicate deterministic effects
+
+### Scope
+- Verify every stage numerically before OAI integration.
+- Treat STK bulk delay, Doppler, and absolute gain as authoritative.
+- Test whether QuaDRiGa residual gain still contains range-dependent free-space path-loss variation.
+- Correct the exporter and contract if duplicate deterministic loss is detected.
+
+### Baseline Audit Result
+- Duplicate range loss is confirmed, not merely suspected: the current residual gain follows free-space variation with slope 0.995961.
+- Adding it to STK power increases the free-space slope from 1.203847 to 2.199808.
+- Investigating direct QuaDRiGa shadow-fading output before selecting the correction.
+
+### Correction and Runtime Check
+- Production residual_gain_db is now fixed at 0 dB; normalized multipath coefficients and relative delays are unchanged.
+- Added audit_link_budget.py plus positive and duplicate-loss negative unit tests.
+- Python audit/unit suite passes 13 tests.
+- Old real bundle is rejected as expected; regenerated real downlink and uplink both pass QDCHANNEL1 validation and the link-budget audit.
+- Saved complete real audit metrics in step02a-real-audit-reports.txt.
+
+### Final Verification
+- All 13 Python tests pass, including the positive audit path and duplicate-loss rejection case.
+- The old real downlink bundle is rejected as a negative control; regenerated downlink and uplink bundles both pass validation and link-budget audit.
+- Regenerated downlink and uplink binary payload SHA256 values match; only direction metadata differs.
+- Isolated WSL trace parser, IQ regression, visibility gate, setup/config, Python syntax, Bash syntax, and git diff checks all pass.
+- Full regression evidence is stored in step02a-full-regression.txt; the isolated WSL verification directory was /tmp/ntn-oai-step02a-audit-20260925-134544.

@@ -60,6 +60,20 @@
 - The full 1387-snapshot export succeeds. QuaDRiGa emits a sampling-theorem warning because the STK geometry grid is 1 second at 2 GHz; STK bulk Doppler remains separate, but fast residual multipath Doppler is under-sampled.
 - Cross-language JSON requires MATLAB manifest integer fields to use an integer MATLAB type; a numerically integral double may be encoded with an exponent and parsed as a JSON float.
 - QuaDRiGa NTN scenarios use the canonical satellite-Tx/ground-Rx orientation. For the current SISO exporter, uplink uses channel reciprocity and changes only the manifest direction plus STK uplink validity/link-budget inputs; a later MIMO implementation must transpose Rx/Tx antenna dimensions explicitly.
+- Step 2A baseline confirms STKTRACE2 columns 17/18 are absolute downlink/uplink received power in dBW, while columns 19/20 are C/N and 21/22 are validity flags.
+- Exported complex taps are normalized independently at every snapshot, so their summed power is one and they cannot carry absolute path loss into RFsim.
+- The current residual_gain_db is raw QuaDRiGa total coefficient power minus its time mean. Zero mean alone does not prove independence from satellite-range free-space loss; the real bundle spans -3.308 to +3.828 dB with 1.362 dB standard deviation and requires correlation/decomposition auditing.
+- The real-data audit confirms duplication: QuaDRiGa residual gain versus relative free-space gain has correlation 0.899117 and regression slope 0.995961. STK downlink power already has slope 1.203847 versus the same free-space term, while STK plus the current residual has slope 2.199808.
+- Subtracting the relative free-space term from the current QuaDRiGa residual reduces its standard deviation from 1.361673 dB to 0.596035 dB and its free-space correlation to -0.008330, confirming that most of the previous residual trend was deterministic range loss.
+- QuaDRiGa 2.8.1 internally distinguishes the large-scale shadow-fading parameter sf from scenario path gain. The next audit action is to inspect the generated qd_channel.par fields and use an explicit stochastic component if it is preserved at channel output.
+- Runtime inspection shows channel.par.pg is a 1-by-1387 per-snapshot path-gain series, while sf_parset is only one scalar (-0.478372 dB) for the current single segment. The channel object does not provide an independent per-snapshot shadow-fading series that can safely replace total path gain.
+- Step 2A correction policy: keep the QDCHANNEL1 v1 residual_gain_db file for compatibility but write 0 dB from the production exporter. This preserves normalized QuaDRiGa multipath while ensuring STK remains the sole large-scale absolute-gain source.
+- A dedicated audit tool will enforce time alignment, trace provenance, per-snapshot unit tap power, zero-reference excess delay, common-phase stabilization, zero production residual, and unchanged STK-to-FSPL slope after composition.
+- The new audit negative control rejects the pre-fix real downlink bundle because its residual_gain_db is non-zero and range-correlated.
+- MATLAB R2023b/QuaDRiGa 2.8.1 regenerated both real downlink and reciprocal uplink with the corrected normalization; both pass the existing bundle validator and the new link-budget audit.
+- Corrected real bundles have zero time misalignment, maximum tap-power error 6.08131e-08, zero excess-delay reference error, and maximum common-phase error 1.87766e-08 rad.
+- The corrected residual gain is exactly 0 dB; its FSPL slope/correlation are zero, and composition leaves the STK FSPL slope unchanged at 1.203847 for both directions.
+- Audited STK geometry gives 6.219-10.739 ms one-way service-link delay and approximately -33.77 to +26.98 kHz bulk Doppler at 2 GHz.
 
 ## Resources
 - .planning/2026-09-24-stk-quadriga-oai-integration-plan/backups/step-00-baseline-20260924-161100

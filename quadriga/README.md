@@ -112,8 +112,18 @@ QuaDRiGa NTN 场景始终以卫星为 Tx、地面 UE 为 Rx 建模。当前 SISO
 ```powershell
 python -m quadriga.tools.create_example_bundle quadriga/examples/siso_two_path
 python -m quadriga.tools.validate_bundle quadriga/examples/siso_two_path
-python -m unittest quadriga.tests.test_validate_bundle quadriga.tests.test_channel_math
+python -m unittest quadriga.tests.test_validate_bundle quadriga.tests.test_channel_math quadriga.tests.test_audit_link_budget
 ```
+
+生产导出器将 `residual_gain_db` 写为 0 dB。原因是 QuaDRiGa 总系数功率包含随卫星距离变化的 path gain，而 STKTRACE2 已提供绝对接收功率；简单减去时间均值仍会重复计算动态路径损耗。归一化多径系数、相对路径功率、K-factor 和超额时延仍由 QuaDRiGa 提供。
+
+真实 bundle 必须额外执行链路预算审计：
+
+```powershell
+python -m quadriga.tools.audit_link_budget path/to/qd_bundle path/to/stk_trace.csv
+```
+
+审计器会检查 STK provenance、时间对齐、逐快照单位多径功率、零参考超额时延、公共相位稳定、残余增益与 FSPL 的斜率，以及合成前后 STK 路径损耗斜率是否保持不变。
 
 `tools/channel_math.py` 是与 MATLAB 归一化公式一致的 Python 标准库参考实现，用于在没有 MATLAB/Octave 的机器上验证公共相位去除、功率/时延契约与 ENU 坐标方向。它不代替真实 QuaDRiGa 运行。后续步骤将实现 OAI C/C++ 读取器。
 

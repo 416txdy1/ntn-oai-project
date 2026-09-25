@@ -4,10 +4,10 @@
 Integrate QuaDRiGa into the existing deterministic STK-to-RFsim architecture one reversible, verified step at a time.
 
 ## Next Step
-Await user review before starting Step 3 OAI/RFsim bundle-reader integration.
+Await user review before starting the OAI/RFsim bundle reader.
 
 ## Current Phase
-Step 2 runtime continuation complete
+Step 2A link-budget audit complete
 
 ## Phases
 
@@ -45,6 +45,14 @@ Step 2 runtime continuation complete
 - [x] Commit a reversible runtime-validated checkpoint
 - **Status:** complete
 
+### Phase 7: Step 2A Link-Budget and Duplicate-Impairment Audit
+- [x] Map every STK and QuaDRiGa output quantity to the final channel equation
+- [x] Numerically compare STK gain, geometric FSPL, QuaDRiGa raw power variation, and residual gain
+- [x] Remove or isolate any duplicated deterministic path-loss component
+- [x] Add automated audit tests and regenerate real runtime bundles
+- [x] Run all regressions and prepare a reversible audit checkpoint
+- **Status:** complete
+
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
@@ -56,6 +64,7 @@ Step 2 runtime continuation complete
 | Step 1 changes only the offline interface contract and project skeleton | Keep RFsim behavior unchanged until the exported QuaDRiGa data format is independently validated |
 | Step 2 first separated runtime-independent conversion from the QuaDRiGa API call | This allowed format/math verification before the runtime was supplied; MATLAB R2023b and QuaDRiGa 2.8.1-0 have now validated the same interface end to end |
 | Keep the canonical satellite-Tx/ground-Rx NTN orientation for both directions | The current SISO uplink uses channel reciprocity and a distinct manifest direction; future MIMO support must transpose antenna dimensions explicitly |
+| Disable production residual large-scale gain until shadow fading is independently available per snapshot | QuaDRiGa total path gain duplicates STK range loss; the current channel exposes only a scalar sf_parset for the single segment, so zero dB is the only unambiguous non-duplicating value |
 
 ## Errors Encountered
 | Error | Resolution |

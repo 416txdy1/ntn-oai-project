@@ -26,7 +26,7 @@ def normalize_channel(
     paths: int,
     relative_power_epsilon: float = 1e-12,
 ) -> NormalizedChannel:
-    """去除公共相位、归一化路径功率并提取零均值残余增益。
+    """去除公共相位、归一化路径功率并禁用重复大尺度增益。
 
     QuaDRiGa 的每个快照包含绝对路径功率和公共传播相位。STKTRACE2 已经
     提供绝对增益与主体 Doppler，因此这里用每个天线链路的最早激活路径
@@ -42,6 +42,8 @@ def normalize_channel(
 
     normalized = [0j] * expected
     excess_delays = [0.0] * expected
+    # STKTRACE2 是绝对链路增益的唯一来源。QuaDRiGa 总系数功率包含
+    # 距离相关路径损耗，不能通过简单减均值后再次叠加。
     gain_db = [0.0] * (snapshots * rx_antennas * tx_antennas)
     phase_reference: list[complex | None] = [None] * (rx_antennas * tx_antennas)
 
@@ -84,17 +86,6 @@ def normalize_channel(
                 for path, value in enumerate(group):
                     normalized[start + path] = value * rotation / scale
                     excess_delays[start + path] = max(0.0, group_delays[path] - earliest_delay)
-                gain_db[link] = 10.0 * math.log10(total_power)
-
-    for rx in range(rx_antennas):
-        for tx in range(tx_antennas):
-            indices = [
-                (snapshot * rx_antennas + rx) * tx_antennas + tx
-                for snapshot in range(snapshots)
-            ]
-            mean_gain = sum(gain_db[index] for index in indices) / snapshots
-            for index in indices:
-                gain_db[index] -= mean_gain
 
     return NormalizedChannel(tuple(normalized), tuple(excess_delays), tuple(gain_db))
 
