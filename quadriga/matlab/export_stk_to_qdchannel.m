@@ -42,18 +42,18 @@ end
 reference_ecef_m = trace.ue_ecef_m(:, 1);
 satellite_enu_m = ecef_to_enu_track(trace.satellite_ecef_m, reference_ecef_m);
 ue_enu_m = ecef_to_enu_track(trace.ue_ecef_m, reference_ecef_m);
+% QuaDRiGa NTN 场景按卫星 Tx、地面 Rx 的规范方向生成。当前为 SISO，
+% uplink bundle 使用该物理信道的互易表示；STK 仍分别提供 UL/DL 绝对项。
+tx_positions_m = satellite_enu_m;
+rx_positions_m = ue_enu_m;
 if strcmp(options.link_direction, 'downlink')
-    tx_positions_m = satellite_enu_m;
-    rx_positions_m = ue_enu_m;
     visibility = trace.dl_valid;
     tx_name = 'STK satellite downlink';
     rx_name = 'STK UE downlink';
 else
-    tx_positions_m = ue_enu_m;
-    rx_positions_m = satellite_enu_m;
     visibility = trace.ul_valid;
-    tx_name = 'STK UE uplink';
-    rx_name = 'STK satellite uplink';
+    tx_name = 'STK satellite reciprocal uplink reference';
+    rx_name = 'STK UE reciprocal uplink reference';
 end
 if ~any(visibility)
     error('QDCHANNEL1:Visibility', '所选方向在 STKTRACE2 中没有任何可见快照');
@@ -69,8 +69,9 @@ layout.no_tx = 1;
 layout.no_rx = 1;
 layout.tx_array = qd_arrayant('omni');
 layout.rx_array = qd_arrayant('omni');
-layout.tx_track = make_track(tx_positions_m, tx_name);
-layout.rx_track = make_track(rx_positions_m, rx_name);
+relative_times_s = trace.times_s - trace.times_s(1);
+layout.tx_track = make_track(tx_positions_m, relative_times_s, tx_name);
+layout.rx_track = make_track(rx_positions_m, relative_times_s, rx_name);
 layout.update_rate = update_rate_s;
 layout.set_scenario(options.scenario);
 
@@ -100,12 +101,21 @@ manifest_path = write_qdchannel1( ...
 end
 
 
-function track = make_track(positions_m, name)
+function track = make_track(positions_m, relative_times_s, name)
 % 使用非零占位长度创建对象，随后以 STK 的完整轨迹覆盖 positions。
 track = qd_track('linear', 1, 0);
 track.name = name;
 track.initial_position = positions_m(:, 1);
-track.positions = positions_m - positions_m(:, 1);
+relative_positions_m = positions_m - positions_m(:, 1);
+segment_lengths_m = sqrt(sum(diff(relative_positions_m, 1, 2).^2, 1));
+cumulative_distance_m = [0, cumsum(segment_lengths_m)];
+if cumulative_distance_m(end) <= 1e-9
+    % 静止端只保留一个点；get_channels 会按另一端的仿真时长自动展开。
+    track.positions = zeros(3, 1);
+else
+    track.positions = relative_positions_m;
+    track.movement_profile = [relative_times_s(:).'; cumulative_distance_m];
+end
 end
 
 

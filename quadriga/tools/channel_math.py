@@ -24,7 +24,7 @@ def normalize_channel(
     rx_antennas: int,
     tx_antennas: int,
     paths: int,
-    active_power_epsilon: float = 1e-15,
+    relative_power_epsilon: float = 1e-12,
 ) -> NormalizedChannel:
     """去除公共相位、归一化路径功率并提取零均值残余增益。
 
@@ -60,9 +60,14 @@ def normalize_channel(
 
                 powers = [abs(value) ** 2 for value in group]
                 total_power = sum(powers)
-                if not math.isfinite(total_power) or total_power <= active_power_epsilon:
+                if not math.isfinite(total_power) or total_power <= 0.0:
                     raise ValueError(f"link {link} 没有激活路径")
-                active = [index for index, power in enumerate(powers) if power > active_power_epsilon]
+                peak_power = max(powers)
+                active = [
+                    index
+                    for index, power in enumerate(powers)
+                    if power > peak_power * relative_power_epsilon
+                ]
                 earliest_delay = min(group_delays[index] for index in active)
                 candidates = [
                     index

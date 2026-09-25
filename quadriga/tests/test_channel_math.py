@@ -59,6 +59,21 @@ class ChannelMathTest(unittest.TestCase):
                 paths=2,
             )
 
+    def test_low_absolute_ntn_power_is_normalized(self) -> None:
+        result = normalize_channel(
+            [1e-10 + 0j, 0.5e-10j, 2e-10 + 0j, 1e-10j],
+            [1.0, 1.2, 2.0, 2.2],
+            snapshots=2,
+            rx_antennas=1,
+            tx_antennas=1,
+            paths=2,
+        )
+        for start in (0, 2):
+            self.assertAlmostEqual(
+                sum(abs(value) ** 2 for value in result.coefficients[start : start + 2]),
+                1.0,
+            )
+
     def test_ecef_to_enu_axes_at_equator(self) -> None:
         reference = (6_378_137.0, 0.0, 0.0)
         east, north, up = ecef_to_enu((6_378_139.0, 1.0, 3.0), reference)

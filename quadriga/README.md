@@ -101,6 +101,10 @@ options.random_seed = 20260925;
 export_stk_to_qdchannel('path/to/stk_trace.csv', 'path/to/qd_downlink', options);
 ```
 
+QuaDRiGa NTN 场景始终以卫星为 Tx、地面 UE 为 Rx 建模。当前 SISO uplink 使用窄带信道互易性复用同一物理多径，并在 manifest 中标记 `link_direction=uplink`；未来扩展 MIMO 时必须显式转置 Rx/Tx 天线维度。
+
+该入口已使用 MATLAB R2023b 与 QuaDRiGa 2.8.1-0 对 1387 个真实 STK 快照完成运行时验证。1 秒 STK 几何网格在 2 GHz 下会触发 QuaDRiGa 的采样定理警告：它可验证离线格式与批量几何演化，但不足以还原毫秒尺度的残余多径 Doppler。主体传播时延、绝对增益和卫星 Doppler 仍由 STK 数据驱动。
+
 当前入口有意限制为一个卫星—UE SISO service link，并为上下行分别生成 bundle。`quadriga_path` 必须显式提供，不会静默下载或安装 QuaDRiGa。STK 不可见区间仍生成时间对齐的快照，但后续由 STKTRACE2 可见性标志静音。
 
 ## 校验命令

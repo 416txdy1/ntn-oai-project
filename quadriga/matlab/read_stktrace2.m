@@ -20,9 +20,14 @@ while ~feof(fid)
     if isempty(line)
         continue;
     end
+    if isempty(magic) && strcmp(line, 'STKTRACE2')
+        magic = line;
+        continue;
+    end
     if startsWith(line, '#')
-        if isempty(magic)
-            magic = strtrim(line(2:end));
+        comment = strtrim(line(2:end));
+        if isempty(magic) && strcmp(comment, 'STKTRACE2')
+            magic = comment;
         end
         continue;
     end
@@ -51,6 +56,6 @@ trace.times_s = rows(:, 1);
 trace.satellite_ecef_m = rows(:, 2:4).';
 trace.gnb_ecef_m = rows(:, 11:13).';
 trace.ue_ecef_m = rows(:, 14:16).';
-trace.ul_valid = logical(rows(:, 21));
-trace.dl_valid = logical(rows(:, 22));
+trace.dl_valid = logical(rows(:, 21));
+trace.ul_valid = logical(rows(:, 22));
 end

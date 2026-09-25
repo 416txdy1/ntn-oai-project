@@ -24,7 +24,7 @@ rx_count = size(coefficients, 1);
 tx_count = size(coefficients, 2);
 path_count = size(coefficients, 3);
 snapshot_count = size(coefficients, 4);
-epsilon = 1e-15;
+relative_power_epsilon = 1e-12;
 normalized = complex(zeros(size(coefficients)), zeros(size(coefficients)));
 excess_delays_s = zeros(size(delays_s));
 raw_gain_db = zeros(rx_count, tx_count, snapshot_count);
@@ -38,10 +38,11 @@ for snapshot = 1:snapshot_count
             group_delays = reshape(delays_s(rx, tx, :, snapshot), [path_count, 1]);
             powers = abs(group).^2;
             total_power = sum(powers);
-            if ~isfinite(total_power) || total_power <= epsilon
+            if ~isfinite(total_power) || total_power <= 0
                 error('QDCHANNEL1:InactiveLink', '快照 %d 的 Rx %d/Tx %d 没有激活路径', snapshot, rx, tx);
             end
-            active = powers > epsilon;
+            % NTN 绝对路径功率可能远小于 1e-15，激活判断必须相对峰值进行。
+            active = powers > max(powers) * relative_power_epsilon;
             earliest_delay = min(group_delays(active));
             candidates = find(active & abs(group_delays - earliest_delay) <= 1e-15);
             [~, strongest] = max(powers(candidates));

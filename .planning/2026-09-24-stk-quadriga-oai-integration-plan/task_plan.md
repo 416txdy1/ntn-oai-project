@@ -4,10 +4,10 @@
 Integrate QuaDRiGa into the existing deterministic STK-to-RFsim architecture one reversible, verified step at a time.
 
 ## Next Step
-Stop after Step 2 delivery and wait for user confirmation before starting the OAI reader/integration step.
+Await user review before starting Step 3 OAI/RFsim bundle-reader integration.
 
 ## Current Phase
-Step 2 complete - awaiting user review before Step 3
+Step 2 runtime continuation complete
 
 ## Phases
 
@@ -37,6 +37,14 @@ Step 2 complete - awaiting user review before Step 3
 - [x] Deliver Step 2 checkpoint
 - **Status:** complete
 
+### Phase 6: Step 2 Runtime Validation
+- [x] Locate and fingerprint the supplied MATLAB/QuaDRiGa runtime
+- [x] Execute a real STKTRACE2-to-QDCHANNEL1 export
+- [x] Fix runtime/API mismatches without starting OAI integration
+- [x] Validate the generated bundle and all regressions
+- [x] Commit a reversible runtime-validated checkpoint
+- **Status:** complete
+
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
@@ -46,7 +54,8 @@ Step 2 complete - awaiting user review before Step 3
 | Step 0 backup is the rollback point | It contains selected project/OAI sources, SHA256 values, commits, manifest, restore notes, transcript, and full regression output |
 | Preserve the verified baseline on `zky` after explicit user authorization | OAI integration sources and project provenance are committed separately, while credentials, raw logs, generated STK data, and complete backup copies remain excluded |
 | Step 1 changes only the offline interface contract and project skeleton | Keep RFsim behavior unchanged until the exported QuaDRiGa data format is independently validated |
-| Step 2 separates runtime-independent conversion from the QuaDRiGa API call | This machine has no MATLAB/Octave or configured QuaDRiGa path, so format/math can be fully tested without pretending that a real QuaDRiGa run occurred |
+| Step 2 first separated runtime-independent conversion from the QuaDRiGa API call | This allowed format/math verification before the runtime was supplied; MATLAB R2023b and QuaDRiGa 2.8.1-0 have now validated the same interface end to end |
+| Keep the canonical satellite-Tx/ground-Rx NTN orientation for both directions | The current SISO uplink uses channel reciprocity and a distinct manifest direction; future MIMO support must transpose antenna dimensions explicitly |
 
 ## Errors Encountered
 | Error | Resolution |
@@ -56,3 +65,4 @@ Step 2 complete - awaiting user review before Step 3
 | First Step 1 completion check read a stale marker from an older discovery script | Preserve the stale marker for audit, use `STEP01_CONTRACT_DISCOVERY_DONE.json`, and rerun the verified script in a visible terminal |
 | Windows PowerShell launch did not produce the unique Step 1 marker | Switched to the current PowerShell 7 runtime with explicit `-NoExit -Command`; discovery then completed successfully |
 | WSL could not enter the project through `/mnt/e` during Step 2 verification | Copied only `local_ntn/` to a unique WSL `/tmp` directory, ran the unchanged regression script there, and separately ran `git diff --check` in the main project |
+| Initial direction/hash assertion used a nonexistent top-level `link_direction` field | Corrected the check to `radio.link_direction`; all four binary hashes matched for original downlink, repeated downlink, and reciprocal uplink |

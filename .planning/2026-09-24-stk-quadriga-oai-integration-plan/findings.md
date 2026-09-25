@@ -22,6 +22,10 @@
 - Official dual-mobility tutorial uses `qd_layout.tx_track`, `qd_layout.rx_track`, identical snapshot counts, `layout.update_rate`, and `layout.get_channels`; transmitter and receiver tracks must be aligned on the same time grid.
 - Official NTN calibration uses `qd_satellite`, `init_tracks`, satellite antenna orientation and 3GPP TR 38.821 scenarios, confirming that arbitrary STK ECEF samples should enter through explicit tracks rather than a terrestrial fixed-BS shortcut.
 - QuaDRiGa dual-mobility output contains both bulk motion Doppler and multipath Doppler. Because STK remains authoritative for satellite bulk Doppler, the Step 2 adapter must document and isolate residual phase handling instead of blindly stacking both frequency shifts.
+- Runtime-continuation discovery did not find the newly supplied MATLAB/QuaDRiGa files under the Windows project root or on the Windows PATH; the external WSL/OAI root and standard installation locations still need inspection.
+- The user-supplied shortcut resolves to MATLAB R2023b at C:\Program Files\MATLAB\R2023b\bin\matlab.exe; the executable exists.
+- The supplied QuaDRiGa 2.8.1-0 root contains the qd_layout and qd_simulation_parameters class sources.
+- Real STKTRACE2 files use a bare STKTRACE2 magic line and columns 21/22 are dl_valid,ul_valid; the first exporter parser version expected a commented magic line and reversed those flags.
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -45,6 +49,17 @@
 | A stale Step 1 marker referenced `local_ntn/test_stk_trace.c` | Actual trace tests are `test_trace.c` and `test_trace_validation.c`; current discovery uses a unique result marker |
 | Windows PowerShell argument passing did not execute the updated discovery script reliably | PowerShell 7 with explicit `-NoExit -Command` produced the expected unique marker and transcript |
 | The WSL instance returned `Bad file descriptor` for `/mnt/e` | Ran the unchanged regression suite from an isolated `/tmp` copy and checked the main project diff separately |
+| The first direction/hash assertion addressed `link_direction` at the manifest root | QDCHANNEL1 stores it at `radio.link_direction`; correcting the field path proved all downlink-repeat/uplink binary hashes are identical |
+
+- Runtime issue resolved: the MATLAB parser now accepts the real magic line and maps downlink/uplink validity to columns 21/22 respectively.
+- MATLAB R2023b reports version 23.2.0.2365128 and parses stk_constellation_trace_blend.csv into 1387 snapshots from t=7614 s through t=9000 s.
+- QuaDRiGa 2.8.1 accepts the configured NTN scenario and starts channel generation, but get_channels rejects tracks that have positions without a movement profile.
+- QuaDRiGa 2.8.1 defines movement_profile as a 2-by-N time-versus-distance matrix; dual-mobility Tx/Rx tracks must share the same end time, and layout.update_rate controls the output time grid.
+- Full QuaDRiGa generation now completes, but an absolute coefficient-power epsilon is invalid for NTN path loss because valid satellite coefficients can have total power below 1e-15.
+- A relative-to-peak path activation threshold preserves valid low-power NTN coefficients while still excluding numerically zero paths.
+- The full 1387-snapshot export succeeds. QuaDRiGa emits a sampling-theorem warning because the STK geometry grid is 1 second at 2 GHz; STK bulk Doppler remains separate, but fast residual multipath Doppler is under-sampled.
+- Cross-language JSON requires MATLAB manifest integer fields to use an integer MATLAB type; a numerically integral double may be encoded with an exponent and parsed as a JSON float.
+- QuaDRiGa NTN scenarios use the canonical satellite-Tx/ground-Rx orientation. For the current SISO exporter, uplink uses channel reciprocity and changes only the manifest direction plus STK uplink validity/link-budget inputs; a later MIMO implementation must transpose Rx/Tx antenna dimensions explicitly.
 
 ## Resources
 - .planning/2026-09-24-stk-quadriga-oai-integration-plan/backups/step-00-baseline-20260924-161100

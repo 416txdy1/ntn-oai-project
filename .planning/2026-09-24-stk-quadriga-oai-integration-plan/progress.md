@@ -116,3 +116,31 @@
 ### Verification Environment Issue
 - Direct WSL access to `/mnt/e` returned `Bad file descriptor` twice.
 - The unchanged `local_ntn/` directory was copied to `/tmp/ntn-oai-step02-regression-20260925-1105` for isolated regression execution; it is not part of the project or commit.
+
+## Session: 2026-09-25 - Step 2 Runtime Continuation
+
+### Current Status
+- **Phase:** Locating user-supplied MATLAB and QuaDRiGa runtime
+
+### Discovery
+- The active plan remains `2026-09-24-stk-quadriga-oai-integration-plan`.
+- The Windows project root and `quadriga/` tree do not currently contain `matlab.exe`, `octave*.exe`, `qd_layout.m`, or `qd_simulation_parameters.m`.
+- MATLAB/Octave is not currently resolved from the Windows PATH.
+- Next search scope is the external WSL/OAI source root and standard MATLAB installation directories.
+- User-provided paths were verified: MATLAB R2023b and QuaDRiGa 2.8.1-0 sources both exist.
+- Compared the real STKTRACE2 header with the MATLAB parser and found a magic-line mismatch plus reversed DL/UL validity columns; the parser was corrected before the first runtime attempt.
+- MATLAB R2023b successfully parsed the real blend trace as 1387 snapshots with 1387 valid DL and UL rows.
+- The first parser-check command failed only because its expected count was incorrectly set to 1386; the file has two non-data lines plus 1387 data rows, so the assertion will be corrected and rerun.
+- The corrected MATLAB parser test passed for all 1387 real snapshots.
+- The first full QuaDRiGa export reached qd_layout.get_channels but failed with Each track must have a movement profile; the STK position assignment needs the QuaDRiGa 2.8.1 movement-profile API.
+- Local QuaDRiGa source/tutorial review established the fix: attach relative STK time and cumulative 3-D track distance as a 2-by-N movement profile for both Tx and Rx tracks.
+- After the movement-profile fix, QuaDRiGa generated the full 1387-snapshot NTN channel in about 4 seconds.
+- Normalization then rejected snapshot 1 because the absolute active-path threshold 1e-15 is too high for satellite path powers; the threshold must be relative to each link snapshot.
+- Replaced the absolute activity threshold with a per-snapshot relative-to-peak threshold and added a low-absolute-power NTN regression test; all 11 Python tests pass.
+- MATLAB and QuaDRiGa then completed the full 1387-snapshot downlink export and wrote a QDCHANNEL1 manifest plus four binary arrays.
+- QuaDRiGa warned that the 1-second track grid does not satisfy the 2 GHz sampling theorem; this runtime output validates the offline interface, not millisecond-scale residual Doppler fidelity.
+- Independent validation reached the generated manifest but rejected random_seed because MATLAB encoded the double value in exponent notation, which Python parsed as a float; the writer now casts the seed to int64.
+- Runtime direction handling now keeps QuaDRiGa's canonical satellite-Tx/ground-Rx NTN geometry for both directions; SISO uplink is exported through channel reciprocity and labeled separately in the manifest.
+- Deterministic downlink repeat and reciprocal uplink both validated at 1387 snapshots, SISO, 11 paths, t=7614..9000 s. All four binary SHA256 values match the original downlink export.
+- Final verification passed: 11 Python unit tests, py_compile, JSON schema parsing, generated example validation, isolated WSL trace/IQ regressions, and main-worktree git diff --check.
+- Runtime validation evidence is stored in step02-runtime-direction-final-check.txt and step02-runtime-full-regression.txt; generated channel bundles remain untracked.
