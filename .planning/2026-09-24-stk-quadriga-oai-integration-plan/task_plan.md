@@ -4,10 +4,10 @@
 Integrate QuaDRiGa into the existing deterministic STK-to-RFsim architecture one reversible, verified step at a time.
 
 ## Next Step
-Wait for user review before Step 2: implement the MATLAB/Octave STK-to-QuaDRiGa exporter against QDCHANNEL1.
+Stop after Step 2 delivery and wait for user confirmation before starting the OAI reader/integration step.
 
 ## Current Phase
-Paused after Step 1 - QDCHANNEL1 contract and project skeleton complete
+Step 2 complete - awaiting user review before Step 3
 
 ## Phases
 
@@ -23,19 +23,19 @@ Paused after Step 1 - QDCHANNEL1 contract and project skeleton complete
 - **Status:** complete
 
 ### Phase 3: Implementation
-- [ ] Execute the plan
-- [ ] Write to files before executing
-- **Status:** pending
+- [x] Execute the plan
+- [x] Write to files before executing
+- **Status:** complete
 
 ### Phase 4: Testing & Verification
-- [ ] Verify requirements met
-- [ ] Document test results
-- **Status:** pending
+- [x] Verify requirements met
+- [x] Document test results
+- **Status:** complete
 
 ### Phase 5: Delivery
-- [ ] Review outputs
-- [ ] Deliver to user
-- **Status:** pending
+- [x] Review outputs
+- [x] Deliver Step 2 checkpoint
+- **Status:** complete
 
 ## Decisions Made
 | Decision | Rationale |
@@ -46,6 +46,7 @@ Paused after Step 1 - QDCHANNEL1 contract and project skeleton complete
 | Step 0 backup is the rollback point | It contains selected project/OAI sources, SHA256 values, commits, manifest, restore notes, transcript, and full regression output |
 | Preserve the verified baseline on `zky` after explicit user authorization | OAI integration sources and project provenance are committed separately, while credentials, raw logs, generated STK data, and complete backup copies remain excluded |
 | Step 1 changes only the offline interface contract and project skeleton | Keep RFsim behavior unchanged until the exported QuaDRiGa data format is independently validated |
+| Step 2 separates runtime-independent conversion from the QuaDRiGa API call | This machine has no MATLAB/Octave or configured QuaDRiGa path, so format/math can be fully tested without pretending that a real QuaDRiGa run occurred |
 
 ## Errors Encountered
 | Error | Resolution |
@@ -54,3 +55,4 @@ Paused after Step 1 - QDCHANNEL1 contract and project skeleton complete
 | First regression reached git diff --check and waited in pager | Terminated only the validated pager PID, then reran visibly with GIT_PAGER=cat and saved full output |
 | First Step 1 completion check read a stale marker from an older discovery script | Preserve the stale marker for audit, use `STEP01_CONTRACT_DISCOVERY_DONE.json`, and rerun the verified script in a visible terminal |
 | Windows PowerShell launch did not produce the unique Step 1 marker | Switched to the current PowerShell 7 runtime with explicit `-NoExit -Command`; discovery then completed successfully |
+| WSL could not enter the project through `/mnt/e` during Step 2 verification | Copied only `local_ntn/` to a unique WSL `/tmp` directory, ran the unchanged regression script there, and separately ran `git diff --check` in the main project |

@@ -57,7 +57,7 @@ def write_example_bundle(root: Path) -> Path:
         "byte_order": "little",
         "axes": ["snapshot", "rx", "tx", "path"],
         "dimensions": {"snapshots": 3, "rx_antennas": 1, "tx_antennas": 1, "paths": 2},
-        "radio": {"center_frequency_hz": 2_000_000_000.0},
+        "radio": {"center_frequency_hz": 2_000_000_000.0, "link_direction": "downlink"},
         "time": {
             "coordinate": "stk_trace_seconds",
             "interpolation": "linear_complex_and_delay",

@@ -28,6 +28,14 @@ class ValidateBundleTest(unittest.TestCase):
         summary = validate_bundle(self.root)
         self.assertEqual(summary["snapshots"], 3)
         self.assertEqual(summary["paths"], 2)
+        self.assertEqual(summary["link_direction"], "downlink")
+
+    def test_invalid_link_direction_is_rejected(self) -> None:
+        manifest = self._manifest()
+        manifest["radio"]["link_direction"] = "sideways"
+        self._write_manifest(manifest)
+        with self.assertRaisesRegex(ValidationError, "link_direction"):
+            validate_bundle(self.root)
 
     def test_checksum_mismatch_is_rejected(self) -> None:
         path = self.root / "coefficients.cf32"

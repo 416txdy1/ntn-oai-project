@@ -76,3 +76,43 @@
 ### Impact
 - No OAI source, RFsim behavior, STKTRACE2 parser, runtime configuration or experiment result was changed.
 - No new Python or system dependency was added.
+
+## Session: 2026-09-25 - Step 2
+
+### Current Status
+- **Phase:** Step 2 complete - awaiting user review before Step 3
+
+### Environment Discovery
+- Restored the pinned plan and inspected the worktree in a visible PowerShell 7 window.
+- Neither Windows nor WSL exposes `matlab`, `octave`, or `octave-cli` on PATH.
+- `QUADRIGA_PATH` is not configured.
+- No heavyweight runtime or QuaDRiGa source was installed; real channel generation cannot be claimed on this machine yet.
+
+### Changes
+- Added a MATLAB/Octave STKTRACE2 parser and WGS84 ECEF-to-ENU converter.
+- Added a dual-mobility QuaDRiGa export entry point for separate downlink/uplink SISO service-link bundles.
+- Added common-phase removal so STK remains authoritative for bulk Doppler while QuaDRiGa retains relative multipath phase.
+- Added QDCHANNEL1 little-endian serialization, manifest creation, SHA256 provenance and explicit QuaDRiGa-path checks.
+- Added a Python standard-library reference implementation and four mathematical regression tests.
+- Extended QDCHANNEL1 v1 with required `radio.link_direction`, updated the validator and regenerated the example manifest.
+- Updated the QuaDRiGa README with the export data flow, MATLAB example and current limitations.
+
+### Verification Results
+| Command | Result |
+|---------|--------|
+| `python -m quadriga.tools.create_example_bundle quadriga/examples/siso_two_path` | PASS |
+| `python -m quadriga.tools.validate_bundle quadriga/examples/siso_two_path` | PASS; direction downlink, 3 snapshots, SISO, 2 paths |
+| `python -m unittest quadriga.tests.test_validate_bundle quadriga.tests.test_channel_math -v` | PASS; 10 tests |
+| `python -m py_compile ...` and `python -m json.tool ...` | PASS |
+| `bash local_ntn/run_regressions.sh` in isolated WSL `/tmp` copy | PASS; trace parser, physical validation, real IQ, legacy visibility, local setup, syntax |
+| `git diff --check` in the main project | PASS |
+
+### Impact and Limitations
+- No OAI source, RFsim runtime behavior, experiment configuration, credentials, logs or generated STK scenario files were changed.
+- No dependency was installed.
+- MATLAB/Octave/QuaDRiGa is absent on this machine, so the API-facing `.m` path has been reviewed but not executed end to end.
+- The initial exporter intentionally supports one satellite-to-UE SISO service link; MIMO arrays and feeder-link modeling remain later work.
+
+### Verification Environment Issue
+- Direct WSL access to `/mnt/e` returned `Bad file descriptor` twice.
+- The unchanged `local_ntn/` directory was copied to `/tmp/ntn-oai-step02-regression-20260925-1105` for isolated regression execution; it is not part of the project or commit.

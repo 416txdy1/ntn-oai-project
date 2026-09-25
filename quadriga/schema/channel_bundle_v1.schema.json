@@ -37,9 +37,10 @@
     "radio": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["center_frequency_hz"],
+      "required": ["center_frequency_hz", "link_direction"],
       "properties": {
-        "center_frequency_hz": { "type": "number", "exclusiveMinimum": 0 }
+        "center_frequency_hz": { "type": "number", "exclusiveMinimum": 0 },
+        "link_direction": { "enum": ["downlink", "uplink"] }
       }
     },
     "time": {

@@ -1,6 +1,6 @@
 # QuaDRiGa 离线信道接口（QDCHANNEL1）
 
-本目录定义 STK、QuaDRiGa 与 OAI RFsim 之间的离线数据边界。本阶段只固定接口和校验规则，尚未把 QDCHANNEL1 接入 OAI。
+本目录定义 STK、QuaDRiGa 与 OAI RFsim 之间的离线数据边界，并提供 MATLAB/Octave 离线导出器。QDCHANNEL1 尚未接入 OAI。
 
 ## 为什么单独定义接口
 
@@ -69,20 +69,49 @@ sum(abs(h[path])**2) = 1
 
 - QuaDRiGa 版本、场景名和随机种子；
 - 输入 STKTRACE2 文件 SHA256；
-- 中心频率和四个维度；
+- 中心频率、`downlink`/`uplink` 方向和四个维度；
 - 每个二进制文件的 dtype、逻辑元素数、字节数和 SHA256。
 
 JSON Schema 位于 `schema/channel_bundle_v1.schema.json`。标准库校验器除检查 manifest 外，还会流式检查文件大小、哈希、时间单调性、有限值、非负时延、零参考时延和路径功率归一化。
 
-## 当前阶段命令
+## MATLAB/Octave 导出
+
+导出器位于 `matlab/export_stk_to_qdchannel.m`，数据流为：
+
+```text
+STKTRACE2 ECEF 轨迹
+  -> 以首个 UE 点为参考的局部 ENU 轨迹
+  -> 对齐的 QuaDRiGa Tx/Rx 双移动轨迹
+  -> qd_layout.get_channels()
+  -> 去公共相位、路径功率归一化、相对时延、零均值残余增益
+  -> QDCHANNEL1 bundle
+```
+
+“去公共相位”使用每个天线链路的最早激活路径作为参考，消除 QuaDRiGa 输出中的公共传播相位演化，同时保留路径之间的相对相位。这样 OAI 后续使用 STK 径向速度添加主体 Doppler 时不会重复计算。
+
+示例（MATLAB 或兼容的 Octave 8 环境）：
+
+```matlab
+addpath('quadriga/matlab');
+options.quadriga_path = 'D:\tools\QuaDRiGa';
+options.center_frequency_hz = 2.0e9;
+options.link_direction = 'downlink';
+options.scenario = 'QuaDRiGa_NTN_Rural_LOS';
+options.random_seed = 20260925;
+export_stk_to_qdchannel('path/to/stk_trace.csv', 'path/to/qd_downlink', options);
+```
+
+当前入口有意限制为一个卫星—UE SISO service link，并为上下行分别生成 bundle。`quadriga_path` 必须显式提供，不会静默下载或安装 QuaDRiGa。STK 不可见区间仍生成时间对齐的快照，但后续由 STKTRACE2 可见性标志静音。
+
+## 校验命令
 
 ```powershell
 python -m quadriga.tools.create_example_bundle quadriga/examples/siso_two_path
 python -m quadriga.tools.validate_bundle quadriga/examples/siso_two_path
-python -m unittest quadriga.tests.test_validate_bundle
+python -m unittest quadriga.tests.test_validate_bundle quadriga.tests.test_channel_math
 ```
 
-后续步骤才会实现 MATLAB/Octave 导出器和 OAI C/C++ 读取器。
+`tools/channel_math.py` 是与 MATLAB 归一化公式一致的 Python 标准库参考实现，用于在没有 MATLAB/Octave 的机器上验证公共相位去除、功率/时延契约与 ENU 坐标方向。它不代替真实 QuaDRiGa 运行。后续步骤将实现 OAI C/C++ 读取器。
 
 ## 官方依据
 

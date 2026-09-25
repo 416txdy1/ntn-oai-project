@@ -15,7 +15,8 @@
     "paths": 2
   },
   "radio": {
-    "center_frequency_hz": 2000000000.0
+    "center_frequency_hz": 2000000000.0,
+    "link_direction": "downlink"
   },
   "time": {
     "coordinate": "stk_trace_seconds",

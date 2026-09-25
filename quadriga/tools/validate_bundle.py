@@ -76,9 +76,11 @@ def validate_bundle(root: Path) -> dict[str, Any]:
     links = snapshots * rx_antennas * tx_antennas
     taps = links * paths
 
-    center_frequency = manifest.get("radio", {}).get("center_frequency_hz")
+    radio = manifest.get("radio", {})
+    center_frequency = radio.get("center_frequency_hz")
     _require(isinstance(center_frequency, (int, float)) and math.isfinite(center_frequency), "中心频率必须是有限数")
     _require(center_frequency > 0, "中心频率必须大于 0")
+    _require(radio.get("link_direction") in {"downlink", "uplink"}, "link_direction 必须是 downlink 或 uplink")
 
     time_contract = manifest.get("time", {})
     _require(time_contract.get("coordinate") == "stk_trace_seconds", "时间坐标必须是 stk_trace_seconds")
@@ -166,6 +168,7 @@ def validate_bundle(root: Path) -> dict[str, Any]:
         "rx_antennas": rx_antennas,
         "tx_antennas": tx_antennas,
         "paths": paths,
+        "link_direction": radio["link_direction"],
         "start_time_s": times[0],
         "end_time_s": times[-1],
     }
