@@ -4,10 +4,10 @@
 Integrate QuaDRiGa into the existing deterministic STK-to-RFsim architecture one reversible, verified step at a time.
 
 ## Next Step
-Await user review before Step 4 RFsim IQ multipath integration.
+Wait for user review before beginning the next integration step.
 
 ## Current Phase
-Step 3A reader numerical re-verification complete
+Step 4 RFsim IQ multipath integration complete
 
 ## Phases
 
@@ -65,6 +65,14 @@ Step 3A reader numerical re-verification complete
 - [x] Re-validate real downlink and uplink bundles numerically
 - [x] Re-run link-budget duplicate-loss audit and STK/RFsim regressions
 - [x] Record exact commands, metrics, and a reversible Git checkpoint
+- **Status:** complete
+
+### Phase 10: Step 4 RFsim IQ Multipath Integration
+- [x] Confirm the clean isolated OAI `zky` worktree and exact IQ call chain
+- [x] Add the smallest runtime adapter around the validated QDCHANNEL1 reader
+- [x] Apply relative taps/delays without duplicating STK bulk effects
+- [x] Add focused integration and regression tests
+- [x] Commit reversible OAI and project checkpoints
 - **Status:** complete
 
 ## Decisions Made

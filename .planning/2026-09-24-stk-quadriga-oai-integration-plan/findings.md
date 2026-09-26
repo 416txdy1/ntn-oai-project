@@ -95,3 +95,15 @@
 - The focused strict C-reader run passes for the real downlink (1387 snapshots, SISO, 11 paths) and all malformed-input controls. Passing a literal multiline Bash command through a double-quoted PowerShell template is unsafe because Bash variable names are expanded by PowerShell; transport the script as Base64 instead.
 - With Base64 transport, the real uplink reader, GCC `-fanalyzer`, ASan/UBSan/leak checks for example/DL/UL, and every functional STK/RFsim regression pass. The combined script returned 129 only because its last `git diff --check` ran in an intentionally non-Git `/tmp` copy; the main-worktree check is handled separately.
 - Final real DL/UL metrics match: time error 0, maximum tap-power error `6.081311076933105e-08`, zero-delay error 0, reference-phase error `1.8776618900713638e-08` rad, residual gain max/slope/correlation all 0, and combined FSPL slope equals the STK-only slope (`1.2038472634976762` DL, `1.2038472634976765` UL). This numerically excludes duplicate large-scale path loss and bulk Doppler phase.
+# Step 4 RFsim integration findings (2026-09-26)
+
+- The project checkpoint is `3109dc6` on branch `zky`; generated STK artifacts remain untracked and must not be staged.
+- Step 4 is limited to the existing satellite-UE SISO service link and must preserve STK ownership of absolute gain, bulk delay, bulk Doppler, visibility, and noise.
+- The first WSL call-chain discovery produced no transcript output, so a second inspection was launched with explicit stdout/stderr capture.
+- The isolated OAI worktree `/home/duyaya/OAI/oai-zky-preserve` is clean on branch `zky` at `219576f68c`; the dirty main `develop` worktree will not be modified.
+- This OAI revision stores RFsim under `radio/rfsimulator`, not the older `targets/ARCH/rfsimulator` path. A corrected call-chain inspection completed successfully.
+- RFsim calls `update_channel_model(channel, nsamps, nextRxTstamp)` before `rxAddInput(...)` for the same receive block. Existing STK trace handling already owns bulk channel offset, Doppler phase increment, gain/noise, visibility, and UE synchronization.
+- The intended Step 4 boundary is therefore: load/sample QDCHANNEL1 during the update stage and change only relative multipath taps/delays consumed by `rxAddInput`; never add another absolute gain, bulk delay, or bulk Doppler term.
+- The real bundle's maximum relative excess delay is `0.00110293139355125 s` (about `33882.05` samples at 30.72 Msps). Since `channel_desc_t::channel_length` is `uint8_t`, the existing short FIR cannot represent it safely.
+- Step 4 keeps `channel_desc_t` unchanged and introduces per-block sparse convolution with explicit RFsim input history. The tested history is `ceil(max_delay * sample_rate) + 3 = 33886` samples.
+- The real-bundle adapter test passes for 11 paths and verifies that a QD time outside the bundle produces zero signal. STK remains responsible for later absolute gain/noise and bulk Doppler stages.

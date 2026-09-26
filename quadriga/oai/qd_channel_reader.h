@@ -1,8 +1,8 @@
 /*
  * QDCHANNEL1 offline bundle reader for OAI RFsim.
  *
- * Step 3 intentionally exposes loading and interpolation only. The RFsim IQ
- * convolution path is connected in a later, independently testable step.
+ * Loading and interpolation stay separate from the RFsim sparse-convolution
+ * adapter so the binary contract remains independently testable.
  */
 #ifndef QD_CHANNEL_READER_H
 #define QD_CHANNEL_READER_H

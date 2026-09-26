@@ -205,3 +205,45 @@
 - GCC static analyzer and ASan/UBSan/leak checks: PASS.
 - STK parser and RFsim IQ functional regression: PASS.
 - Main worktree `git diff --check`: PASS after EOF cleanup.
+# Session: 2026-09-26 - Step 4 RFsim IQ multipath integration
+
+### Current Status
+- **Phase:** Step 4 complete; waiting for user review
+
+### Actions Taken
+- Recovered the active plan, project branch, and latest numerical audit checkpoint in a visible PowerShell window.
+- Confirmed generated STK artifacts remain outside Git.
+- Started a captured inspection of the isolated OAI `zky` worktree, RFsim call sites, and build definitions.
+- Confirmed the per-block call order (`update_channel_model` before `rxAddInput`) and started a targeted inspection of the exact channel descriptor fields and convolution loop.
+
+### Errors
+- The first WSL discovery output did not appear in the PowerShell transcript. Retried with explicit stdout/stderr capture; that captured command returned exit code 2 and is being diagnosed before any source edit.
+- The captured inspection used the obsolete `targets/ARCH/rfsimulator` path. Confirmed the current path is `radio/rfsimulator` and reran the inspection successfully.
+- A desktop sandbox setup refresh temporarily rejected the read-only transcript command and CUA initialization. No project command ran and no file changed; the already approved visible PowerShell path was used instead.
+- Two inspection commands assumed a nonexistent `quadriga/oai/tests` directory. No file changed; tests are actually stored in `quadriga/tests`.
+- The first visible fallback attempted an obsolete cached `codex.exe` path, and the next invocation passed the patch through stdin instead of the required argument. Both attempts changed no file; `Get-Command codex.exe` resolved the active desktop path and invocation contract.
+
+### Discovery Results
+- `rxAddInput` currently convolves the short `channel_desc_t::ch` FIR, then applies the STK bulk Doppler rotation, and finally applies STK absolute gain/noise. This is the required composition order.
+- `channel_length` is a `uint8_t`, and each `ch` row is allocated to exactly that length. Increasing the field alone would cause an out-of-bounds access.
+- The corrected real QDCHANNEL1 bundle has a maximum relative excess delay of `0.00110293139355125 s`, equal to about `33882.05` samples at 30.72 Msps. It therefore cannot be represented by the existing maximum 255-sample FIR.
+- RFsim already asks `combine_received_beams` for a block with explicit history. Step 4 will use a separate sparse QuaDRiGa history length and convolution path instead of truncating delays or changing the global channel descriptor ABI.
+- Implemented that separate sparse convolution in the isolated OAI worktree without changing `channel_desc_t`. The adapter samples QDCHANNEL1 at STK trace time and applies only normalized relative multipath plus the audited residual term.
+- The real downlink bundle requires 33,886 history samples at 30.72 Msps for 11 paths. Its independent constant-input reference and out-of-range mute regression passed.
+
+### Step 4 Implementation Errors
+- The first standalone adapter compilation failed because `qd_channel_adapter.c` included `rfsimulator.h` before OAI's simulation type definitions. Added `openair1/SIMULATION/TOOLS/sim.h` first; recompilation and the real-bundle run passed.
+- Copying temporary sources through the Windows `\\wsl.localhost` view did not expose them at the expected WSL `/tmp` path. The runner now compiles directly from the mounted project path; product data was not changed.
+- An earlier Bash inspection embedded in double-quoted PowerShell expanded `$build` prematurely and produced an unmatched quote. Retried with literal quoting; no source was changed by the failed inspection.
+- A read-only build-object inspection used escaped `find` parentheses that did not survive the PowerShell/WSL quoting boundary. Retried with a simple name glob and confirmed both QD object files.
+- The first OAI commit message was truncated to `rfsim:` by the same quoting boundary. Since the commit was local and unpushed, amended only its message; the final OAI checkpoint is `1e0c78bfbb80424f275e73a3103f582e0f903413`.
+
+### Step 4 Final Verification Results
+- Full isolated OAI build (`nr-softmodem`, `nr-uesoftmodem`, `rfsimulator`): PASS; both QD sources generated object files.
+- Real QD sparse adapter: PASS; 1,387 snapshots, 11 paths, 33,886 history samples, out-of-range mute.
+- Adapter ASan/UBSan: PASS.
+- STK trace parser, physical validation, RFsim IQ and legacy visibility regressions: PASS.
+- Strict real-bundle reader and malformed-input controls: PASS.
+- 13 Python schema/channel-math/link-budget tests: PASS.
+- Real DL/UL link-budget audit: PASS; residual gain/slope/correlation all zero and combined FSPL slope unchanged at `1.2038472634976762`.
+- Project and OAI `git diff --check`: PASS before checkpoint creation.

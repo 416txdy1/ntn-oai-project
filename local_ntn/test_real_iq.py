@@ -1,9 +1,10 @@
 """Build actual repository IQ path with OAI's include flags and minimal test doubles."""
-import csv,json,re,shlex,subprocess,tempfile
+import csv,json,os,re,shlex,subprocess,tempfile
 from pathlib import Path
 from paths import OAI_REPO
 repo=OAI_REPO;base=Path(__file__).resolve().parent
-build=repo/'cmake_targets/ran_build/build'
+build_repo=Path(os.environ.get('OAI_BUILD_REPO',repo)).resolve()
+build=build_repo/'cmake_targets/ran_build/build'
 make_flags=build/'radio/rfsimulator/CMakeFiles/rfsimulator.dir/flags.make'
 if make_flags.exists():
     flags=make_flags.read_text()
@@ -19,13 +20,16 @@ else:
     args=[];i=compiler+1
     while i<len(command):
         v=command[i]
-        if v in ('-o','-c','-MF','-MT','-MQ'):
+        if v in ('-o','-MF','-MT','-MQ'):
             i+=2;continue
-        if v not in ('-MD','-MMD','-MP'):
+        if v in ('-c','-MD','-MMD','-MP') or v==entry['file']:
+            i+=1;continue
+        if v.startswith('-'):
             args.append(v)
         i+=1
 # Assertions are the test oracle: release builds must not compile them away.
 args=[v for v in args if v not in ('-DT_TRACER','-DNDEBUG')]
+args=[v.replace(str(build_repo),str(repo)) for v in args]
 args.append('-UNDEBUG')
 has_legacy='int stk_visible;' in (repo/'openair1/SIMULATION/TOOLS/sim.h').read_text()
 if has_legacy:args.append('-DOAI_HAS_LEGACY_STK')
@@ -38,6 +42,8 @@ with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
                         -100 if i==0 else -110,-100,20,20,int(i<3),int(i<3)])
     src=repo/'radio/rfsimulator'
     subprocess.run(['cc',*args,str(base/'test_real_iq.c'),str(src/'apply_channelmod.c'),
-                    str(src/'stk_trace.c'),str(src/'stk_trace_channel.c'),'-lm','-lpthread','-o',str(d/'test')],check=True,cwd=build)
+                    str(src/'stk_trace.c'),str(src/'stk_trace_channel.c'),
+                    str(src/'qd_channel_reader.c'),str(src/'qd_channel_adapter.c'),
+                    '-lcrypto','-lm','-lpthread','-o',str(d/'test')],check=True,cwd=build)
     subprocess.run([str(d/'test'),str(trace)],check=True)
     if has_legacy:subprocess.run([str(d/'test'),'--legacy'],check=True)
