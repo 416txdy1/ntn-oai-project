@@ -4,10 +4,10 @@
 Integrate QuaDRiGa into the existing deterministic STK-to-RFsim architecture one reversible, verified step at a time.
 
 ## Next Step
-Await user review before starting the OAI/RFsim bundle reader.
+Await user review before Step 4 RFsim IQ multipath integration.
 
 ## Current Phase
-Step 2A link-budget audit complete
+Step 3A reader numerical re-verification complete
 
 ## Phases
 
@@ -51,6 +51,20 @@ Step 2A link-budget audit complete
 - [x] Remove or isolate any duplicated deterministic path-loss component
 - [x] Add automated audit tests and regenerate real runtime bundles
 - [x] Run all regressions and prepare a reversible audit checkpoint
+- **Status:** complete
+
+### Phase 8: Step 3 QDCHANNEL1 C Reader
+- [x] Implement the standalone C reader and public API
+- [x] Validate manifest, payload hashes, dimensions, and provenance
+- [x] Add interpolation, out-of-range mute, and malformed-input tests
+- [x] Preserve the implementation in Git commit `8b1bb1d`
+- **Status:** complete
+
+### Phase 9: Step 3A Numerical Re-verification
+- [x] Re-run strict compile, static analysis, sanitizers, and malformed-input tests
+- [x] Re-validate real downlink and uplink bundles numerically
+- [x] Re-run link-budget duplicate-loss audit and STK/RFsim regressions
+- [x] Record exact commands, metrics, and a reversible Git checkpoint
 - **Status:** complete
 
 ## Decisions Made

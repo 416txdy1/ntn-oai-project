@@ -174,3 +174,34 @@
 - Regenerated downlink and uplink binary payload SHA256 values match; only direction metadata differs.
 - Isolated WSL trace parser, IQ regression, visibility gate, setup/config, Python syntax, Bash syntax, and git diff checks all pass.
 - Full regression evidence is stored in step02a-full-regression.txt; the isolated WSL verification directory was /tmp/ntn-oai-step02a-audit-20260925-134544.
+# Session: 2026-09-26 - Step 3A numerical re-verification
+
+### Current Status
+- **Phase:** Step 3A numerical re-verification in progress
+
+### Actions Taken
+- Recovered the active plan and confirmed the reader implementation checkpoint is `8b1bb1d` on branch `zky`.
+- Opened visible PowerShell windows and saved transcripts for plan recovery and verification-input discovery.
+- Found that the plan text was stale at Step 2A and added explicit Step 3 and Step 3A phases before running the audit.
+- Located the real corrected downlink and uplink audit bundles in the project runtime-output directory.
+- Ran a visible provenance/trace mapping inspection; its transcript is `step03-reverification-trace-map.txt`.
+
+### Errors
+- The first direct `apply_patch` call failed during Windows sandbox setup refresh; no file changed. Retried through the desktop apply-patch entry point.
+- The first full re-verification launcher stopped before opening the test window because the outer PowerShell interpolated WSL `$(sha256sum ...)`. No test ran and no data changed; replaced the launcher with a literal placeholder template.
+- The second launcher attempt also stopped before opening the test window because the orchestration JavaScript runtime has no `btoa` function. No test ran; switched to an explicit byte-to-Base64 encoder.
+- The corrected visible run executed 13 Python tests successfully, then stopped at the real downlink link-budget audit with exit code 1. Bundle schema validation itself passed. A focused visible provenance/error diagnostic was started and saved to `step03-reverification-dl-failure.txt`.
+- Diagnosed the nonzero audit as a mismatched STK trace selection, not a failed channel metric. Started a visible exact-hash and STKTRACE2 magic-line search, saved as `step03-reverification-find-trace.txt`.
+- Re-ran with the matching CSV trace. Python and real-data numerical checks passed through the DL/UL payload comparison; the combined WSL stage returned nonzero without captured native output. Started a focused visible C-reader diagnosis in retained directory `/tmp/ntn-oai-step03-reverify-4uoRR3se`.
+- Focused real DL C-reader regression passed completely. The remaining-stage launcher exposed a second shell-boundary quoting issue: PowerShell expanded Bash `$TRACE/$DL/$UL` to empty values, so the UL driver received `.` as its trace. No product code or data failed; the next retry transports the Bash script as Base64.
+- Base64-isolated WSL stages passed real UL, static analysis, sanitizers, and STK/RFsim functional regressions. The isolated copy then failed only at `git diff --check` because it intentionally has no `.git`; launched a final visible main-worktree gate and numerical-report capture.
+- Captured final DL/UL audit JSON with all numerical invariants passing. The main-worktree `git diff --check` initially found only blank EOF lines in this audit's planning files; removed those lines and retained user changes untouched.
+
+### Final Verification Results
+- 13 Python schema/channel-math/link-budget tests: PASS.
+- Real downlink and uplink bundle validation: PASS, each 1387 snapshots, SISO, 11 paths.
+- Real DL/UL link-budget audit: PASS; no repeated large-scale gain or bulk Doppler phase.
+- Strict C reader and malformed-input tests for real DL/UL: PASS.
+- GCC static analyzer and ASan/UBSan/leak checks: PASS.
+- STK parser and RFsim IQ functional regression: PASS.
+- Main worktree `git diff --check`: PASS after EOF cleanup.

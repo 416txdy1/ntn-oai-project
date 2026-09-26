@@ -82,3 +82,16 @@
 - https://github.com/fraunhoferhhi/QuaDRiGa/blob/main/quadriga_src/%40qd_channel/combine_tx_rx.m
 - https://github.com/fraunhoferhhi/QuaDRiGa/blob/main/tutorials/t14_dual_mobility.m
 - https://github.com/fraunhoferhhi/QuaDRiGa/blob/main/tutorials/calib_3GPP_38821_ntn.m
+# Step 3A re-verification findings (2026-09-26)
+
+- The tracked planning text had not yet been advanced from Step 2A even though the Step 3 reader exists in commit `8b1bb1d`; this is a documentation-state omission, not a code-state mismatch.
+- Re-verification will use the existing C reader driver, real retained DL/UL bundles, the link-budget auditor, and the full STK/RFsim regression suite.
+- No new channel-model behavior will be implemented during this audit; any numerical failure will stop the phase for diagnosis rather than being hidden or weakened.
+- Real audit bundles are available under `runtime-output/audit-downlink` and `runtime-output/audit-uplink`; the previously retained WSL Step 3 temporary directory is no longer present, so a fresh isolated copy is required.
+- PowerShell must not interpolate Bash command substitutions while constructing the visible WSL test script; use a single-quoted outer template plus explicit path placeholder replacement.
+- The first real-data rerun passed all 13 schema/math/audit unit tests and real DL/UL bundle validation, but the real DL link-budget audit returned nonzero. The full pipeline correctly stopped before C-reader and STK/RFsim stages; the exact provenance/error is being diagnosed without relaxing any threshold.
+- The real DL audit failure is an input-selection error: the bundle provenance is `680632212ffdbfa95a8e45a537acbfcad3c6dfaccfca1bc50283f0384c6e3e73`, while the initially selected blend trace hashes to `b0a911d2e31449ef6f57f1bb2a7b47e430634c40ec74b4df70cebfc45e3f3ba1`. The auditor correctly rejected the mismatch before performing composition metrics.
+- The matching input is `stk_constellation_trace_blend.csv`. With it, all 13 Python tests, real DL/UL schema checks, real DL/UL link-budget audits, and all four cross-direction payload SHA256 comparisons pass. The remaining nonzero status occurred later in the combined WSL stage and is being isolated.
+- The focused strict C-reader run passes for the real downlink (1387 snapshots, SISO, 11 paths) and all malformed-input controls. Passing a literal multiline Bash command through a double-quoted PowerShell template is unsafe because Bash variable names are expanded by PowerShell; transport the script as Base64 instead.
+- With Base64 transport, the real uplink reader, GCC `-fanalyzer`, ASan/UBSan/leak checks for example/DL/UL, and every functional STK/RFsim regression pass. The combined script returned 129 only because its last `git diff --check` ran in an intentionally non-Git `/tmp` copy; the main-worktree check is handled separately.
+- Final real DL/UL metrics match: time error 0, maximum tap-power error `6.081311076933105e-08`, zero-delay error 0, reference-phase error `1.8776618900713638e-08` rad, residual gain max/slope/correlation all 0, and combined FSPL slope equals the STK-only slope (`1.2038472634976762` DL, `1.2038472634976765` UL). This numerically excludes duplicate large-scale path loss and bulk Doppler phase.
