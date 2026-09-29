@@ -1,5 +1,10 @@
 # 本机 STK–OAI–5GC 实验（2026-09-10）
 
+> 后续切换测试：`test_seamless.py` 支持 `--rate`，默认使用 `0.1` 进行
+> 可完成业务探测的重放；`--rate 1` 仍可用于高速时序压力测试。若要把初始
+> SIB19/传播时延对齐到预计同步时刻，可设置
+> `OAI_STK_INITIAL_LEAD_RFSIM=2.5`（单位为 RFsim 秒）；不设置时保持首行状态。
+
 ## 已验证的结果
 
 所有通信组件在本机 Ubuntu-22.04 WSL 内：gNB、UE、OAI 5GC v2.2.0。Windows STK 通过官方 API 导出当前相控阵场景。UE 使用独立网络命名空间 `oai-stk-ue`，防止同机路由绕过空口和核心网。

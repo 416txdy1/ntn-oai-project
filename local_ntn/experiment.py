@@ -6,6 +6,8 @@ STATE=BASE/'processes.json'
 p=argparse.ArgumentParser();p.add_argument('action',choices=['start','stop','status','ping','iperf'])
 p.add_argument('--rate',type=float,default=0);p.add_argument('--label',default='static-final')
 p.add_argument('--reverse',action='store_true')
+p.add_argument('--ping-count',type=int,default=10)
+p.add_argument('--iperf-seconds',type=int,default=15)
 a=p.parse_args()
 def call(cmd,**kw):return subprocess.run(cmd,check=True,**kw)
 def identity(pid):
@@ -32,7 +34,11 @@ elif a.action=='start':
         raise SystemExit('gNB already running; use stop for this controller or stop your manual process')
     if subprocess.run(['pgrep','-x','nr-uesoftmodem'],stdout=subprocess.DEVNULL).returncode==0:
         raise SystemExit('UE already running; refusing duplicate')
-    call(['python3',str(BASE/'prepare_local.py'),'--rate',str(a.rate)])
+    prepare_cmd=['python3',str(BASE/'prepare_local.py'),'--rate',str(a.rate)]
+    initial_lead=os.environ.get('OAI_STK_INITIAL_LEAD_RFSIM')
+    if initial_lead is not None:
+        prepare_cmd += ['--initial-lead-rfsim', initial_lead]
+    call(prepare_cmd)
     call(['bash',str(BASE/'local_network.sh')])
     env=os.environ.copy();env['OAI_STK_TRACE_RATE']=str(a.rate)
     state={}
@@ -64,8 +70,11 @@ else:
     addr=info[0]['addr_info'][0]['local']
     call(['ip','-n','oai-stk-ue','route','replace','192.168.70.135/32','dev','oaitun_ue1','src',addr])
     print('UE source',addr,'destination ext-DN 192.168.70.135; through oaitun_ue1',flush=True)
-    if a.action=='ping':call(ns+['ping','-n','-I','oaitun_ue1','-c','10','-W','5','192.168.70.135'])
+    if a.action=='ping':
+        if a.ping_count <= 0: p.error('--ping-count must be positive')
+        call(ns+['ping','-n','-I','oaitun_ue1','-c',str(a.ping_count),'-W','5','192.168.70.135'])
     else:
+        if a.iperf_seconds <= 0: p.error('--iperf-seconds must be positive')
         # Same binary/version at both ends; enter only ext-DN's network namespace.
         # This keeps the same data path without changing its old Ubuntu image.
         container=json.loads(subprocess.check_output(['docker','inspect','oai-ext-dn']))[0]
@@ -75,7 +84,7 @@ else:
         try:
             time.sleep(.3)
             if server.poll() is not None:raise RuntimeError(server.stderr.read().decode())
-            call(ns+['iperf3','-c','192.168.70.135','-p','5203','-B',addr,'-u','-b','100K','-t','15','-i','5']
+            call(ns+['iperf3','-c','192.168.70.135','-p','5203','-B',addr,'-u','-b','100K','-t',str(a.iperf_seconds),'-i','5']
                  +(['-R'] if a.reverse else []))
         finally:
             if server.poll() is None:server.terminate()

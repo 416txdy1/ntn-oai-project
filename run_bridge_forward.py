@@ -19,10 +19,17 @@ PYTHON_EXE = sys.executable
 BRIDGE_SCRIPT = Path(r"D:\实验室学习工作\杂活\雄安\OAI调研\stk_oai_bridge_generic.py")
 WSL_DISTRO = "Ubuntu-22.04"
 
-LOG_RECEIVER = ("10.129.137.101", 9000)
+LOG_RECEIVER = ("10.29.132.223", 9000)
 GNB_TARGET = "192.168.114.16:49000"
-LAN_STK_TARGET = "10.129.137.101:49000"
+LAN_STK_TARGET = "10.29.132.223:49000"
 UE_STK_PORT = 49001
+# The current STK scene contains a constellation, so the bridge must be
+# explicit about which satellite supplies the RFsim state.  Change this path
+# when selecting another member of the constellation.
+SATELLITE_PATH = (
+    "/Application/STK/Scenario/OAI_LEO_Constellation/"
+    "Satellite/OAI_LEO_P01_S01"
+)
 
 RATE_HZ = 20
 STATUS_INTERVAL = 1               # one terminal/TCP status log per real second
@@ -130,6 +137,7 @@ def main() -> int:
         "--target", GNB_TARGET,
         "--target", f"{wsl_ip}:{UE_STK_PORT}",
         "--target", LAN_STK_TARGET,
+        "--satellite", SATELLITE_PATH,
         "--rate-hz", str(RATE_HZ),
         "--status-interval", str(STATUS_INTERVAL),
         "--time-mode", TIME_MODE,

@@ -15,21 +15,20 @@ static inline double stk_trace_epoch(double epoch, uint64_t timestamp, double fs
 { return epoch + (double)timestamp / fs * rate; }
 static inline double stk_trace_amplitude(double power, double reference, int valid)
 { return valid ? pow(10.0, (power-reference)/20.0) : 0.0; }
-/* Cubic Hermite: velocity is exactly the derivative of interpolated position. */
+/* Linear state interpolation. The exported velocity is authoritative: during a
+ * handover the position may move between two satellite paths, so deriving a
+ * velocity from that chord would create an artificial hundreds-of-km/s jump. */
 static inline bool stk_trace_interpolate(const stk_trace_row *a, const stk_trace_row *b,
                                         double time, stk_trace_row *out)
 {
   double h=b->time-a->time;
   if (!(h>0) || time<a->time || time>b->time || !isfinite(time)) return false;
-  double u=(time-a->time)/h, u2=u*u, u3=u2*u;
+  double u=(time-a->time)/h;
   *out=*a; out->time=time;
   for (int i=0;i<3;i++) {
-    out->pos[i]=(2*u3-3*u2+1)*a->pos[i]+(u3-2*u2+u)*h*a->vel[i]
-                +(-2*u3+3*u2)*b->pos[i]+(u3-u2)*h*b->vel[i];
-    out->vel[i]=((6*u2-6*u)*a->pos[i]+(-6*u2+6*u)*b->pos[i])/h
-                +(3*u2-4*u+1)*a->vel[i]+(3*u2-2*u)*b->vel[i];
-    out->acc[i]=((12*u-6)*a->pos[i]+(-12*u+6)*b->pos[i])/(h*h)
-                +((6*u-4)*a->vel[i]+(6*u-2)*b->vel[i])/h;
+    out->pos[i]=a->pos[i]+u*(b->pos[i]-a->pos[i]);
+    out->vel[i]=a->vel[i]+u*(b->vel[i]-a->vel[i]);
+    out->acc[i]=a->acc[i]+u*(b->acc[i]-a->acc[i]);
     out->gnb[i]=a->gnb[i]+u*(b->gnb[i]-a->gnb[i]);
     out->ue[i]=a->ue[i]+u*(b->ue[i]-a->ue[i]);
   }

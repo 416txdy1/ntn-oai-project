@@ -35,3 +35,19 @@ volumes/
 .idea/
 Thumbs.db
 Desktop.ini
+
+# Presentation exports and source material (not runtime/code dependencies)
+_ppt_build_*/
+*.pptx
+*.pptx.inspect.ndjson
+*.pdf
+*.docx
+*.png
+*.svg
+
+# Generated local experiment reports/configuration
+local_ntn/*.txt
+local_ntn/gnb.local.conf
+gnb*.conf
+nrue*.conf
+core-config*.yaml

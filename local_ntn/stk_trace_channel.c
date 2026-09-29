@@ -11,17 +11,26 @@
 #include "openair2/LAYER2/NR_MAC_gNB/mac_config.h"
 #include "rfsimulator.h"
 #include "stk_trace.h"
+#include "stk_schedule.h"
 
 static pthread_once_t once=PTHREAD_ONCE_INIT;
 static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 static stk_trace trace;
+static stk_schedule schedule;
 static bool enabled;
+static bool schedule_enabled;
 static double rate=1., epoch, dl_reference, ul_reference, bandwidth=2000000.;
 static double extra_loss, cn_offset;
 static bool noise_enabled=true;
+/* Diagnostic switches: keep both enabled by default; tests can disable one
+ * impairment without changing the exported STK trace or OAI configuration. */
+static bool dynamic_delay=true;
+static bool dynamic_doppler=true;
 static openair0_ntn_sync_state_t last_sync;
 static bool have_sync;
 static bool observed_dl;
+static char last_satellite[sizeof(schedule.rows[0].satellite_id)];
+static char last_phase[sizeof(schedule.rows[0].handover_phase)];
 typedef struct {channel_desc_t *channel;double gain, noise_ratio;bool valid;} iq_state;
 static iq_state iq[16];
 
@@ -37,20 +46,32 @@ static void init(void)
   const char *path=getenv("OAI_STK_TRACE"); if(!path || !*path)return;
   enabled=true;char error[256];
   AssertFatal(stk_trace_load(path,&trace,error,sizeof(error)),"STK trace: %s\n",error);
+  const char *schedule_path=getenv("OAI_STK_SCHEDULE");
+  if(schedule_path && *schedule_path) {
+    if(stk_schedule_load(schedule_path,&schedule,error,sizeof(error))) {
+      schedule_enabled=true;
+      LOG_I(HW,"STK satellite schedule loaded: %zu rows from %s\n",schedule.count,schedule_path);
+    } else {
+      LOG_W(HW,"STK satellite schedule disabled: %s\n",error);
+    }
+  }
   rate=number("OAI_STK_TRACE_RATE",1,0,1);
   epoch=number("OAI_STK_TRACE_EPOCH",trace.rows[0].time,trace.rows[0].time,trace.rows[trace.count-1].time);
   bandwidth=number("OAI_STK_TRACE_BW_HZ",2000000,1,100000000);
   extra_loss=number("OAI_STK_TRACE_EXTRA_LOSS_DB",0,0,200);
   cn_offset=number("OAI_STK_TRACE_CN_OFFSET_DB",0,-200,100);
   noise_enabled=number("OAI_STK_TRACE_NOISE",1,0,1)!=0;
+  dynamic_delay=number("OAI_STK_DYNAMIC_DELAY",1,0,1)!=0;
+  dynamic_doppler=number("OAI_STK_DYNAMIC_DOPPLER",1,0,1)!=0;
   bool dl=false,ul=false;
   for(size_t i=0;i<trace.count;i++) {
     if(!dl && trace.rows[i].dl_valid){dl_reference=trace.rows[i].dl_power;dl=true;}
     if(!ul && trace.rows[i].ul_valid){ul_reference=trace.rows[i].ul_power;ul=true;}
   }
   AssertFatal(dl && ul,"STK trace has no valid DL/UL power reference\n");
-  LOG_I(HW,"STKTRACE2 loaded %zu states [%.3f, %.3f], epoch %.3f, rate %.3f STK-s/IQ-s; noise %d\n",
-        trace.count,trace.rows[0].time,trace.rows[trace.count-1].time,epoch,rate,noise_enabled);
+  LOG_I(HW,"STKTRACE2 loaded %zu states [%.3f, %.3f], epoch %.3f, rate %.3f STK-s/IQ-s; noise %d delay %d Doppler %d\n",
+        trace.count,trace.rows[0].time,trace.rows[trace.count-1].time,epoch,rate,noise_enabled,
+        dynamic_delay,dynamic_doppler);
 }
 static void ranges(const stk_trace_row *s,const double site[3],double *r,double *v,double *a)
 {
@@ -97,19 +118,41 @@ bool update_channel_model_from_stk_trace(channel_desc_t *ch,int n,uint64_t ts)
   double delay_samples=delay*ch->sampling_rate;
   AssertFatal(isfinite(delay_samples) && delay_samples>=0 && delay_samples<(double)LLONG_MAX,
               "STK delay does not fit sample offset\n");
-  if(ch->enable_dynamic_delay)ch->channel_offset=llround(delay_samples);
-  if(ch->enable_dynamic_Doppler)ch->Doppler_phase_inc=2*M_PI*doppler/ch->sampling_rate;
+  if(ch->enable_dynamic_delay && dynamic_delay)ch->channel_offset=llround(delay_samples);
+  if(ch->enable_dynamic_Doppler && dynamic_doppler)ch->Doppler_phase_inc=2*M_PI*doppler/ch->sampling_rate;
   if(!ch->is_uplink) {
     pthread_mutex_lock(&lock);
     last_sync=(openair0_ntn_sync_state_t){.stk_time_s=s.time,.propagation_delay_ms=delay*1000,
-      .dl_doppler_hz=ch->enable_dynamic_Doppler?doppler:0,
+      .dl_doppler_hz=ch->enable_dynamic_Doppler && dynamic_doppler?doppler:0,
       .dl_time_drift_us_s=(vs+vf)/SPEED_OF_LIGHT*1e6};
     have_sync=valid;observed_dl=true;pthread_mutex_unlock(&lock);
   }
   if(ts/(uint64_t)ch->sampling_rate!=(ts+n)/(uint64_t)ch->sampling_rate)
-    LOG_I(HW,"STKTRACE2 %s IQ=%.6f STK=%.6f delay=%.6fms Doppler=%.3fHz gain=%.3fdB C/N=%.3fdB valid=%d samples=%" PRIu64 "\n",
-      ch->is_uplink?"UL":"DL",ts/ch->sampling_rate,s.time,delay*1000,doppler,
-      gain>0?20*log10(gain):-300,cn,valid,ts);
+    {
+      stk_schedule_entry selected={0};
+      const char *satellite_id="unknown";
+      const char *phase="steady";
+      const char *previous_id="";
+      const char *next_id="";
+      double elevation=NAN;
+      if(schedule_enabled && stk_schedule_at(&schedule,s.time,&selected)) {
+        satellite_id=selected.satellite_id;
+        phase=selected.handover_phase;
+        previous_id=selected.previous_satellite_id;
+        next_id=selected.next_satellite_id;
+        elevation=selected.elevation_deg;
+        if(strcmp(last_satellite,satellite_id)!=0 || strcmp(last_phase,phase)!=0 || selected.switched) {
+          LOG_I(HW,"STK satellite handover phase=%s: %s -> %s at STK time %.3f s (elevation %.2f deg)\n",
+                phase, previous_id[0]?previous_id:(*last_satellite?last_satellite:"none"),
+                next_id[0]?next_id:satellite_id,s.time,elevation);
+          snprintf(last_satellite,sizeof(last_satellite),"%s",satellite_id);
+          snprintf(last_phase,sizeof(last_phase),"%s",phase);
+        }
+      }
+      LOG_I(HW,"STKTRACE2 %s IQ=%.6f STK=%.6f satellite_id=%s elevation_deg=%.3f phase=%s previous=%s next=%s delay=%.6fms Doppler=%.3fHz gain=%.3fdB C/N=%.3fdB valid=%d samples=%" PRIu64 "\n",
+      ch->is_uplink?"UL":"DL",ts/ch->sampling_rate,s.time,satellite_id,elevation,phase,previous_id,next_id,
+      delay*1000,doppler,gain>0?20*log10(gain):-300,cn,valid,ts);
+    }
   /* Publish the state AT the announced next-frame epoch, not the current frame. */
   uint64_t spms=llround(ch->sampling_rate/1000),subframe=ts/spms;
   if(ch->is_uplink && subframe%10==0 && at((subframe/10+1)*10*spms,ch->sampling_rate,&s)) {
