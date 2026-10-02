@@ -1,18 +1,17 @@
-# External source repositories used by the local experiment
-oai.openairinterface5g.path=/home/duyaya/OAI/openairinterface5g
-oai.openairinterface5g.commit=219576f68c
-oai.openairinterface5g.base_commit=c4125d1c740181ab1f7da0e7dd1d04ed07c37670
-oai.openairinterface5g.branch=zky
-oai.openairinterface5g.upstream=https://gitlab.eurecom.fr/oai/openairinterface5g.git
-oai-cn5g-fed.path=/home/duyaya/OAI/oai-cn5g-fed
-oai-cn5g-fed.commit=212f92f
-oai-cn5g-fed.upstream=https://gitlab.eurecom.fr/oai/cn5g/oai-cn5g-fed.git
-
-# Apply the project-specific changes from oai_patch/ or the documented patch
-# workflow after checking the target source commit. Never commit credentials.
-
-# 2026-09-23 local runtime: existing containers, not the older fed compose.
-runtime.5gc.compose=/home/duyaya/OAI/openairinterface5g/doc/tutorial_resources/oai-cn5g/docker-compose.yaml
-runtime.5gc.image_version=v2.2.1
-runtime.5gc.mysql_image=mysql:9.6
-runtime.local_debug_notes=local_ntn/DEBUG-2026-09-23.md
+# Source delivery lock (2026-10-02)
+# Archive digests: vendor/checksums.json. OAI commit and exclusions: vendor/source-manifest.json.
+oai.source=.runtime/oai
+oai.archive=vendor/oai-source.tar.gz
+oai.overlay=oai_patch/current
+quadriga.c_overlay=quadriga/oai
+quadriga.source=.runtime/quadriga
+quadriga.archive=vendor/quadriga-source.tar.gz
+quadriga.version=2.8.1-0
+asn1c.commit=940dd5fa9f3917913fd487b13dfddfacd0ded06e
+asn1c.archive=vendor/asn1c-source.tar.gz
+simde.archive=vendor/simde-source.tar.gz
+core.templates=configs/core
+core.nf_images=v2.2.1
+core.mysql_image=mysql:9.6
+example.trace_sha256=3d63d47a050f68bf670e4d298cc579c7f0f09b0550b58c849fdc0a12b2dbda18
+# No additional Git checkout is required for the supported RFsim mode; E2_AGENT is OFF.

@@ -15,12 +15,14 @@ from paths import OAI_REPO
 BASE = Path(__file__).resolve().parent
 with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
     work = Path(directory)
-    for name in ('prepare_local.py', 'paths.py'):
+    for name in ('prepare_local.py', 'paths.py', 'network_config.py'):
         shutil.copy2(BASE / name, work / name)
     private = work / 'identity.conf'
     private.write_text('imsi = "001010000000001"; nssai_sst = 1; dnn = "oai";\n'
                        'position0 = { x = 6377900; y = 0; z = 0; };\n')
-    env = dict(os.environ, OAI_REPO=str(OAI_REPO), OAI_UE_CONFIG=str(private))
+    env = dict(os.environ, OAI_REPO=str(OAI_REPO), OAI_UE_CONFIG=str(private),
+               OAI_AMF_IP='192.168.70.132', OAI_GNB_IP_CIDR='192.168.70.129/26')
+    env['OAI_STK_TRACE'] = str(work / 'stk_trace.csv')  # 测试只使用临时输入。
     template = OAI_REPO / 'ci-scripts/conf_files/gnb.sa.band254.u0.25prb.rfsim.ntn-leo.conf'
     original = template.read_bytes()
     def run(rate):
@@ -46,6 +48,9 @@ with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
         assert re.search(r'mcc\s*=\s*1;', conf)
         assert re.search(r'mnc\s*=\s*1;', conf)
         assert 'sd = 0xffffff' in conf
+        assert re.search(r'amf_ip_address\s*=\s*\(\s*\{\s*ipv4\s*=\s*\"192.168.70.132\"', conf)
+        for field in ('GNB_IPV4_ADDRESS_FOR_NG_AMF', 'GNB_IPV4_ADDRESS_FOR_NGU'):
+            assert re.search(field + r'\s*=\s*\"192.168.70.129/26\"', conf)
         assert re.search(r'velocityVX-r17\s*=\s*'+str(expected_velocity)+r';', conf)
     for rate in ('nan', '-0.1', '1.1'):
         assert run(rate).returncode != 0
@@ -57,6 +62,14 @@ with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
     assert template.read_bytes() == original, 'Original gNB template changed'
     print('PASS: config generation, UE position guard, static/dynamic velocity, both lab PLMNs, missing trace and invalid rates; template unchanged')
 
+    # 默认文件不存在时，显式 trace 仍须同时用于配置生成和启动。
+    selected = work / 'selected trace.csv'
+    (work / 'stk_trace.csv').rename(selected)
+    env['OAI_STK_TRACE'] = str(selected)
+    assert run(0).returncode == 0
+    selected.write_text(selected.read_text().replace('STKTRACE2', '# STKTRACE2', 1))
+    assert run(0).returncode == 0
+    print('PASS: explicit trace override and comment magic with missing default trace')
     # Exercise the validator's exit status without starting processes or real traffic.
     source = (BASE/'validate_dynamic.py').read_text()
     def fake_run(command, **kwargs):

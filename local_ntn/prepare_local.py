@@ -1,18 +1,19 @@
 """Generate a separate local gNB config from trace[0]; never rewrite user templates."""
 import argparse,csv,math,re
 from pathlib import Path
-from paths import OAI_REPO, UE_CONFIG
+from paths import OAI_REPO, UE_CONFIG, STK_TRACE
+from network_config import configure
 p=argparse.ArgumentParser();p.add_argument('--rate',type=float,default=0)
 a=p.parse_args()
 if not math.isfinite(a.rate) or not 0 <= a.rate <= 1:
     p.error('--rate must be finite and between 0 and 1')
 base=Path(__file__).resolve().parent
 repo=OAI_REPO
-trace=base/'stk_trace.csv'
+trace=STK_TRACE
 if not trace.is_file():
     raise SystemExit(f'Missing STK trace: {trace}. Open the STK scene and run local_ntn/export_stk_trace.py on Windows first.')
-lines=[s for s in trace.read_text().splitlines() if s and not s.startswith('#')]
-if not lines or lines[0]!='STKTRACE2' or len(lines)<3:
+lines=[s.strip() for s in trace.read_text().splitlines() if s.strip() and (not s.strip().startswith('#') or s.strip()=='# STKTRACE2')]
+if not lines or lines[0] not in ('STKTRACE2','# STKTRACE2') or len(lines)<3:
     raise SystemExit('Expected STKTRACE2 with at least two data rows; legacy channel CSV is not compatible.')
 v=list(map(float,next(csv.reader(lines[1:]))))
 if len(v)!=22 or not all(math.isfinite(x) for x in v) or v[20:]!=[1,1]:
@@ -59,7 +60,7 @@ values.update({f'velocityV{k}-r17':round(x*a.rate/.06) for k,x in zip('XYZ',vel)
 for name,value in values.items():
     conf,n=re.subn(r'(?m)^(\s*'+re.escape(name)+r'\s*=)[^;]+;',r'\g<1> '+str(value)+';',conf)
     if n!=1:raise RuntimeError(f'{name}: {n} occurrences')
-# Keep 20ms static history guard (greater than maximum delay in selected pass).
-out=base/'gnb.local.conf';out.write_text(conf)
+# 初始时延由双段几何计算；动态回放可超过 20 ms，由运行时更新偏移。
+out=base/'gnb.local.conf';out.write_text(configure(conf))
 (base/'initial_delay_ms.txt').write_text(f'{(rf+rs)/c*1000:.9f}\n')
 print('Generated',out,'rate',a.rate,'initial delay ms',(rf+rs)/c*1000)

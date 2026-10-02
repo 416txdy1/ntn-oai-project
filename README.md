@@ -1,120 +1,46 @@
-<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+# NTN OAI：单仓库 STK + QuaDRiGa 回放调试
 
-本仓库的 NTN 实验入口：[local_ntn/README.md](local_ntn/README.md)。STK 与 QuaDRiGa 的离线信道接口见 [quadriga/README.md](quadriga/README.md)。当前机器的运行方法、修复和验证记录：[2026-09-23 本地调试](local_ntn/DEBUG-2026-09-23.md)。下方保留上游 OAI 说明，不代表本仓库包含完整 OAI 源码。
+本仓库 zky 分支保存当前 OAI/STK/QuaDRiGa 集成源码、构建所需源码归档、真实 FDD 示例和无凭据核心网模板。接收者只需获取本仓库，无需再 clone OAI、QuaDRiGa、ASN1C 或 SIMDe 仓库。
 
-<h1 align="center">
-    <a href="https://lfnetworking.org/projects/duranta/"><img src="https://raw.githubusercontent.com/duranta-project/governance/main/logos/Duranta-OAI-Combined.png" alt="Duranta OAI" width="550"></a>
-</h1>
+系统依赖仍需安装：Ubuntu 22.04/WSL2、C/C++ 工具链、Docker Engine + Compose v2。核心网使用 Docker 镜像（首次启动可能下载）。示例回放不需要 MATLAB/STK；重新生成信道需 MATLAB 和 STK 导出输入。这里不承诺离线安装系统依赖或支持未验证的平台。
 
-<p align="center">
-    <a href="https://github.com/duranta-project/openairinterface5g/blob/develop/LICENSE"><img src="https://img.shields.io/badge/license-CSSL--v1.0-blue" alt="License"></a>
-    <a href="https://releases.ubuntu.com/22.04/"><img src="https://img.shields.io/badge/OS-Ubuntu22-Green" alt="Supported OS Ubuntu 22"></a>
-    <a href="https://releases.ubuntu.com/24.04/"><img src="https://img.shields.io/badge/OS-Ubuntu24-Green" alt="Supported OS Ubuntu 24"></a>
-    <a href="https://releases.ubuntu.com/26.04/"><img src="https://img.shields.io/badge/OS-Ubuntu26-Green" alt="Supported OS Ubuntu 26"></a>
-    <a href="https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux"><img src="https://img.shields.io/badge/OS-RHEL9-Green" alt="Supported OS RHEL9"></a>
-    <a href="https://getfedora.org/en/workstation/"><img src="https://img.shields.io/badge/OS-Fedora44-Green" alt="Supported OS Fedora 44"></a>
-</p>
+## 布局
 
-<p align="center">
-    <a href="https://jenkins-oai.eurecom.fr/job/RAN-Ubuntu18-Image-Builder/"><img src="https://img.shields.io/jenkins/build?jobUrl=https%3A%2F%2Fjenkins-oai.eurecom.fr%2Fjob%2FRAN-Ubuntu18-Image-Builder%2F&label=build-Ubuntu-x86%20Images"></a>
-    <a href="https://jenkins-oai.eurecom.fr/job/RAN-RHEL8-Cluster-Image-Builder/"><img src="https://img.shields.io/jenkins/build?jobUrl=https%3A%2F%2Fjenkins-oai.eurecom.fr%2Fjob%2FRAN-RHEL8-Cluster-Image-Builder%2F&label=build-UBI-x86%20Images"></a>
-    <a href="https://jenkins-oai.eurecom.fr/job/RAN-Ubuntu-ARM-Image-Builder/"><img src="https://img.shields.io/jenkins/build?jobUrl=https%3A%2F%2Fjenkins-oai.eurecom.fr%2Fjob%2FRAN-Ubuntu-ARM-Image-Builder%2F&label=build-Ubuntu-ARM%20Images"></a>
-</p>
+| 目录 | 用途 |
+|---|---|
+| `vendor/` | 固定版本源码压缩快照、SHA256、许可证；无构建二进制、无 Git 子模块 |
+| `oai_patch/current/` | 当前 OAI 修改文件，按 OAI 原始相对路径保存 |
+| `quadriga/oai/` | QD C reader/adapter 的唯一维护入口 |
+| `quadriga/matlab/` | STK→QD 转换、归一化及 FDD 导出脚本 |
+| `examples/fdd-pass/` | 已验算的 362 快照 trace 与 DL/UL bundle |
+| `configs/core/` | 无凭据的 5GC、UE 和数据库表结构模板 |
+| `scripts/` | 解包、构建、初始化、核心网管理和回归入口 |
+| `.runtime/` | 本地解包源码、构建目录、工具；自动生成，不提交 |
+| `.private/` | 本地随机凭据和核心网配置；自动生成，不提交 |
 
-<p align="center">
-  <a href="https://hub.docker.com/r/oaisoftwarealliance/oai-gnb"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/oaisoftwarealliance/oai-gnb?label=gNB%20docker%20pulls"></a>
-  <a href="https://hub.docker.com/r/oaisoftwarealliance/oai-nr-ue"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/oaisoftwarealliance/oai-nr-ue?label=NR-UE%20docker%20pulls"></a>
-  <a href="https://hub.docker.com/r/oaisoftwarealliance/oai-enb"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/oaisoftwarealliance/oai-enb?label=eNB%20docker%20pulls"></a>
-  <a href="https://hub.docker.com/r/oaisoftwarealliance/oai-lte-ue"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/oaisoftwarealliance/oai-lte-ue?label=LTE-UE%20docker%20pulls"></a>
-  <a href="https://hub.docker.com/r/oaisoftwarealliance/oai-nr-cuup"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/oaisoftwarealliance/oai-nr-cuup?label=NR-CUUP%20docker%20pulls"></a>
-</p>
+旧 `oai_patch/` 根目录、`local_ntn/original/`、`local_ntn/staged/` 作为历史材料保留，不是当前部署源。不要手动用它们覆盖新 OAI。
 
-# Duranta - OpenAirInterface
+## 快速开始
 
-Duranta OpenAirInterface RAN delivers and maintains an open-source cellular
-wireless software stack for 4G, 5G and future networking technologies. It
-supports simulation, prototyping, and end-to-end deployments on
-Commercial-Off-The-Shelf (COTS) hardware. Built for research and
-experimentation, it provides standard-compliant interfaces and is released
-under the Collaborative Standards Software License (CSSL).
+将工作目录放在 WSL 的 Linux 文件系统中（例如 `~/ntn-oai-project`），避免在 `/mnt/c`、`/mnt/e` 编译大量 ASN.1 源码。
 
-## License
-
- *  [OAI License Model](http://www.openairinterface.org/?page_id=101)
- *  [CSSL v1.0](http://www.openairinterface.org/?page_id=698)
-
-The source code is distributed under [**CSSL v1.0**](LICENSE).
-Some files, such as for orchestration, are distributed under
-[MIT license](./LICENSES/preferred/MIT.txt). Documentation is distributed under
-[Creative Commons Attribution 4.0 International license](LICENSES/preferred/CC-BY-4.0.txt).
-
-All the files without an explicit copyright header have an implicit "Copyright
-of OpenAirInterface Authors".
-
-Please see [NOTICE](NOTICE) for other licenses which are used in the software.
-
-In the past OAI source code has been re-licensed sometimes, here is the
-history:
-
-1. CSSL v1.0 starting tag 2026.w14
-2. OAI Public License v1.1 starting tag v1.0 till af4b0d53
-3. OAI Public License v1.0: starting tag v.04 till v1.0
-4. GPL 3: starting tag v.0 till v.04 (only initial implementation of 4G)
-
-## Where to Start
-
- *  [General overview of documentation](./doc/README.md)
- *  [The implemented features](./doc/FEATURE_SET.md)
- *  [System Requirements for Using OAI Stack](./doc/system_requirements.md)
- *  [How to build](./doc/BUILD.md)
- *  [How to run the modems](./doc/RUNMODEM.md)
-
-Not all information is available in a central place, and information for
-specific sub-systems might be available in the corresponding sub-directories.
-To find all READMEs, this command might be handy:
-
-```
-find . -iname "readme*"
+```bash
+bash scripts/install_deps.sh
+bash scripts/build.sh
+python3 scripts/init_lab.py
+source scripts/env.sh
+bash scripts/core.sh up
+bash scripts/prepare_iperf.sh
+python3 local_ntn/experiment.py preflight --rate 1
+sudo --preserve-env=OAI_REPO,OAI_BUILD_DIR,OAI_STK_TRACE,OAI_UE_CONFIG,OAI_QD_DL_CHANNEL,OAI_QD_UL_CHANNEL,OAI_AMF_IP,OAI_GNB_IP_CIDR,OAI_EXT_DN_IP,OAI_EXT_DN_CONTAINER python3 local_ntn/experiment.py start --rate 1 --label manual-dynamic
 ```
 
-## RAN repository structure
+完整的 PDU 等待、ping、双向流量、停止命令见 [手动运行指南](local_ntn/MANUAL_RUN.md)。使用 Docker 所需权限由本机管理员配置；也可在 root 终端中执行初始化及运行步骤。不要将 `.private/` 提交或分享。
 
-The OpenAirInterface (OAI) software is composed of the following parts: 
+## 源码变更与许可
 
-```
-openairinterface5g
-├── charts
-├── ci-scripts        : Meta-scripts used by the OSA CI process. Contains also configuration files used day-to-day by CI.
-├── CMakeLists.txt    : Top-level CMakeLists.txt for building
-├── cmake_targets     : Build utilities to compile (simulation, emulation and real-time platforms), and generated build files.
-├── common            : Some common OAI utilities, some other tools can be found at openair2/UTILS.
-├── doc               : Documentation
-├── docker            : Dockerfiles to build for Ubuntu and RHEL
-├── executables       : Top-level executable source files (gNB, eNB, ...)
-├── maketags          : Script to generate emacs tags.
-├── nfapi             : (n)FAPI code for MAC-PHY interface
-├── openair1          : Layer 1 (3GPP LTE Rel-10/12 PHY, NR Rel-15 PHY)
-├── openair2          : Layer 2 (3GPP LTE Rel-10 MAC/RLC/PDCP/RRC/X2AP, LTE Rel-14 M2AP, NR Rel-15+ MAC/RLC/PDCP/SDAP/RRC/X2AP/F1AP/E1AP), E2AP
-├── openair3          : Layer 3 (3GPP LTE Rel-10 S1AP/GTP, NR Rel-15 NGAP/GTP)
-├── openshift         : OpenShift helm charts for some deployment options of OAI
-├── radio             : Drivers for various radios such as USRP, AW2S, RFsim, 7.2 FHI, ...
-├── targets           : Some configuration files; only historical relevance, and might be deleted in the future
-└── tools             : Tools for use by the developers/ci machines: code analysis and formatting
-```
+OAI 来源版本、排除项见 `vendor/source-manifest.json`。修改 OAI 请编辑 `oai_patch/current/`；QD C 模块编辑 `quadriga/oai/`，然后重新运行 `scripts/build.sh`。解包树是生成产物，重建时会同步这些覆盖文件。
 
-## How to get support from the Community
+QuaDRiGa 随附源码许可证要求非商业使用，完整条款见 `vendor/QuaDRiGa-LICENSE.txt`。OAI 许可证见 `vendor/OAI-LICENSE` 和归档中的 LICENSES/NOTICE；ASN1C、SIMDe 保留各自源码版权声明。不要把整个仓库误认为采用单一许可证。
 
-You can ask your question on the [mailing lists](https://github.com/duranta-project/openairinterface5g/wiki/MailingList).
-
-Your email should contain below information:
-
-- A clear subject in your email.
-- For all the queries there should be [Query\] in the subject of the email and for problems there should be [Problem\].
-- In case of a problem, add a small description.
-- Do not share any photos unless you want to share a diagram.
-- OAI gNB/DU/CU/CU-CP/CU-UP configuration file in `.conf` format only.
-- Logs of OAI gNB/DU/CU/CU-CP/CU-UP in `.log` or `.txt` format only.
-- In case your question is related to performance, include a small description of the machine (Operating System, Kernel version, CPU, RAM and networking card) and diagram of your testing environment.
-- Known/open issues are present on [Github](https://github.com/duranta-project/openairinterface5g/issues), so keep checking.
-
-Always remember a structured email will help us understand your issues quickly.
+已知研究限制：1 秒 QD 快照不足以保证快速残余 Doppler 的采样精度；复系数线性插值中点功率不严格为 1；低速 UDP 验证不代表最大容量或完整过境稳定性。

@@ -1,2 +1,15 @@
 * text=auto
 *.sh text eol=lf
+*.py text eol=lf
+*.m text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.cpp text eol=lf
+*.tar.gz binary
+*.cf32 binary
+*.f32 binary
+*.f64 binary
+# Preserve upstream source, license and patch context formatting.
+vendor/*LICENSE* -whitespace
+oai_patch/current/** -whitespace
+quadriga/oai/*.diff -whitespace

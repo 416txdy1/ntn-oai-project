@@ -1,6 +1,10 @@
+# 当前单仓库入口
+
+QuaDRiGa 源码由 vendor/quadriga-source.tar.gz 提供；运行 python3 scripts/prepare_sources.py 后可用 quadriga/matlab/export_example_fdd.m 重新生成示例。主调试入口见 ../local_ntn/MANUAL_RUN.md。以下为模块说明及历史记录。
+
 # QuaDRiGa 离线信道接口（QDCHANNEL1）
 
-本目录定义 STK、QuaDRiGa 与 OAI RFsim 之间的离线数据边界，并提供 MATLAB/Octave 离线导出器。QDCHANNEL1 尚未接入 OAI。
+本目录定义 STK、QuaDRiGa 与 OAI RFsim 之间的离线数据边界，并提供 MATLAB/Octave 离线导出器。QDCHANNEL1 已在外部 OAI 源码的 RFsim IQ 路径中完成 SISO 稀疏多径接入，详见 [集成说明](docs/step04_rfsim_integration.md) 和 [2026-09-28 复核报告](docs/recheck_20260928.md)。完整 gNB/UE/5GC 联调尚未完成。
 
 ## 为什么单独定义接口
 
@@ -125,7 +129,7 @@ python -m quadriga.tools.audit_link_budget path/to/qd_bundle path/to/stk_trace.c
 
 审计器会检查 STK provenance、时间对齐、逐快照单位多径功率、零参考超额时延、公共相位稳定、残余增益与 FSPL 的斜率，以及合成前后 STK 路径损耗斜率是否保持不变。
 
-`tools/channel_math.py` 是与 MATLAB 归一化公式一致的 Python 标准库参考实现，用于在没有 MATLAB/Octave 的机器上验证公共相位去除、功率/时延契约与 ENU 坐标方向。它不代替真实 QuaDRiGa 运行。后续步骤将实现 OAI C/C++ 读取器。
+`tools/channel_math.py` 是与 MATLAB 归一化公式一致的 Python 标准库参考实现，用于在没有 MATLAB/Octave 的机器上验证公共相位去除、功率/时延契约与 ENU 坐标方向。它不代替真实 QuaDRiGa 运行。C 读取器和 RFsim 适配器位于 `oai/`，相关测试位于 `tests/`。
 
 ## 官方依据
 

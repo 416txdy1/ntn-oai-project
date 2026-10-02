@@ -3,8 +3,8 @@
 ## Scope
 
 This repository coordinates an OAI 5G NTN experiment using STK, RFsim, and
-OAI 5GC. The OAI and 5GC source trees are external repositories; keep their
-exact commits and local patches documented rather than committing build trees.
+OAI 5GC. OAI, QuaDRiGa and build-tool source snapshots are delivered in vendor/; keep their
+exact versions and current overlays documented. Do not commit .runtime/ build trees or .private/ credentials. Current OAI overlays live in oai_patch/current/, QD C modules in quadriga/oai/. Use scripts/build.sh and scripts/test.sh.
 
 ## Safety
 
@@ -28,8 +28,7 @@ sudo python3 local_ntn/experiment.py stop
 Build the OAI binaries with:
 
 ```bash
-cmake --build /home/kayoko/OAI/openairinterface5g/cmake_targets/ran_build/build \
-  --target nr-softmodem nr-uesoftmodem rfsimulator -j 6
+bash scripts/build.sh
 ```
 
 Before claiming a change works, run the trace parser and IQ regression tests

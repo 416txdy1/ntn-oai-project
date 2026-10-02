@@ -37,3 +37,7 @@ volumes/
 .idea/
 Thumbs.db
 Desktop.ini
+
+# Generated single-repository runtime and private lab state
+.runtime/
+.private/

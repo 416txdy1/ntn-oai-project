@@ -1,0 +1,70 @@
+
+
+uicc0 = {
+  imsi = "@IMSI@";
+  key = "@KEY@";
+  opc= "@OPC@";
+  pdu_sessions = ({ dnn = "oai"; nssai_sst = 1; });
+}
+
+position0 = {
+    x = -2176831.540396419;
+    y = 4387441.71613672;
+    z = 4071933.940179984;
+}
+
+thread-pool = "-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1"
+
+rfsimulator = (
+    {
+        prop_delay = 20;
+        options = ("chanmod");
+    }
+);
+
+RUs = (
+    {
+        nb_tx      = 1;
+        nb_rx      = 1;
+        att_tx     = 0;
+        att_rx     = 0;
+        max_rxgain = 114;
+        sdr_addrs  = "type=x300";
+        clock_src  = "internal";
+        time_src   = "internal";
+
+
+    }
+);
+
+cells = (
+    {
+        ru_id      = 0;
+        band       = 254;
+        rf_freq    = 2488400000L;
+        rf_offset  = -873500000L;
+        numerology = 0;
+        N_RB_DL    = 25;
+        ssb_start  = 60;
+    }
+);
+
+
+
+
+channelmod = {
+  max_chan = 10;
+  modellist = "modellist_rfsimu_1";
+  modellist_rfsimu_1 = (
+    {
+      model_name     = "rfsimu_channel_enB0"
+      type           = "SAT_LEO_TRANS";
+      noise_power_dB = -100;
+    },
+    {
+      model_name     = "rfsimu_channel_ue0"
+      type           = "SAT_LEO_TRANS";
+      noise_power_dB = -100;
+    }
+  );
+};

@@ -1,0 +1,25 @@
+--- a/radio/rfsimulator/simulator.cpp
++++ b/radio/rfsimulator/simulator.cpp
+@@ -1513,13 +1513,16 @@
+     buffer_t *ptr = &t->buf[sock];
+ 
+     if (ptr->conn_sock != -1 && !ptr->received_packets.empty()) {
+-      openair0_timestamp_t timestamp_to_free = t->nextRxTstamp - 1;
++      // 保留下一块卷积需要的完整历史；QD 稀疏时延可能远大于短 FIR。
++      uint64_t retained_samples = t->chan_offset;
+       if (ptr->channel_model) {
+-        timestamp_to_free -=
+-            (ptr->channel_model->channel_length - 1) + std::max(ptr->channel_model->channel_offset, t->chan_offset);
+-      } else {
+-        timestamp_to_free -= t->chan_offset;
+-      }
++        retained_samples = (qd_channel_history_length(ptr->channel_model) - 1)
++                           + std::max(ptr->channel_model->channel_offset, t->chan_offset);
++      }
++      // 启动时没有足够历史，饱和到零，避免无符号下溢后误删整个队列。
++      const uint64_t timestamp_to_free = t->nextRxTstamp > 0 && static_cast<uint64_t>(t->nextRxTstamp) > retained_samples
++                                            ? t->nextRxTstamp - retained_samples - 1
++                                            : 0;
+       clear_old_packets(ptr->received_packets, timestamp_to_free);
+     }
+   }
