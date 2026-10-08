@@ -20,6 +20,8 @@
 
 旧 `oai_patch/` 根目录、`local_ntn/original/`、`local_ntn/staged/` 作为历史材料保留，不是当前部署源。不要手动用它们覆盖新 OAI。
 
+> **调试版本状态：** 完整 361 秒业务验收仍未通过，末段有失步。其他成员请先阅读 [zky 协作调试指南](docs/DEBUG_ZKY.md)，按其中步骤配置和复现；实验修正默认关闭。
+
 ## 快速开始
 
 将工作目录放在 WSL 的 Linux 文件系统中（例如 `~/ntn-oai-project`），避免在 `/mnt/c`、`/mnt/e` 编译大量 ASN.1 源码。

@@ -19,7 +19,7 @@ times=[r[0] for r in rows]
 c=299792458.0
 fs=7680000.0
 
-def interpolate(t):
+def interpolate(t, mode='hermite'):
     assert times[0] <= t <= times[-1]
     i=max(0,min(len(rows)-2,bisect.bisect_right(times,t)-1))
     x,y=rows[i:i+2]
@@ -32,6 +32,9 @@ def interpolate(t):
         aa=2*(d-y[1+k])+h*(x[4+k]+y[4+k])
         r[1+k]=((aa*u+b)*u+v)*u+d
         r[4+k]=(3*aa*u*u+2*b*u+v)/h
+    if mode == 'blend-aware' and math.dist(x[1:4], y[1:4])/h > 20000:
+        # 位置仍按原 Hermite；混合段载波速度按导出的物理速度插值。
+        r[4:7] = [left+u*(right-left) for left,right in zip(x[4:7],y[4:7])]
     return r
 
 def geometry(r,rate):
@@ -49,6 +52,8 @@ for label in a.labels:
     rate=result['rate']; run={}
     for kind,direction in [('gnb','UL'),('ue','DL')]:
         text=(a.run_dir/'local_ntn'/f'{kind}-{label}.log').read_text(errors='replace')
+        if 'interpolation' in result:
+            assert 'STKTRACE2 interpolation='+result['interpolation'] in text, 'recorded interpolation mode mismatch'
         matches=list(pattern.finditer(text))
         assert matches, (label,kind,'no numeric log')
         maxima=dict.fromkeys(limits,0.0)
@@ -57,7 +62,7 @@ for label in a.labels:
             side,iq,stk,delay,doppler,gain,cn,valid,samples=m.groups()
             assert side==direction and valid=='1'
             iq_exact=int(samples)/fs; t=times[0]+rate*iq_exact
-            r=interpolate(t); expected_delay,vr,_=geometry(r,rate)
+            r=interpolate(t,result.get('interpolation','hermite')); expected_delay,vr,_=geometry(r,rate)
             frequency=1614900000 if side=='UL' else 2488400000
             expected_doppler=-vr/(c if side=='UL' else c+vr)*frequency
             power_index,cn_index=(17,19) if side=='UL' else (16,18)

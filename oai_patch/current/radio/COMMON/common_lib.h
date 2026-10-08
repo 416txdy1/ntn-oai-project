@@ -361,6 +361,7 @@ typedef struct {
   double propagation_delay_ms;
   double dl_doppler_hz;
   double dl_time_drift_us_s;
+  bool synthetic_blend; /* 合成位置过渡，不是物理卫星超高速运动 */
 } openair0_ntn_sync_state_t;
 
 /*!\brief structure holds the parameters to configure RF devices */

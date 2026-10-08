@@ -1,5 +1,8 @@
 # 单仓库手动运行配置与指令
 
+> 2026-10-02 全程复核更新：当前示例末 4 秒含卫星位置混合跳变，361 秒持续业务验收未通过。短测和公式一致性通过不代表完整过境通过。详见 [全程验收失败报告](../docs/FULL_PASS_ACCEPTANCE_20261002.md)。
+
+
 本说明针对仓库内源码交付结构。只需拉取 ntn-oai-project 的 zky 分支；不需要额外 clone OAI、QuaDRiGa、ASN1C 或 SIMDe。Ubuntu 22.04/WSL2、Docker Engine/Compose v2、系统依赖仍须安装，核心网镜像首次可能需要联网下载。
 
 ## 1. 安装依赖、解包并编译
@@ -157,3 +160,31 @@ python3 local_ntn/audit_runtime_numbers.py \
 该命令会核对 IQ 采样时间、STK 插值、上下行多普勒、传播时延、增益、C/N 和初始 TA；断言失败时退出码非零。若日志已被清理、当前生成配置换了轨迹，或使用了其他频率/采样率，不能直接套用这个针对当前示例的验算器。第 4 节单独执行 start 不会生成 smoke 结果 JSON，因此不能把手动 start 的 label 直接传给此命令。
 
 本次示例的验算参考：总 feeder+service 几何时延 14.7174–21.4783 ms，初始 TA=3614295。日志时延差不超过 5.1e-7 ms、多普勒差不超过 5.1e-4 Hz 是打印舍入容差；不表示实际卫星测量达到这种精度。完整验证结果见 [SELF_CONTAINED_VALIDATION.md](../docs/SELF_CONTAINED_VALIDATION.md)。
+
+## 10. 完整轨迹的持续业务验收
+
+在已编译并初始化的项目中，进入 root 终端并保持终端打开：
+
+```bash
+cd /home/你的用户名/ntn-oai-project
+source scripts/env.sh
+bash scripts/core.sh up
+bash scripts/prepare_iperf.sh
+python3 scripts/full_pass.py --max-wall-seconds 1800
+bash scripts/core.sh stop
+```
+
+脚本拒绝接管已运行的 modem；请先正常停止自己的上一轮实验。它自动启动 rate=1，等 PDU 建立，然后同时发送持续 ping、上行 100 Kbit/s UDP、下行 100 Kbit/s UDP（端口 5203/5204），每 30 秒输出两端 IQ 进度。仿真速度可能低于墙钟速度，不能用 sleep 361 代替轨迹覆盖检查。
+
+当前示例轨迹为 361 秒，脚本要求两端最后记录的 IQ 时间都达到 360.9 秒以上，即进入最后 0.1 秒；STKTRACE2 通常在约 360.999 秒打印最后有效记录。业务从 PDU 建立后开始，具体起点写入报告，启动阶段不算业务覆盖。结束时停止本次流量和 modem，核心网由最后一条命令停止。原始日志仅保存在本地 .runtime/reports/ 和 local_ntn/。
+
+严格判据为：到达轨迹末端、无提前退出/停滞、接收端 UDP 零丢包、ping 全收、无墙钟回退、两端正确加载 STK/QD。失败时仍保存 JSON 摘要并返回非零；必须按报告区分中途故障、主动结束时的在途报文和墙钟异常，不要直接忽略丢包。信道超出轨迹后会静音而不循环，这是预期边界行为。
+
+将控制台打印的 fullpass label 用于数值验算：
+
+```bash
+python3 local_ntn/audit_runtime_numbers.py \
+  --run-dir "$PWD" --labels fullpass-替换为实际编号
+```
+
+数值验算通过只能证明轨迹与 IQ 日志计算一致，不能替代持续业务通过。

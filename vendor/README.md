@@ -7,6 +7,6 @@
 - asn1c-source.tar.gz：固定 commit 940dd5fa9f3917913fd487b13dfddfacd0ded06e，包含构建工具源码和许可证。
 - simde-source.tar.gz：已验证 SIMD 头文件源码；逐文件保留 MIT 等版权声明，不包含嵌套 .git。
 
-当前实验需要的覆盖文件在 oai_patch/current/（15 个文件，含构建版本标识适配）与 quadriga/oai/（3 个文件），解包器只将它们同步到本仓库 .runtime/oai，不会覆盖外部源码。
+当前实验需要的覆盖文件在 oai_patch/current/（16 个文件，含构建版本标识适配与可选 blend 时延前馈）与 quadriga/oai/（3 个文件），解包器只将它们同步到本仓库 .runtime/oai，不会覆盖外部源码。
 
 源码之外的操作系统依赖用发行版包安装；5GC 通过容器镜像运行。不会为了构建启用 E2/FlexRIC 或自动下载 ASN1C。

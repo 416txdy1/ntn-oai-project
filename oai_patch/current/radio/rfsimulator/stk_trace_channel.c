@@ -43,6 +43,7 @@ static void init(void)
   extra_loss=number("OAI_STK_TRACE_EXTRA_LOSS_DB",0,0,200);
   cn_offset=number("OAI_STK_TRACE_CN_OFFSET_DB",0,-200,100);
   noise_enabled=number("OAI_STK_TRACE_NOISE",1,0,1)!=0;
+  LOG_I(HW,"STKTRACE2 interpolation=%s\n",trace.blend_aware?"blend-aware":"hermite");
   bool dl=false,ul=false;
   for(size_t i=0;i<trace.count;i++) {
     if(!dl && trace.rows[i].dl_valid){dl_reference=trace.rows[i].dl_power;dl=true;}
@@ -59,6 +60,12 @@ static void ranges(const stk_trace_row *s,const double site[3],double *r,double 
   *r=sqrt(rr);AssertFatal(isfinite(*r) && *r>1 && isfinite(rv) && isfinite(vv) && isfinite(ra),"Invalid STK range\n");
   *v=rv / *r * rate;*a=(vv+ra-(rv / *r)*(rv / *r)) / *r * rate*rate;
   AssertFatal(isfinite(*v) && isfinite(*a),"Invalid STK range derivatives\n");
+}
+static double path_rate(const stk_trace_row *s,const double site[3],double distance)
+{
+  double value=0;
+  for(int i=0;i<3;i++)value+=(s->pos[i]-site[i])*s->path_velocity[i];
+  return value/distance*rate;
 }
 static double clamp(double v,double lo,double hi){return fmin(hi,fmax(lo,v));}
 static bool at(uint64_t ts,double fs,stk_trace_row *s)
@@ -110,9 +117,9 @@ bool update_channel_model_from_stk_trace(channel_desc_t *ch,int n,uint64_t ts)
   if(ch->enable_dynamic_Doppler)ch->Doppler_phase_inc=2*M_PI*doppler/ch->sampling_rate;
   if(!ch->is_uplink) {
     pthread_mutex_lock(&lock);
-    last_sync=(openair0_ntn_sync_state_t){.stk_time_s=s.time,.propagation_delay_ms=delay*1000,
+    last_sync=(openair0_ntn_sync_state_t){.stk_time_s=s.time,.propagation_delay_ms=delay*1000,.synthetic_blend=s.synthetic_blend,
       .dl_doppler_hz=ch->enable_dynamic_Doppler?doppler:0,
-      .dl_time_drift_us_s=(vs+vf)/SPEED_OF_LIGHT*1e6};
+      .dl_time_drift_us_s=(path_rate(&s,s.ue,rs)+path_rate(&s,s.gnb,rf))/SPEED_OF_LIGHT*1e6};
     have_sync=valid;observed_dl=true;pthread_mutex_unlock(&lock);
   }
   if(ts/(uint64_t)ch->sampling_rate!=(ts+n)/(uint64_t)ch->sampling_rate)
@@ -146,8 +153,8 @@ bool get_stk_trace_sync(double frequency,openair0_ntn_sync_state_t *s,openair0_n
   stk_trace_row r;
   if(!stk_trace_at(&trace,epoch,&r)||!r.dl_valid){*status=OPENAIR0_NTN_SYNC_NOT_VISIBLE;return true;}
   double rs,vs,as,rf,vf,af;ranges(&r,r.ue,&rs,&vs,&as);ranges(&r,r.gnb,&rf,&vf,&af);
-  *s=(openair0_ntn_sync_state_t){.stk_time_s=epoch,.propagation_delay_ms=(rs+rf)/SPEED_OF_LIGHT*1000,
-    .dl_doppler_hz=-vs/(SPEED_OF_LIGHT+vs)*frequency,.dl_time_drift_us_s=(vs+vf)/SPEED_OF_LIGHT*1e6};
+  *s=(openair0_ntn_sync_state_t){.stk_time_s=epoch,.propagation_delay_ms=(rs+rf)/SPEED_OF_LIGHT*1000,.synthetic_blend=r.synthetic_blend,
+    .dl_doppler_hz=-vs/(SPEED_OF_LIGHT+vs)*frequency,.dl_time_drift_us_s=(path_rate(&r,r.ue,rs)+path_rate(&r,r.gnb,rf))/SPEED_OF_LIGHT*1e6};
   *status=OPENAIR0_NTN_SYNC_READY;return true;
 }
 

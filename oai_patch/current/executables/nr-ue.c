@@ -6,6 +6,7 @@
 #define _GNU_SOURCE // For pthread_setname_np
 #include <pthread.h>
 #include "executables/nr-ue-ru.h"
+#include "executables/stk_timing_assist.h"
 #include "executables/nr-uesoftmodem.h"
 #include "PHY/INIT/nr_phy_init.h"
 #include "NR_MAC_UE/mac_proto.h"
@@ -762,6 +763,12 @@ void *UE_thread(void *arg)
   bool stats_printed = false;
   int stk_wait_log_counter = 0;
   double last_stk_sync_log_time = -1.0;
+  stk_timing_tracker blend_timing={0};
+  const char *blend_assist=getenv("OAI_STK_BLEND_TIMING_ASSIST");
+  AssertFatal(!blend_assist || !strcmp(blend_assist,"0") || !strcmp(blend_assist,"1"),
+              "OAI_STK_BLEND_TIMING_ASSIST must be 0 or 1\n");
+  const bool use_blend_timing=blend_assist && !strcmp(blend_assist,"1");
+  double last_blend_timing_log=-1;
 
   if (get_softmodem_params()->sync_ref && UE->sl_mode == 2) {
     UE->is_synchronized = 1;
@@ -978,6 +985,27 @@ void *UE_thread(void *arg)
 
     int iq_shift_to_apply = 0;
     if (slot_nr == nb_slot_frame - 1) {
+      if(use_blend_timing) {
+        openair0_ntn_sync_state_t state={0};
+        if(nrue_ru_get_ntn_sync_state(UE,&state)==OPENAIR0_NTN_SYNC_READY) {
+          const double fs=fp->samples_per_subframe*1000.0;
+          /* 同步状态对应上一个 read 的起点，外推至下一帧首符号。 */
+          const double ahead=(get_readBlockSize(slot_nr-1,fp)+get_readBlockSize(slot_nr,fp))/fs;
+          const double delay=state.propagation_delay_ms+state.dl_time_drift_us_s*ahead/1000;
+          int correction=0;
+          const int applied=stk_timing_step(&blend_timing,state.stk_time_s,delay,
+                                             state.synthetic_blend,fs,get_readBlockSize(slot_nr,fp)/2,&correction);
+          AssertFatal(applied>=0,"STK blend timing step exceeds safe read size\n");
+          if(applied) {
+            shiftForNextFrame=correction;
+            if(last_blend_timing_log<0 || state.stk_time_s-last_blend_timing_log>=.1) {
+              LOG_I(PHY,"STK blend timing: time %.6f shift %d samples drift %.3f us/s\n",
+                    state.stk_time_s,correction,state.dl_time_drift_us_s);
+              last_blend_timing_log=state.stk_time_s;
+            }
+          }
+        } else blend_timing.valid=false;
+      }
       // we shift of half of measured drift, at each beginning of frame for both rx and tx
       iq_shift_to_apply = shiftForNextFrame;
       // autonomous timing advance calculation, which does not use SIB19 information

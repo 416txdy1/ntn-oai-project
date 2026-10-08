@@ -1,5 +1,8 @@
 # 单仓库交付与数值验证（2026-10-02）
 
+> 2026-10-02 全程复核更新：当前示例末 4 秒含卫星位置混合跳变，361 秒持续业务验收未通过。短测和公式一致性通过不代表完整过境通过。详见 [全程验收失败报告](FULL_PASS_ACCEPTANCE_20261002.md)。
+
+
 ## 源码与构建
 
 OAI、QuaDRiGa、ASN1C、SIMDe 的源码归档位于 vendor/，版本与校验和见 source-manifest.json、checksums.json。OAI 修改文件维护在 oai_patch/current/，QD C 模块维护在 quadriga/oai/。构建解包到 .runtime/ 后应用这些文件，不需要拉取其他源码仓库。系统依赖、Docker、核心网镜像仍需安装；本次没有在全新 Ubuntu 上重新安装系统软件包。
