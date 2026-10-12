@@ -11,8 +11,9 @@ bool stk_trace_load(const char *path, stk_trace *trace, char *error, size_t erro
   char line[4096]; size_t lineno=1, cap=0;
   *trace=(stk_trace){0};
   const char *mode=getenv("OAI_STK_TRACE_INTERPOLATION");
-  if(mode && *mode && strcmp(mode,"hermite") && strcmp(mode,"blend-aware"))goto bad;
+  if(mode && *mode && strcmp(mode,"hermite") && strcmp(mode,"blend-aware") && strcmp(mode,"legacy-linear"))goto bad;
   trace->blend_aware=mode && strcmp(mode,"blend-aware")==0;
+  trace->legacy_linear=mode && strcmp(mode,"legacy-linear")==0;
   if (!fgets(line,sizeof(line),f)) goto bad;
   line[strcspn(line,"\r\n")]=0;
   if(strcmp(line,"STKTRACE2"))goto bad;
@@ -65,7 +66,9 @@ bool stk_trace_at(const stk_trace *trace, double time, stk_trace_row *out)
     return false;
   size_t lo=0,hi=trace->count-1;
   while (hi-lo>1) {size_t m=(lo+hi)/2;if(trace->rows[m].time<=time)lo=m;else hi=m;}
-  if(!stk_trace_interpolate(&trace->rows[lo],&trace->rows[hi],time,out))return false;
+  if(trace->legacy_linear) {
+    if(!stk_trace_interpolate_linear(&trace->rows[lo],&trace->rows[hi],time,out))return false;
+  } else if(!stk_trace_interpolate(&trace->rows[lo],&trace->rows[hi],time,out))return false;
   if(trace->blend_aware)stk_trace_blend_velocity(&trace->rows[lo],&trace->rows[hi],time,out);
   return true;
 }

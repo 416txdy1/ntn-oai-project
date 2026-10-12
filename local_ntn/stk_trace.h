@@ -13,11 +13,36 @@ typedef struct {
   double dl_power, ul_power, dl_cn, ul_cn;
   int dl_valid, ul_valid;
 } stk_trace_row;
-typedef struct { stk_trace_row *rows; size_t count; bool blend_aware; } stk_trace;
+typedef struct { stk_trace_row *rows; size_t count; bool blend_aware, legacy_linear; } stk_trace;
 static inline double stk_trace_epoch(double epoch, uint64_t timestamp, double fs, double rate)
 { return epoch + (double)timestamp / fs * rate; }
 static inline double stk_trace_amplitude(double power, double reference, int valid)
 { return valid ? pow(10.0, (power-reference)/20.0) : 0.0; }
+/* Legacy pseudo-handover contract: position and physical input velocity are
+ * interpolated independently; synthetic position blend is not carrier motion. */
+static inline bool stk_trace_interpolate_linear(const stk_trace_row *a, const stk_trace_row *b,
+                                               double time, stk_trace_row *out)
+{
+  const double h=b->time-a->time;
+  if (!(h>0) || time<a->time || time>b->time || !isfinite(time)) return false;
+  const double u=(time-a->time)/h;
+  *out=*a; out->time=time; out->synthetic_blend=false;
+  for (int i=0;i<3;i++) {
+    out->pos[i]=a->pos[i]+u*(b->pos[i]-a->pos[i]);
+    out->vel[i]=a->vel[i]+u*(b->vel[i]-a->vel[i]);
+    out->acc[i]=a->acc[i]+u*(b->acc[i]-a->acc[i]);
+    out->path_velocity[i]=out->vel[i];
+    out->gnb[i]=a->gnb[i]+u*(b->gnb[i]-a->gnb[i]);
+    out->ue[i]=a->ue[i]+u*(b->ue[i]-a->ue[i]);
+  }
+  out->dl_power=a->dl_power+u*(b->dl_power-a->dl_power);
+  out->ul_power=a->ul_power+u*(b->ul_power-a->ul_power);
+  out->dl_cn=a->dl_cn+u*(b->dl_cn-a->dl_cn);
+  out->ul_cn=a->ul_cn+u*(b->ul_cn-a->ul_cn);
+  out->dl_valid=a->dl_valid && b->dl_valid;
+  out->ul_valid=a->ul_valid && b->ul_valid;
+  return true;
+}
 /* Cubic Hermite: velocity is exactly the derivative of interpolated position. */
 static inline bool stk_trace_interpolate(const stk_trace_row *a, const stk_trace_row *b,
                                         double time, stk_trace_row *out)
