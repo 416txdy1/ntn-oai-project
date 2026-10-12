@@ -39,5 +39,41 @@ catch failure
         'Wrong rejection: %s: %s', failure.identifier, failure.message);
 end
 assert(~exist(output, 'file'));
+% Force a real exporter failure after the wrapper creates its output root.
+% Nonuniform trace rows and an exactly aligned schedule reach the unchanged
+% export_stk_to_qdchannel TraceRate rejection without any QuaDRiGa mutation.
+trace_lines = strsplit(fileread(fullfile(root, 'local_ntn', 'stk_trace_firsthandover.csv')), sprintf('\n'));
+schedule_lines = strsplit(fileread(fullfile(root, 'local_ntn', 'satellite_schedule_firsthandover.csv')), sprintf('\n'));
+fields = strsplit(trace_lines{4}, ',');
+fields{1} = '8201.25';
+trace_lines{4} = strjoin(fields, ',');
+fields = strsplit(schedule_lines{3}, ',');
+fields{1} = '8201.25';
+schedule_lines{3} = strjoin(fields, ',');
+nonuniform_trace = fullfile(temporary, 'nonuniform-trace.csv');
+aligned_schedule = fullfile(temporary, 'aligned-schedule.csv');
+fid = fopen(nonuniform_trace, 'wt');
+fprintf(fid, '%s', strjoin(trace_lines, sprintf('\n')));
+fclose(fid);
+fid = fopen(aligned_schedule, 'wt');
+fprintf(fid, '%s', strjoin(schedule_lines, sprintf('\n')));
+fclose(fid);
+partial = fullfile(temporary, 'partial-output');
+try
+    export_handover_fdd(nonuniform_trace, aligned_schedule, partial);
+    error('TEST:UnexpectedSuccess', 'Nonuniform trace was accepted');
+catch failure
+    assert(strcmp(failure.identifier, 'QDCHANNEL1:TraceRate'), ...
+        'Wrong rejection: %s: %s', failure.identifier, failure.message);
+end
+assert(exist(partial, 'dir') == 7);
+assert(~exist(fullfile(partial, 'provenance.json'), 'file'));
+try
+    export_handover_fdd(nonuniform_trace, aligned_schedule, partial);
+    error('TEST:UnexpectedSuccess', 'Partial output was overwritten');
+catch failure
+    assert(strcmp(failure.identifier, 'QDCHANNEL1:OutputExists'));
+end
+disp('PASS MATLAB real partial failure has no completion record and cannot be overwritten');
 disp('PASS MATLAB handover export no-overwrite and input alignment');
 end
