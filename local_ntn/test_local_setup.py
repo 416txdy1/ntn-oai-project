@@ -99,3 +99,33 @@ with tempfile.TemporaryDirectory(prefix='ntn-init-import-') as directory:
     assert imported.returncode==0, imported.stderr
     assert not (import_root/'.private').exists()
     print('PASS: init_lab import has no CLI or credential side effects')
+
+# Generated files are scoped to the selected run and lead affects config only.
+from runtime_config import resolve_runtime
+from prepare_local import generate
+with tempfile.TemporaryDirectory(prefix='ntn-run-config-') as directory:
+    root=Path(directory)
+    config=resolve_runtime(root,'legacy-handover','generated',{})
+    config.ue_config.parent.mkdir(parents=True)
+    config.ue_config.write_text('imsi = "001010000000001"; position0 = { x = 6377900; y = 0; z = 0; };')
+    config.trace.parent.mkdir(parents=True)
+    row=[8200,7000000,0,0,100,0,0,0,0,0,6377900,0,0,6377900,0,0,-100,-100,20,20,1,1]
+    config.trace.write_text('STKTRACE2\n'+'\n'.join(','.join(map(str,r)) for r in (row,[8201,*row[1:]]))+'\n')
+    template=config.oai_repo/'ci-scripts/conf_files/gnb.sa.band254.u0.25prb.rfsim.ntn-leo.conf'
+    template.parent.mkdir(parents=True)
+    template.write_bytes((OAI_REPO/'ci-scripts/conf_files/gnb.sa.band254.u0.25prb.rfsim.ntn-leo.conf').read_bytes())
+    original=template.read_bytes()
+    with contextlib.redirect_stdout(io.StringIO()):generate(config,1,0)
+    first=config.gnb_config.read_text()
+    with contextlib.redirect_stdout(io.StringIO()):generate(config,1,2)
+    second=config.gnb_config.read_text()
+    assert first!=second,'lead must predict initial position'
+    assert config.initial_delay_file.parent==config.run_dir and config.gnb_config.parent==config.run_dir
+    assert not (root/'local_ntn/gnb.local.conf').exists()
+    assert template.read_bytes()==original
+    assert config.trace.read_text().splitlines()[1].startswith('8200,')
+    for bad in (-1,float('nan'),float('inf')):
+        try:generate(config,1,bad)
+        except ValueError:pass
+        else:raise AssertionError('invalid initial lead accepted')
+    print('PASS: test_generated_files_stay_in_run, bounded initial lead and unchanged epoch/template')

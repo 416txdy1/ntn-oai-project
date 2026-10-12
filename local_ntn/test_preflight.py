@@ -179,5 +179,31 @@ class PreflightTest(unittest.TestCase):
                 self.assertEqual(json.loads((Path(directory) / 'processes.json').read_text()), {})
 
 
+
+
+class ProfilePreflightTest(unittest.TestCase):
+    def test_integrated_requires_both_bundles(self):
+        for env in ({}, {'OAI_QD_DL_CHANNEL':'/tmp/dl'}, {'OAI_QD_UL_CHANNEL':'/tmp/ul'}):
+            with self.assertRaises(ValueError):channel_environments(env,qd_required=True)
+        children=channel_environments({'OAI_QD_DL_CHANNEL':'/tmp/dl','OAI_QD_UL_CHANNEL':'/tmp/ul'},qd_required=True)
+        self.assertEqual(children['gnb']['OAI_QD_CHANNEL'],'/tmp/ul')
+        self.assertEqual(children['ue']['OAI_QD_CHANNEL'],'/tmp/dl')
+
+    def test_legacy_runtime_clears_inherited_qd(self):
+        import preflight as module
+        from runtime_config import resolve_runtime
+        with tempfile.TemporaryDirectory() as directory:
+            config=resolve_runtime(Path(directory),'legacy-handover','fixture',{})
+            with patch.object(module,'read_trace',return_value=[[0]+[0]*12+[6377900,0,0]+[0]*6,[1]+[0]*21]), \
+                 patch.object(module,'check_template'),patch.object(Path,'is_file',return_value=True), \
+                 patch('os.access',return_value=True),patch.object(Path,'read_text',return_value='position0 = { x = 6377900; y = 0; z = 0; };'), \
+                 patch.object(Path,'read_bytes',return_value=b'fixture'),patch.object(module,'check_bundle') as bundle:
+                result=module.preflight(0,{'OAI_QD_CHANNEL':'/foreign','OAI_QD_DL_CHANNEL':'/foreign'},runtime=config)
+            self.assertEqual(result['mode'],'STK-only')
+            self.assertEqual(result['source_repo'],str(config.oai_repo))
+            self.assertEqual(result['trace'],str(config.trace))
+            bundle.assert_not_called()
+
 if __name__ == '__main__':
     unittest.main()
+
