@@ -16,3 +16,8 @@ quadriga/oai/*.diff -whitespace
 
 # Existing bundle provenance hashes the original Windows-generated trace bytes.
 examples/fdd-pass/trace.csv text eol=crlf
+
+# Restored handover input bytes remain reproducible on Windows and Linux.
+local_ntn/satellite_schedule*.csv text eol=lf
+local_ntn/stk_trace_firsthandover.csv text eol=lf
+local_ntn/stk_trace_seamless.csv text eol=lf
