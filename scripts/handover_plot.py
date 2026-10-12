@@ -140,4 +140,3 @@ def draw(rows,output,report,epoch,rate,start,end):
     axes[-1].set_xlabel('Absolute STK seconds' if rate else 'IQ elapsed seconds (static STK epoch)')
     fig.savefig(output/'timeline.svg');fig.savefig(output/'timeline.png',dpi=140)
     plt.close(fig)
-

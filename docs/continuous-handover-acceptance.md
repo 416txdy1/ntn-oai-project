@@ -137,4 +137,3 @@ vendor archive. Parent integration HEAD is never recorded as OAI source commit.
 Archive identity contains the pinned commit, verified archive checksum/stamp and
 deployed current/QuaDRiGa overlay hashes. Git trusted-directory exceptions are
 scoped to exact commands, never global configuration.
-

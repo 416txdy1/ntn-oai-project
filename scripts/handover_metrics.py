@@ -169,4 +169,3 @@ def evaluate_handover(report):
     except (KeyError,TypeError,ValueError,IndexError) as error:
         reasons.append('missing or invalid evidence: '+str(error))
     return reasons
-

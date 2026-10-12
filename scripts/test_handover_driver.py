@@ -202,4 +202,3 @@ class ScientificTimelineTests(unittest.TestCase):
             self.assertTrue((Path(directory)/'timeline.svg').is_file())
 
 if __name__=='__main__':unittest.main()
-

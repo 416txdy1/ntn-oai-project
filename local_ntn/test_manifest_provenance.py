@@ -89,4 +89,3 @@ class ProvenanceTests(unittest.TestCase):
             self.assertEqual(identity['commit'],e.commit_at(root))
 
 if __name__=='__main__':unittest.main()
-

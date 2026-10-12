@@ -41,4 +41,3 @@ class NumericAuditTests(unittest.TestCase):
         self.assertGreater(a.interpolate(rows,400.5,'hermite')[4],100000)
 
 if __name__=='__main__':unittest.main()
-
