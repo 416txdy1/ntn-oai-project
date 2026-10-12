@@ -76,6 +76,20 @@ class DriverBoundaryTests(unittest.TestCase):
                      [ready,dict(event='error',role='receiver',monotonic_ns=200),end]):
             with self.assertRaises(ValueError):d.worker_observation(rows,'receiver')
 
+    def test_numeric_and_schedule_observation_gaps_cannot_pass(self):
+        from handover_metrics import case_spec
+        numbers=[dict(samples=999+i*1000,valid=1) for i in range(620)]
+        schedule=[dict(samples=999+i*1000,stk_s=8200+.999+i,
+                       phase='complete' if i in (44,599) else 'steady') for i in range(620)]
+        observer=SimpleNamespace(fs=1000,numbers={'gnb':numbers,'ue':numbers},
+                                 schedules={'gnb':schedule,'ue':schedule})
+        d.validate_physical_observations(observer,case_spec('full'))
+        observer.numbers['ue']=numbers[:40]+numbers[41:]
+        with self.assertRaises(ValueError):d.validate_physical_observations(observer,case_spec('full'))
+        observer.numbers['ue']=numbers
+        observer.schedules['ue']=[row for row in schedule if row['phase']!='complete']
+        with self.assertRaises(ValueError):d.validate_physical_observations(observer,case_spec('full'))
+
     def test_drain_reserve_uses_observed_wall_to_iq_rate_and_preserves_windows(self):
         from handover_metrics import case_spec
         def rows(factor):
