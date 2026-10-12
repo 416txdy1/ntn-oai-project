@@ -51,3 +51,31 @@ with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
     subprocess.run([str(d/'test'),'--phase'],check=True)
     subprocess.run([str(d/'test'),str(trace)],check=True)
     if has_legacy:subprocess.run([str(d/'test'),'--legacy'],check=True)
+
+    disabled={**os.environ,'OAI_STK_DYNAMIC_DELAY':'0','OAI_STK_DYNAMIC_DOPPLER':'0'}
+    subprocess.run([str(d/'test'),str(trace)],check=True,env=disabled)
+    schedule=d/'schedule.csv'
+    schedule.write_text('time,satellite_id,elevation_deg,visible,switched,handover_phase,previous_satellite_id,next_satellite_id\n'
+                        '1,SAT_A,20,1,0,steady,,SAT_A\n'
+                        '2,SAT_B,15,1,1,complete,SAT_A,SAT_B\n')
+    clock_env={**os.environ,'OAI_STK_TRACE_RATE':'0.5','OAI_STK_TRACE_EPOCH':'1',
+               'OAI_STK_SCHEDULE':str(schedule)}
+    output=subprocess.check_output([str(d/'test'),str(trace),'--clock'],text=True,env=clock_env)
+    clocks=[line.split() for line in output.splitlines() if line.startswith('STKCLOCK ')]
+    assert clocks,'actual channel must emit STKCLOCK anchors'
+    previous=None
+    for words in clocks:
+        assert words[1]=='DL'
+        fields=dict(word.split('=',1) for word in words[2:])
+        samples=int(fields['samples']);fs=float(fields['sampling_rate']);iq=float(fields['iq_s']);stk=float(fields['stk_s'])
+        monotonic=int(fields['monotonic_ns'])
+        assert fs==7680000 and abs(iq-samples/fs)<1e-8 and abs(stk-(1+iq*.5))<1e-8
+        assert monotonic>0
+        if previous:
+            assert monotonic>=previous[0] and 0<iq-previous[1]<=.100001
+        else:assert samples==0
+        previous=monotonic,iq
+    schedules=[line for line in output.splitlines() if line.startswith('STKSCHEDULE ')]
+    assert any('satellite_id=SAT_A ' in line and 'phase=steady ' in line for line in schedules)
+    assert any('satellite_id=SAT_B ' in line and 'phase=complete ' in line and 'previous=SAT_A ' in line for line in schedules)
+    print(f'PASS actual STKCLOCK: {len(clocks)} monotonic/IQ/STK anchors; schedule identity and phase')

@@ -13,7 +13,11 @@
 static log_t log_state;
 log_t *g_log=&log_state;
 void logRecord_mt(const char *f,const char *fn,int l,int c,int level,const char *format,...)
-{ (void)f; (void)fn; (void)l; (void)c; (void)level; (void)format; }
+{ (void)f; (void)fn; (void)l; (void)c; (void)level;
+  if(strncmp(format,"STKCLOCK ",9)==0 || strncmp(format,"STKSCHEDULE ",12)==0 || strncmp(format,"STKTRACE2 ",10)==0) {
+    va_list args;va_start(args,format);vprintf(format,args);va_end(args);
+  }
+}
 void exit_function(const char *f,const char *fn,const int line,const char *s,const int kind)
 { (void)f; (void)fn; (void)line; (void)s; (void)kind; abort(); }
 double gaussZiggurat(double mean,double variance)
@@ -27,7 +31,9 @@ bool update_channel_model_from_stk(channel_desc_t *c,int n,uint64_t t)
 static double energy(cf_t *s,int n){double e=0;for(int i=0;i<n;i++)e+=s[i].r*s[i].r+s[i].i*s[i].i;return e/n;}
 int main(int argc,char **argv)
 {
-  assert(argc==2);
+  assert(argc==2 || argc==3);
+  log_state.log_component[HW].level=OAILOG_INFO;
+  bool clock_mode=argc==3 && strcmp(argv[2],"--clock")==0;
   if(strcmp(argv[1],"--phase")==0) {
     struct complexd tap={.r=1};struct complexd *taps[]={&tap};float phase=0;
     channel_desc_t ch={.nb_tx=1,.nb_rx=1,.channel_length=1,.ch=taps,.Doppler_phase_cur=&phase,
@@ -54,6 +60,10 @@ int main(int argc,char **argv)
     .enable_dynamic_delay=true,.enable_dynamic_Doppler=true};
   enum {N=1024};c16_t in[N];cf_t out[N];c16_t *inputs[]={in};
   for(int i=0;i<N;i++)in[i]=(c16_t){.r=1000,.i=2000};
+  if(clock_mode) {
+    for(int i=0;i<=60;i++)update_channel_model(&ch,N,(uint64_t)i*384000);
+    puts("PASS actual sample clock log fixture");return 0;
+  }
   if(legacy) {
 #ifdef OAI_HAS_LEGACY_STK
     ch.stk_n=1;ch.stk_visible=0;memset(out,0,sizeof(out));rxAddInput(inputs,out,0,&ch,N);
@@ -70,7 +80,12 @@ int main(int argc,char **argv)
   int delay0=ch.channel_offset;
   update_channel_model(&ch,N,7680000);memset(out,0,sizeof(out));rxAddInput(inputs,out,0,&ch,N);
   double e1=energy(out,N);assert(fabs(e1/e0-.1)<1e-6);
-  assert(ch.channel_offset>delay0);assert(ch.Doppler_phase_inc<0);
+  if(getenv("OAI_STK_DYNAMIC_DELAY") && strcmp(getenv("OAI_STK_DYNAMIC_DELAY"),"0")==0)
+    assert(ch.channel_offset==delay0);
+  else assert(ch.channel_offset>delay0);
+  if(getenv("OAI_STK_DYNAMIC_DOPPLER") && strcmp(getenv("OAI_STK_DYNAMIC_DOPPLER"),"0")==0)
+    assert(ch.Doppler_phase_inc==0);
+  else assert(ch.Doppler_phase_inc<0);
   double gain=1,sigma=0;stk_trace_iq_parameters(&ch,inputs,0,N,&gain,&sigma);
   double ratio=2*sigma*sigma/(e0*gain*gain);
   assert(fabs(ratio-(pow(10,-20./10)*7680000/2000000))<1e-8);
