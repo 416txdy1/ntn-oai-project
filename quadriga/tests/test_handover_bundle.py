@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import math
 from pathlib import Path
 import shutil
 import sys
@@ -64,6 +65,12 @@ class HandoverBundleTest(unittest.TestCase):
                        "quadriga_archive_sha256": json.loads((ROOT / "vendor/checksums.json").read_text())["quadriga-source.tar.gz"],
                        "files": {name: sha(ROOT / name) if (ROOT / name).is_file() else "0" * 64
                                  for name in SOURCE_FILES}},
+            "warnings": {
+                "events": [], "trace_time_step_s": self.rows[1][0] - self.rows[0][0],
+                "max_satellite_track_speed_m_s": max(
+                    math.dist(a[1:4], b[1:4]) / (b[0] - a[0]) for a, b in zip(self.rows, self.rows[1:])),
+                "center_frequency_hz": {"downlink": 2488400000, "uplink": 1614900000},
+            },
             "bundles": {},
         }
         for direction, bundle in self.bundles.items():
@@ -134,6 +141,11 @@ class HandoverBundleTest(unittest.TestCase):
         self.provenance['inputs']['schedule']['sha256'] = sha(self.schedule)
         self.save()
         self.assertEqual(self.check()['schedule_sha256'], sha(self.schedule))
+    def test_warning_provenance_is_required_without_weakening_audit(self):
+        self.provenance.pop('warnings')
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'warning provenance'):
+            self.check()
     def test_manifest_hash_mismatch(self):
         path = self.bundles["uplink"] / "manifest.json"
         path.write_text(path.read_text() + "\n")
