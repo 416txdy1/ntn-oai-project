@@ -72,7 +72,9 @@ direction, monotonic_ns, samples, actual sampling_rate, iq_s and stk_s.
 gNB UL and UE DL have separate mappings. Actual startup rates, manifest Fs,
 anchor Fs, epoch and rate must agree. Physical log arrival times are never
 clock anchors. Incremental tails reject rotation, truncation, clock regression
-and missing observations.
+and missing observations. Numerical/schedule records must also cover the run
+at their one-IQ-second cadence without gaps over 1.15 IQ seconds, including
+both observed satellite-completion markers.
 
 Each business event needs bracketing anchors. Interpolation gives an estimate
 while the interval remains explicit uncertainty evidence. Intended cadence is

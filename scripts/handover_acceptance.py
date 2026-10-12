@@ -173,6 +173,24 @@ class Observer:
         return ClockMap(self.anchors[side],self.manifest['epoch'],self.manifest['rate'],self.fs)
 
 
+def validate_physical_observations(observer,spec):
+    duration=spec['duration_iq_s']
+    for side in ('gnb','ue'):
+        for label,rows in [('numeric',observer.numbers[side]),('schedule',observer.schedules[side])]:
+            if not rows:raise ValueError('missing '+side+' '+label+' physical observations')
+            times=[row['samples']/observer.fs for row in rows]
+            if times[0]>1.15 or times[-1]<duration-1.15:
+                raise ValueError('incomplete '+side+' '+label+' physical coverage')
+            if any(b<=a or b-a>1.15 for a,b in zip(times,times[1:])):
+                raise ValueError(side+' '+label+' physical observation gap')
+        if any(row['valid']!=1 for row in observer.numbers[side]):
+            raise ValueError('invalid physical channel in required interval')
+        for completion in spec['completions']:
+            if not any(row['phase']=='complete' and completion<=row['stk_s']<completion+1.15
+                       for row in observer.schedules[side]):
+                raise ValueError('missing observed satellite completion: '+side)
+
+
 def tail_stop_iq(spec,anchors,fs):
     factors=[]
     for rows in anchors.values():
@@ -422,6 +440,7 @@ def run_acceptance(argv=None):
             time.sleep(.1)
         observer.manifest['sample_rate_hz']=observer.fs
         write_manifest(manifest_path,observer.manifest)
+        validate_physical_observations(observer,spec)
         numeric=audit_manifest(manifest_path)
         (output/'numeric-audit.json').write_text(json.dumps(numeric,indent=2))
         report['numeric_audit_ok']=True
