@@ -13,3 +13,6 @@
 vendor/*LICENSE* -whitespace
 oai_patch/current/** -whitespace
 quadriga/oai/*.diff -whitespace
+
+# Existing bundle provenance hashes the original Windows-generated trace bytes.
+examples/fdd-pass/trace.csv text eol=crlf
