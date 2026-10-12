@@ -175,6 +175,66 @@ class ProfilePreflightTest(unittest.TestCase):
             self.assertIn('escapes',result.stderr)
             self.assertNotIn('"args"',result.stdout)
 
+    def test_integrated_producer_launcher_and_real_verify_boundary(self):
+        import experiment
+        from runtime_config import resolve_runtime
+        with tempfile.TemporaryDirectory(prefix='integrated boundary ') as directory:
+            root=Path(directory)
+            scripts=root/'local_ntn'
+            scripts.mkdir()
+            for name in ('runtime_config.py','run_local.sh','network_owner.py'):
+                shutil.copy2(Path(__file__).parent/name,scripts/name)
+            shutil.copy2(Path(__file__).parent/'verify_network.py',scripts/'verify_impl.py')
+            # Run the real verification CLI/resolver, mocking only privilege/kernel manager.
+            (scripts/'verify_network.py').write_text('''import os,runpy
+from pathlib import Path
+from unittest.mock import patch
+def verify(claim=False):
+    assert not os.environ.get('OAI_QD_CHANNEL'), 'generic channel leaked into verification'
+    Path(os.environ['VERIFY_MARKER']).write_text('verified')
+with patch('os.geteuid',return_value=0),patch('network_owner.NetworkManager') as manager:
+    manager.return_value.verify.side_effect=verify
+    runpy.run_path(str(Path(__file__).with_name('verify_impl.py')),run_name='__main__')
+''')
+            config=resolve_runtime(root,'integrated-handover','boundary',{})
+            config.build_dir.mkdir(parents=True)
+            config.run_dir.mkdir(parents=True)
+            config.initial_delay_file.write_text('15\n')
+            stub='#!/usr/bin/env python3\nimport os,json,sys\nprint(json.dumps({"qd":os.environ.get("OAI_QD_CHANNEL"),"args":sys.argv[1:]}))\n'
+            for name in ('nr-softmodem','nr-uesoftmodem'):
+                binary=config.build_dir/name
+                binary.write_text(stub)
+                binary.chmod(0o755)
+            ip=root/'ip'
+            ip.write_text('#!/bin/sh\nshift 3\nexec "$@"\n')
+            ip.chmod(0o755)
+            env={k:v for k,v in os.environ.items() if not k.startswith('OAI_')}
+            env.update(config.to_env())
+            env.update(VERIFY_MARKER=str(root/'verified'),PATH=str(root)+os.pathsep+os.environ['PATH'])
+            # Exercise the producer that start() actually invokes before its Popen boundary.
+            producer=getattr(experiment,'launcher_environments',channel_environments)
+            children=producer(env,qd_required=True)
+            for kind,bundle in (('gnb',config.ul_bundle),('ue',config.dl_bundle)):
+                result=subprocess.run(['bash',str(scripts/'run_local.sh'),kind],env=children[kind],text=True,capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                payload=json.loads(result.stdout.splitlines()[-1])
+                self.assertEqual(payload['qd'],str(bundle))
+                self.assertEqual((root/'verified').read_text(),'verified')
+                (root/'verified').unlink()
+            # Direct valid shell entry derives the same role without a generic user input.
+            for kind,bundle in (('gnb',config.ul_bundle),('ue',config.dl_bundle)):
+                result=subprocess.run(['bash',str(scripts/'run_local.sh'),kind],env=env,text=True,capture_output=True)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual(json.loads(result.stdout.splitlines()[-1])['qd'],str(bundle))
+                (root/'verified').unlink()
+            polluted=dict(env,OAI_QD_CHANNEL=str(config.ul_bundle))
+            with self.assertRaises(ValueError):producer(polluted,qd_required=True)
+            result=subprocess.run(['bash',str(scripts/'run_local.sh'),'gnb'],env=polluted,text=True,capture_output=True)
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn('separate isolated DL/UL',result.stderr)
+            self.assertFalse((root/'verified').exists())
+            self.assertNotIn('"qd"',result.stdout)
+
     def test_integrated_requires_both_bundles(self):
         for env in ({}, {'OAI_QD_DL_CHANNEL':'/tmp/dl'}, {'OAI_QD_UL_CHANNEL':'/tmp/ul'}):
             with self.assertRaises(ValueError):channel_environments(env,qd_required=True)

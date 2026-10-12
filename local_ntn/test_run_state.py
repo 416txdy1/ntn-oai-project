@@ -143,6 +143,32 @@ class RunStateTest(unittest.TestCase):
                     experiment.start(config,Mock(rate=0,label='ready',initial_lead_rfsim=0),{})
                 check.assert_not_called()
 
+    def test_zky_traffic_preserves_explicit_iperf_and_path_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config=resolve_runtime(Path(directory),'zky','default',{})
+            for settings,binary,library in (({'OAI_IPERF3_BIN':'/chosen path/iperf3','OAI_IPERF3_LIBRARY_PATH':'/chosen libs'},'/chosen path/iperf3','/chosen libs'),
+                                            ({},'/host/iperf3',None)):
+                with self.subTest(settings=settings),patch.dict(os.environ,settings,clear=True), \
+                     patch('experiment.resolve_runtime',return_value=config),patch('experiment.call') as calls, \
+                     patch('subprocess.check_output',side_effect=[json.dumps([{'addr_info':[{'local':'12.1.1.2'}]}]),json.dumps([{'State':{'Pid':12345}}])]), \
+                     patch('subprocess.Popen') as popen,patch('shutil.which',return_value='/host/iperf3') as which, \
+                     patch('time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+                    popen.return_value.poll.return_value=None
+                    experiment.main(['iperf','--profile','zky','--run-id','default','--iperf-seconds','7','--reverse'])
+                client=calls.call_args_list[-1].args[0]
+                server=popen.call_args.args[0]
+                self.assertIn(binary,client)
+                self.assertIn(binary,server)
+                self.assertEqual(client[client.index('-t')+1],'7')
+                self.assertIn('-R',client)
+                if library:
+                    self.assertIn('LD_LIBRARY_PATH='+library,client)
+                    self.assertIn('LD_LIBRARY_PATH='+library,server)
+                    which.assert_not_called()
+                else:
+                    self.assertFalse(any(arg.startswith('LD_LIBRARY_PATH=') for arg in client+server))
+                    which.assert_called_once_with('iperf3')
+
     def test_stop_without_state_does_not_remove_network(self):
         with tempfile.TemporaryDirectory() as directory:
             config=resolve_runtime(Path(directory),'legacy-handover','missing',{})
