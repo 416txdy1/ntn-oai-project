@@ -87,3 +87,15 @@ with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
         else:
             raise AssertionError('A failed ping was incorrectly accepted')
     print('PASS: dynamic validator returns failure when ping fails')
+
+# init_lab imports must not parse caller argv or generate credentials.
+with tempfile.TemporaryDirectory(prefix='ntn-init-import-') as directory:
+    import_root = Path(directory)
+    (import_root/'scripts').mkdir()
+    shutil.copy2(BASE.parent/'scripts/init_lab.py',import_root/'scripts/init_lab.py')
+    imported = subprocess.run([sys.executable,'-c',
+        'import sys; sys.argv=["caller", "--unrelated-option"]; import init_lab'],
+        cwd=import_root/'scripts',capture_output=True,text=True)
+    assert imported.returncode==0, imported.stderr
+    assert not (import_root/'.private').exists()
+    print('PASS: init_lab import has no CLI or credential side effects')
