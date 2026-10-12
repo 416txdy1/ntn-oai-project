@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -77,5 +78,57 @@ class OwnerTests(unittest.TestCase):
         marker=create_owner(c,self.t)
         self.assertEqual(marker,{'schema':1,'host_ifindex':11,'peer_ifindex':12,'netns_inode':99})
         validate_owner(c,self.t,marker)
+
+    def test_resolver_to_manager_rejects_marker_symlink_before_down(self):
+        link=self.root/'selected-owner.json';target=self.root/'target-owner.json'
+        env={'OAI_NTN_OWNER_FILE':str(link)}
+        c=resolve_runtime(self.root,'zky','default',env)
+        t=dict(self.t,host=dict(self.t['host'],ifname=c.host_veth),peer=dict(self.t['peer'],ifname=c.ue_veth),host_addresses=[{'local':c.rf_host_ip,'prefixlen':30}],peer_addresses=[{'local':c.rf_ue_ip,'prefixlen':30}],interfaces=['lo',c.ue_veth])
+        target.write_text(json.dumps(create_owner(c,t)))
+        original=target.read_bytes();link.symlink_to(target)
+        # Simulate root-owned test files without sudo or writing anything in /run.
+        real_lstat=os.lstat;real_fstat=os.fstat
+        def root_stat(info):
+            fields=list(info);fields[4]=0;return os.stat_result(fields)
+        commands=[]
+        with patch('network_owner.os.lstat',side_effect=lambda *a,**kw:root_stat(real_lstat(*a,**kw))),patch('network_owner.os.fstat',side_effect=lambda fd:root_stat(real_fstat(fd))):
+            c=resolve_runtime(self.root,'zky','default',env)
+            manager=NetworkManager(c,runner=lambda cmd:commands.append(cmd))
+            with patch.object(manager,'topology',return_value=t):
+                for action in ('verify','down'):
+                    with self.subTest(action=action), self.assertRaises(ValueError):
+                        getattr(manager,action)()
+        self.assertEqual(commands,[])
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(target.read_bytes(),original)
+        # The same resolved consumer still accepts a nonsymlink legacy marker.
+        link.unlink();link.write_bytes(original)
+        with patch('network_owner.os.lstat',side_effect=lambda *a,**kw:root_stat(real_lstat(*a,**kw))),patch('network_owner.os.fstat',side_effect=lambda fd:root_stat(real_fstat(fd))):
+            c=resolve_runtime(self.root,'zky','default',env)
+            manager=NetworkManager(c,runner=lambda cmd:commands.append(cmd))
+            with patch.object(manager,'topology',return_value=t):
+                self.assertEqual(manager.verify(),create_owner(c,t))
+    def test_default_zky_owner_path_never_follows_marker_symlink(self):
+        original_resolve=Path.resolve
+        default=Path('/run/oai-stk-ue.owner.json')
+        target=self.root/'default-target.json'
+        def fake_resolve(path,*args,**kwargs):
+            if path==default:return target
+            return original_resolve(path,*args,**kwargs)
+        with patch.object(Path,'resolve',fake_resolve):
+            c=resolve_runtime(self.root,'zky','default',{})
+        self.assertEqual(c.owner_file,default)
+
+    def test_isolated_owner_still_rejects_resolved_fixed_path_redirection(self):
+        original_resolve=Path.resolve
+        default=Path('/run/ntn-qd-ue.owner.json')
+        target=self.root/'isolated-target.json'
+        def fake_resolve(path,*args,**kwargs):
+            if path==default:return target
+            return original_resolve(path,*args,**kwargs)
+        with patch.object(Path,'resolve',fake_resolve):
+            for profile in ('integrated-handover','legacy-handover'):
+                with self.subTest(profile=profile),self.assertRaises(ValueError):
+                    resolve_runtime(self.root,profile,'run',{})
 
 if __name__=='__main__': unittest.main()

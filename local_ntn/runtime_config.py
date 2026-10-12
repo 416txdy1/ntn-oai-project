@@ -166,8 +166,9 @@ def resolve_runtime(root: Path, profile: str, run_id: str,
     if not 1 <= rf_port <= 65535 or isolated and rf_port != 4044:
         raise ValueError('OAI_RF_PORT conflicts with the profile port')
     owner_default = Path('/run/ntn-qd-ue.owner.json' if isolated else '/run/oai-stk-ue.owner.json')
-    owner = Path(environ.get('OAI_NTN_OWNER_FILE') or owner_default).expanduser().resolve()
-    if isolated and owner != owner_default:
+    # Keep the selected pathname so the consumer can lstat/O_NOFOLLOW the marker itself.
+    owner = Path(environ.get('OAI_NTN_OWNER_FILE') or owner_default).expanduser().absolute()
+    if isolated and (owner != owner_default or owner.resolve() != owner_default):
         raise ValueError('OAI_NTN_OWNER_FILE conflicts with isolated ownership')
     timing_value = environ.get('OAI_STK_BLEND_TIMING_ASSIST', '0')
     if timing_value not in ('0', '1') or isolated and timing_value != '0':
