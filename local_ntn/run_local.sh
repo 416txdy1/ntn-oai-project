@@ -36,4 +36,3 @@ case "${1:-}" in
     ;;
   *) echo 'Usage: sudo -E bash run_local.sh gnb|ue';exit 2;;
 esac
-

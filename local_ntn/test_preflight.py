@@ -92,6 +92,8 @@ class PreflightTest(unittest.TestCase):
             ip.chmod(0o755)
             trace = root / 'chosen trace.csv'
             env = dict(os.environ, OAI_BUILD_DIR=str(build), OAI_STK_TRACE=str(trace),
+                       OAI_NTN_RUN_DIR=str(root),OAI_GNB_CONFIG=str(root/'gnb.local.conf'),
+                       OAI_INITIAL_DELAY_FILE=str(root/'initial_delay_ms.txt'),
                        PATH=str(root) + os.pathsep + os.environ['PATH'])
             for kind in ('gnb', 'ue'):
                 result = subprocess.run(['bash', str(root / 'run_local.sh'), kind], env=env,
@@ -153,5 +155,3 @@ class ProfilePreflightTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-

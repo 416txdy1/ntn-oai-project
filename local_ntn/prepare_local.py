@@ -71,7 +71,7 @@ def generate(config, rate, initial_lead_rfsim=0):
     out=config.gnb_config;out.write_text(configure(conf, config.to_env()))
     config.initial_delay_file.write_text(f'{(rf+rs)/c*1000:.9f}\n')
     print('Generated',out,'rate',rate,'initial delay ms',(rf+rs)/c*1000)
-    
+
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)

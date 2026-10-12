@@ -134,18 +134,21 @@ class RunStateTest(unittest.TestCase):
             self.assertEqual(records['ue']['executable'],str(config.build_dir/'nr-uesoftmodem'))
             with patch('experiment.preflight') as check:
                 with self.assertRaisesRegex(ValueError,'exists'):
-                    network.return_value.up.return_value={}
-                experiment.start(config,Mock(rate=0,label='ready',initial_lead_rfsim=0),{})
+                    experiment.start(config,Mock(rate=0,label='ready',initial_lead_rfsim=0),{})
                 check.assert_not_called()
+
+    def test_actual_oai_startup_formats_are_hz(self):
+        logs={'gnb':'[PHY] tune_offset 0 Hz, sample_rate 7680000 Hz\n',
+              'ue':'[PHY] HW: Configuring ru_id 0, sample_rate 7680000.000000, tx/rx num_channels 1/1, duplex_mode FDD\n'}
+        self.assertEqual(experiment.observed_sample_rate(logs),7680000)
+        self.assertIsNone(experiment.observed_sample_rate({'gnb':'unknown sampling rate 7680000','ue':logs['ue']}))
 
     def test_sample_rate_must_be_observed_on_both_sides(self):
         self.assertIsNone(experiment.observed_sample_rate({'gnb':'unrelated 7680000','ue':'unrelated 7680000'}))
-        self.assertEqual(experiment.observed_sample_rate({'gnb':'sample_rate_hz=7680000','ue':'sample_rate_hz=7680000'}),7680000)
-        self.assertIsNone(experiment.observed_sample_rate({'gnb':'sample_rate_hz=7680000','ue':''}))
+        self.assertEqual(experiment.observed_sample_rate({'gnb':'STKRUNTIME sample_rate_hz=7680000','ue':'STKRUNTIME sample_rate_hz=7680000'}),7680000)
+        self.assertIsNone(experiment.observed_sample_rate({'gnb':'STKRUNTIME sample_rate_hz=7680000','ue':''}))
         with self.assertRaisesRegex(ValueError,'sample rate'):
-            experiment.observed_sample_rate({'gnb':'sample_rate_hz=7680000','ue':'sample_rate_hz=15360000'})
+            experiment.observed_sample_rate({'gnb':'STKRUNTIME sample_rate_hz=7680000','ue':'STKRUNTIME sample_rate_hz=15360000'})
 
 
 if __name__=='__main__':unittest.main()
-
-

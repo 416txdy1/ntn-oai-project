@@ -149,5 +149,3 @@ if __name__ == '__main__':
         print(json.dumps(preflight(parser.parse_args().rate), ensure_ascii=False, indent=2))
     except (ValueError, OSError, KeyError, ImportError) as error:
         raise SystemExit(f'Preflight failed: {error}') from None
-
-

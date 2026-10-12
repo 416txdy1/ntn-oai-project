@@ -22,6 +22,8 @@ with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
                        'position0 = { x = 6377900; y = 0; z = 0; };\n')
     env = dict(os.environ, OAI_REPO=str(OAI_REPO), OAI_UE_CONFIG=str(private),
                OAI_AMF_IP='192.168.70.132', OAI_GNB_IP_CIDR='192.168.70.129/26', OAI_NTN_RUN_DIR=str(work))
+    for key in ('OAI_GNB_CONFIG','OAI_INITIAL_DELAY_FILE','OAI_NTN_STATE_FILE'):
+        env.pop(key,None)
     env['OAI_STK_TRACE'] = str(work / 'stk_trace.csv')  # 测试只使用临时输入。
     template = OAI_REPO / 'ci-scripts/conf_files/gnb.sa.band254.u0.25prb.rfsim.ntn-leo.conf'
     original = template.read_bytes()
@@ -65,6 +67,8 @@ with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
     # 默认文件不存在时，显式 trace 仍须同时用于配置生成和启动。
     selected = work / 'selected trace.csv'
     (work / 'stk_trace.csv').rename(selected)
+    for key in ('OAI_GNB_CONFIG','OAI_INITIAL_DELAY_FILE','OAI_NTN_STATE_FILE'):
+        env.pop(key,None)
     env['OAI_STK_TRACE'] = str(selected)
     assert run(0).returncode == 0
     selected.write_text(selected.read_text().replace('STKTRACE2', '# STKTRACE2', 1))
@@ -129,4 +133,3 @@ with tempfile.TemporaryDirectory(prefix='ntn-run-config-') as directory:
         except ValueError:pass
         else:raise AssertionError('invalid initial lead accepted')
     print('PASS: test_generated_files_stay_in_run, bounded initial lead and unchanged epoch/template')
-

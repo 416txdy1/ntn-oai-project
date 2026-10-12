@@ -59,7 +59,11 @@ def observed_sample_rate(logs):
     for kind in ('gnb','ue'):
         text=logs.get(kind,'')
         # Only explicit modem/RFsim rate diagnostics qualify; no inferred PRB constant.
-        found=re.findall(r'\b(?:sample_rate_hz|sample_rate|sampling rate)\s*(?:[=:,]|is)?\s*([0-9]+(?:\.[0-9]+)?)',text,re.I)
+        number=r'([0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)'
+        patterns=(r'\bSTKRUNTIME\b[^\n]*?\bsample_rate_hz='+number+r'\b',
+                  r'\btune_offset [+-]?[0-9.]+ Hz, sample_rate '+number+r' Hz\b',
+                  r'\bHW: Configuring ru_id \d+, sample_rate '+number+r', tx/rx num_channels')
+        found=[value for pattern in patterns for value in re.findall(pattern,text)]
         rates={float(value) for value in found if math.isfinite(float(value)) and float(value)>0}
         if len(rates)>1:raise ValueError('Conflicting sample rate in '+kind+' startup log')
         if not rates:return None
