@@ -131,6 +131,44 @@ class PreflightTest(unittest.TestCase):
                 self.assertEqual(json.loads(state.read_text()),{})
 
 class ProfilePreflightTest(unittest.TestCase):
+    def test_isolated_launcher_uses_run_port_epoch_and_only_selected_libraries(self):
+        from runtime_config import resolve_runtime
+        with tempfile.TemporaryDirectory(prefix='isolated launcher ') as directory:
+            root=Path(directory)
+            scripts=root/'local_ntn'
+            scripts.mkdir()
+            for name in ('runtime_config.py','run_local.sh'):
+                shutil.copy2(Path(__file__).parent/name,scripts/name)
+            (scripts/'verify_network.py').write_text('')
+            config=resolve_runtime(root,'legacy-handover','launcher',{})
+            config.build_dir.mkdir(parents=True)
+            config.run_dir.mkdir(parents=True)
+            config.initial_delay_file.write_text('15\n')
+            stub='#!/usr/bin/env python3\nimport os,json,sys\nprint(json.dumps({"epoch":os.environ.get("OAI_STK_TRACE_EPOCH"),"rate":os.environ["OAI_STK_TRACE_RATE"],"library":os.environ["LD_LIBRARY_PATH"],"args":sys.argv[1:]}))\n'
+            for name in ('nr-softmodem','nr-uesoftmodem'):
+                binary=config.build_dir/name
+                binary.write_text(stub)
+                binary.chmod(0o755)
+            ip=root/'ip'
+            ip.write_text('#!/bin/sh\nshift 3\nexec "$@"\n')
+            ip.chmod(0o755)
+            env={k:v for k,v in os.environ.items() if not k.startswith('OAI_')}
+            env.update(config.to_env())
+            env.update(OAI_STK_TRACE_EPOCH='8200',OAI_STK_TRACE_RATE='1',LD_LIBRARY_PATH='/foreign-build',
+                       PATH=str(root)+os.pathsep+os.environ['PATH'])
+            for kind in ('gnb','ue'):
+                result=subprocess.run(['bash',str(scripts/'run_local.sh'),kind],env=env,text=True,capture_output=True,check=True)
+                payload=json.loads(result.stdout)
+                self.assertEqual(payload['epoch'],'8200')
+                self.assertEqual(payload['rate'],'1')
+                self.assertEqual(payload['library'],str(config.build_dir))
+                args=payload['args']
+                self.assertEqual(args[args.index('--rfsimulator.[0].serverport')+1],'4044')
+                if kind=='gnb':self.assertEqual(args[args.index('-O')+1],str(config.gnb_config))
+                else:
+                    self.assertEqual(args[args.index('--rfsimulator.[0].serveraddr')+1],'10.202.0.1')
+                    self.assertEqual(args[args.index('-O')+1],str(config.ue_config))
+
     def test_integrated_requires_both_bundles(self):
         for env in ({}, {'OAI_QD_DL_CHANNEL':'/tmp/dl'}, {'OAI_QD_UL_CHANNEL':'/tmp/ul'}):
             with self.assertRaises(ValueError):channel_environments(env,qd_required=True)
