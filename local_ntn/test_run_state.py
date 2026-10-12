@@ -155,19 +155,19 @@ class RunStateTest(unittest.TestCase):
                      patch('time.sleep'),contextlib.redirect_stdout(io.StringIO()):
                     popen.return_value.poll.return_value=None
                     experiment.main(['iperf','--profile','zky','--run-id','default','--iperf-seconds','7','--reverse'])
-                client=calls.call_args_list[-1].args[0]
-                server=popen.call_args.args[0]
-                self.assertIn(binary,client)
-                self.assertIn(binary,server)
-                self.assertEqual(client[client.index('-t')+1],'7')
-                self.assertIn('-R',client)
-                if library:
-                    self.assertIn('LD_LIBRARY_PATH='+library,client)
-                    self.assertIn('LD_LIBRARY_PATH='+library,server)
-                    which.assert_not_called()
-                else:
-                    self.assertFalse(any(arg.startswith('LD_LIBRARY_PATH=') for arg in client+server))
-                    which.assert_called_once_with('iperf3')
+                    client=calls.call_args_list[-1].args[0]
+                    server=popen.call_args.args[0]
+                    self.assertIn(binary,client)
+                    self.assertIn(binary,server)
+                    self.assertEqual(client[client.index('-t')+1],'7')
+                    self.assertIn('-R',client)
+                    if library:
+                        self.assertIn('LD_LIBRARY_PATH='+library,client)
+                        self.assertIn('LD_LIBRARY_PATH='+library,server)
+                        which.assert_not_called()
+                    else:
+                        self.assertFalse(any(arg.startswith('LD_LIBRARY_PATH=') for arg in client+server))
+                        which.assert_called_once_with('iperf3')
 
     def test_stop_without_state_does_not_remove_network(self):
         with tempfile.TemporaryDirectory() as directory:
