@@ -69,6 +69,10 @@ def stop_owned(state_file: Path, run_id: str) -> None:
         while any(matches(record) for record in records.values()) and time.monotonic() < deadline:
             time.sleep(.1)
         if not any(matches(record) for record in records.values()):
+            for record in records.values():
+                current=process_identity(record['pid'])
+                if current and current[0]==record.get('start'):
+                    raise RuntimeError('Owned PID executable changed; state retained for inspection')
             if 'schema' in state:
                 state['stopped_processes'] = records
                 state['processes'] = {}

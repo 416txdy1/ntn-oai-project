@@ -131,6 +131,7 @@ def start(config,args,environment):
     state={'schema':2,'run_id':config.run_id,'profile':config.profile,'status':'launching','processes':{}}
     manager=NetworkManager(config)
     network_up=False
+    started=[]
     try:
         call(['python3',str(BASE/'prepare_local.py'),'--profile',config.profile,'--run-id',config.run_id,
               '--rate',str(args.rate),'--initial-lead-rfsim',str(args.initial_lead_rfsim)],env=env)
@@ -143,6 +144,7 @@ def start(config,args,environment):
             with os.fdopen(fd,'w') as stream:
                 process=subprocess.Popen(['bash',str(BASE/'run_local.sh'),kind],stdout=stream,
                     stderr=subprocess.STDOUT,env=children[kind],start_new_session=True)
+            started.append(process)
             identity=process_identity(process.pid)
             record={'pid':process.pid,'start':identity[0] if identity else None,
                     'executable':identity[1] if identity else None,'phase':'launching',
@@ -171,6 +173,10 @@ def start(config,args,environment):
         # Shutdown handles shell→selected modem transitions only during launch, with unchanged starttime.
         # Timeout leaves state intact and intentionally prevents network teardown.
         stop_owned(config.state_file,config.run_id)
+        for process in started:
+            try:process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                raise RuntimeError('Launched child exit unconfirmed; network retained for inspection') from None
         if network_up and config.profile!='zky':manager.down()
         raise
 
@@ -232,8 +238,9 @@ def main(argv=None):
         if args.action=='preflight':print(json.dumps(preflight(args.rate,dict(os.environ),runtime=config),ensure_ascii=False,indent=2))
         elif args.action=='start':start(config,args,dict(os.environ))
         elif args.action=='stop':
+            recorded=config.state_file.exists()
             stop_owned(config.state_file,config.run_id)
-            if config.profile!='zky' and config.owner_file.exists():NetworkManager(config).down()
+            if recorded and config.profile!='zky' and (config.owner_file.exists() or config.owner_file.is_symlink()):NetworkManager(config).down()
             print('Owned modem processes stopped')
         elif args.action=='status':
             refresh_manifest(config)

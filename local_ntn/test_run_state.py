@@ -63,7 +63,7 @@ class RunStateTest(unittest.TestCase):
             state = self.write_state(Path(directory))
             with patch('run_state.process_identity', return_value=('123', '/foreign')), \
                  patch('os.killpg') as signals:
-                stop_owned(state, 'mine')
+                with self.assertRaisesRegex(RuntimeError,'executable changed'):stop_owned(state, 'mine')
             signals.assert_not_called()
             state = self.write_state(Path(directory))
             clock = [0.0]
@@ -91,6 +91,7 @@ class RunStateTest(unittest.TestCase):
                 def identity(pid):
                     kind='gnb' if pid==42000 else 'ue'
                     return ('123' if pid==42000 else '124', '/bin/bash' if kind==failed_kind else str(config.build_dir/('nr-softmodem' if kind=='gnb' else 'nr-uesoftmodem')))
+                live={42000:identity(42000),42001:identity(42001),49999:('other','/foreign')}
                 with patch('experiment.preflight', return_value={}), \
                      patch('experiment.check_network', return_value={}), \
                      patch('experiment.build_manifest', return_value={'run_id':'failure','network':{},'logs':{}}), \
@@ -99,14 +100,17 @@ class RunStateTest(unittest.TestCase):
                      patch('subprocess.run', return_value=Mock(returncode=1)), \
                      patch('subprocess.Popen', side_effect=popen), \
                      patch('experiment.process_identity', side_effect=identity), \
-                     patch('experiment.stop_owned') as stop, patch('time.sleep'), \
+                     patch('run_state.process_identity',side_effect=lambda pid: live.get(pid)), patch('os.killpg',side_effect=lambda pid,sig: live.pop(pid,None)) as signals, patch('time.sleep'), \
                      contextlib.redirect_stdout(io.StringIO()):
                     network.return_value.up.return_value={}
                     with self.assertRaisesRegex(SystemExit, 'exited'):
                         experiment.start(config, Mock(rate=0, label='failure', initial_lead_rfsim=0), {})
-                    stop.assert_called_once_with(config.state_file, 'failure')
+                    self.assertEqual(signals.call_count,len(processes))
+                    self.assertEqual({call.args[0] for call in signals.call_args_list},{p.pid for p in processes})
+                    self.assertIn(49999,live)
+                    for process in processes:process.wait.assert_called_once_with(timeout=5)
                     network.return_value.down.assert_called_once()
-                records = json.loads(config.state_file.read_text())['processes']
+                records = json.loads(config.state_file.read_text())['stopped_processes']
                 self.assertEqual({v['pid'] for v in records.values()}, {p.pid for p in processes})
                 self.assertTrue((config.run_dir/'run.json').is_file())
 
@@ -136,6 +140,35 @@ class RunStateTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'exists'):
                     experiment.start(config,Mock(rate=0,label='ready',initial_lead_rfsim=0),{})
                 check.assert_not_called()
+
+    def test_stop_without_state_does_not_remove_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config=resolve_runtime(Path(directory),'legacy-handover','missing',{})
+            with patch('experiment.resolve_runtime',return_value=config),patch('experiment.NetworkManager') as network, \
+                 contextlib.redirect_stdout(io.StringIO()):
+                experiment.main(['stop','--profile','legacy-handover','--run-id','missing'])
+            network.assert_not_called()
+
+    def test_stop_timeout_never_tears_down_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config=resolve_runtime(Path(directory),'legacy-handover','timeout',{})
+            config.run_dir.mkdir(parents=True)
+            config.state_file.write_text('{}')
+            with patch('experiment.resolve_runtime',return_value=config), \
+                 patch('experiment.stop_owned',side_effect=RuntimeError('timed out')), \
+                 patch('experiment.NetworkManager') as network,contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):experiment.main(['stop','--profile','legacy-handover','--run-id','timeout'])
+            network.assert_not_called()
+
+    def test_safe_tail_never_prints_private_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log=Path(directory)/'ue.log'
+            log.write_text('Authentication K = private-key OPc: private-opc\nSTKTRACE2 t=1 K = private-key\nSTKSCHEDULE t=1 sat=A\n')
+            output=io.StringIO()
+            with contextlib.redirect_stdout(output):experiment.safe_tail(log)
+            self.assertNotIn('private-key',output.getvalue())
+            self.assertNotIn('private-opc',output.getvalue())
+            self.assertIn('STKSCHEDULE',output.getvalue())
 
     def test_actual_oai_startup_formats_are_hz(self):
         logs={'gnb':'[PHY] tune_offset 0 Hz, sample_rate 7680000 Hz\n',
