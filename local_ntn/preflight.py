@@ -155,7 +155,8 @@ def check_handover_bundles(dl: Path, ul: Path, trace: Path, schedule: Path) -> d
                 and warning.get('center_frequency_hz') == warning_record['center_frequency_hz'][warning['direction']]
                 and isinstance(warning.get('identifier'), str)
                 and isinstance(warning.get('message'), str) and bool(warning['message']),
-                'handover warning provenance event is invalid')    tools = metadata.get('tools', {})
+                'handover warning provenance event is invalid')
+    tools = metadata.get('tools', {})
     require(isinstance(tools.get('matlab_version'), str) and bool(tools['matlab_version'])
             and tools.get('quadriga_version') == '2.8.1-0'
             and tools.get('scenario') == 'QuaDRiGa_NTN_Rural_LOS'
