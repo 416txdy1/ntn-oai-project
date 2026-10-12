@@ -11,14 +11,17 @@
 #include "openair2/LAYER2/NR_MAC_gNB/mac_config.h"
 #include "rfsimulator.h"
 #include "stk_trace.h"
+#include "stk_schedule.h"
 
 static pthread_once_t once=PTHREAD_ONCE_INIT;
 static pthread_mutex_t lock=PTHREAD_MUTEX_INITIALIZER;
 static stk_trace trace;
+static stk_schedule schedule;
+static bool schedule_enabled;
 static bool enabled;
 static double rate=1., epoch, dl_reference, ul_reference, bandwidth=2000000.;
 static double extra_loss, cn_offset;
-static bool noise_enabled=true;
+static bool noise_enabled=true, dynamic_delay=true, dynamic_doppler=true;
 static openair0_ntn_sync_state_t last_sync;
 static bool have_sync;
 static bool observed_dl;
@@ -37,12 +40,20 @@ static void init(void)
   const char *path=getenv("OAI_STK_TRACE"); if(!path || !*path)return;
   enabled=true;char error[256];
   AssertFatal(stk_trace_load(path,&trace,error,sizeof(error)),"STK trace: %s\n",error);
+  const char *schedule_path=getenv("OAI_STK_SCHEDULE");
+  if(schedule_path && *schedule_path) {
+    AssertFatal(stk_schedule_load(schedule_path,&schedule,error,sizeof(error)),"STK schedule: %s\n",error);
+    schedule_enabled=true;
+  }
   rate=number("OAI_STK_TRACE_RATE",1,0,1);
   epoch=number("OAI_STK_TRACE_EPOCH",trace.rows[0].time,trace.rows[0].time,trace.rows[trace.count-1].time);
   bandwidth=number("OAI_STK_TRACE_BW_HZ",2000000,1,100000000);
   extra_loss=number("OAI_STK_TRACE_EXTRA_LOSS_DB",0,0,200);
   cn_offset=number("OAI_STK_TRACE_CN_OFFSET_DB",0,-200,100);
   noise_enabled=number("OAI_STK_TRACE_NOISE",1,0,1)!=0;
+  dynamic_delay=number("OAI_STK_DYNAMIC_DELAY",1,0,1)!=0;
+  dynamic_doppler=number("OAI_STK_DYNAMIC_DOPPLER",1,0,1)!=0;
+  LOG_I(HW,"STKTRACE2 interpolation=%s\n",trace.legacy_linear?"legacy-linear":trace.blend_aware?"blend-aware":"hermite");
   bool dl=false,ul=false;
   for(size_t i=0;i<trace.count;i++) {
     if(!dl && trace.rows[i].dl_valid){dl_reference=trace.rows[i].dl_power;dl=true;}
@@ -60,9 +71,24 @@ static void ranges(const stk_trace_row *s,const double site[3],double *r,double 
   *v=rv / *r * rate;*a=(vv+ra-(rv / *r)*(rv / *r)) / *r * rate*rate;
   AssertFatal(isfinite(*v) && isfinite(*a),"Invalid STK range derivatives\n");
 }
+static double path_rate(const stk_trace_row *s,const double site[3],double distance)
+{
+  double value=0;
+  for(int i=0;i<3;i++)value+=(s->pos[i]-site[i])*s->path_velocity[i];
+  return value/distance*rate;
+}
 static double clamp(double v,double lo,double hi){return fmin(hi,fmax(lo,v));}
 static bool at(uint64_t ts,double fs,stk_trace_row *s)
 {return stk_trace_at(&trace,stk_trace_epoch(epoch,ts,fs,rate),s);}
+
+bool stk_trace_time_at_timestamp(uint64_t timestamp,double sampling_rate,double *trace_time_s)
+{
+  pthread_once(&once,init);
+  if(!enabled || trace_time_s==NULL || !isfinite(sampling_rate) || sampling_rate<=0)
+    return false;
+  *trace_time_s=stk_trace_epoch(epoch,timestamp,sampling_rate,rate);
+  return isfinite(*trace_time_s);
+}
 
 bool update_channel_model_from_stk_trace(channel_desc_t *ch,int n,uint64_t ts)
 {
@@ -97,19 +123,27 @@ bool update_channel_model_from_stk_trace(channel_desc_t *ch,int n,uint64_t ts)
   double delay_samples=delay*ch->sampling_rate;
   AssertFatal(isfinite(delay_samples) && delay_samples>=0 && delay_samples<(double)LLONG_MAX,
               "STK delay does not fit sample offset\n");
-  if(ch->enable_dynamic_delay)ch->channel_offset=llround(delay_samples);
-  if(ch->enable_dynamic_Doppler)ch->Doppler_phase_inc=2*M_PI*doppler/ch->sampling_rate;
+  if(ch->enable_dynamic_delay && dynamic_delay)ch->channel_offset=llround(delay_samples);
+  if(ch->enable_dynamic_Doppler && dynamic_doppler)ch->Doppler_phase_inc=2*M_PI*doppler/ch->sampling_rate;
   if(!ch->is_uplink) {
     pthread_mutex_lock(&lock);
-    last_sync=(openair0_ntn_sync_state_t){.stk_time_s=s.time,.propagation_delay_ms=delay*1000,
-      .dl_doppler_hz=ch->enable_dynamic_Doppler?doppler:0,
-      .dl_time_drift_us_s=(vs+vf)/SPEED_OF_LIGHT*1e6};
+    last_sync=(openair0_ntn_sync_state_t){.stk_time_s=s.time,.propagation_delay_ms=delay*1000,.synthetic_blend=s.synthetic_blend,
+      .dl_doppler_hz=ch->enable_dynamic_Doppler && dynamic_doppler?doppler:0,
+      .dl_time_drift_us_s=(path_rate(&s,s.ue,rs)+path_rate(&s,s.gnb,rf))/SPEED_OF_LIGHT*1e6};
     have_sync=valid;observed_dl=true;pthread_mutex_unlock(&lock);
   }
   if(ts/(uint64_t)ch->sampling_rate!=(ts+n)/(uint64_t)ch->sampling_rate)
     LOG_I(HW,"STKTRACE2 %s IQ=%.6f STK=%.6f delay=%.6fms Doppler=%.3fHz gain=%.3fdB C/N=%.3fdB valid=%d samples=%" PRIu64 "\n",
       ch->is_uplink?"UL":"DL",ts/ch->sampling_rate,s.time,delay*1000,doppler,
       gain>0?20*log10(gain):-300,cn,valid,ts);
+  if(schedule_enabled && ts/(uint64_t)ch->sampling_rate!=(ts+n)/(uint64_t)ch->sampling_rate) {
+    stk_schedule_entry selected={0};
+    if(stk_schedule_at(&schedule,s.time,&selected))
+      LOG_I(HW,"STKSCHEDULE %s IQ=%.6f STK=%.6f satellite_id=%s elevation_deg=%.3f visible=%d switched=%d phase=%s previous=%s next=%s samples=%" PRIu64 "\n",
+            ch->is_uplink?"UL":"DL",ts/ch->sampling_rate,s.time,selected.satellite_id,
+            selected.elevation_deg,selected.visible,selected.switched,selected.handover_phase,
+            selected.previous_satellite_id,selected.next_satellite_id,ts);
+  }
   /* Publish the state AT the announced next-frame epoch, not the current frame. */
   uint64_t spms=llround(ch->sampling_rate/1000),subframe=ts/spms;
   if(ch->is_uplink && subframe%10==0 && at((subframe/10+1)*10*spms,ch->sampling_rate,&s)) {
@@ -137,8 +171,8 @@ bool get_stk_trace_sync(double frequency,openair0_ntn_sync_state_t *s,openair0_n
   stk_trace_row r;
   if(!stk_trace_at(&trace,epoch,&r)||!r.dl_valid){*status=OPENAIR0_NTN_SYNC_NOT_VISIBLE;return true;}
   double rs,vs,as,rf,vf,af;ranges(&r,r.ue,&rs,&vs,&as);ranges(&r,r.gnb,&rf,&vf,&af);
-  *s=(openair0_ntn_sync_state_t){.stk_time_s=epoch,.propagation_delay_ms=(rs+rf)/SPEED_OF_LIGHT*1000,
-    .dl_doppler_hz=-vs/(SPEED_OF_LIGHT+vs)*frequency,.dl_time_drift_us_s=(vs+vf)/SPEED_OF_LIGHT*1e6};
+  *s=(openair0_ntn_sync_state_t){.stk_time_s=epoch,.propagation_delay_ms=(rs+rf)/SPEED_OF_LIGHT*1000,.synthetic_blend=r.synthetic_blend,
+    .dl_doppler_hz=dynamic_doppler?-vs/(SPEED_OF_LIGHT+vs)*frequency:0,.dl_time_drift_us_s=(path_rate(&r,r.ue,rs)+path_rate(&r,r.gnb,rf))/SPEED_OF_LIGHT*1e6};
   *status=OPENAIR0_NTN_SYNC_READY;return true;
 }
 
@@ -146,7 +180,7 @@ bool get_stk_trace_sync(double frequency,openair0_ntn_sync_state_t *s,openair0_n
  * Noise is block-RMS calibrated (not an absolute receiver sensitivity model).
  * C/N is referenced to the exported 2 MHz measurement bandwidth by default.
  */
-void stk_trace_iq_parameters(channel_desc_t *ch,c16_t **input,int n,double *gain,double *sigma)
+void stk_trace_iq_parameters(channel_desc_t *ch,c16_t **input,int input_offset,int n,double *gain,double *sigma)
 {
   pthread_mutex_lock(&lock);iq_state state={0};
   for(int k=0;k<16;k++)if(iq[k].channel==ch){state=iq[k];break;}
@@ -154,7 +188,8 @@ void stk_trace_iq_parameters(channel_desc_t *ch,c16_t **input,int n,double *gain
   if(!state.channel)return;
   double energy=0;
   for(int ant=0;ant<ch->nb_tx;ant++)for(int i=0;i<n;i++)
-    energy+=(double)input[ant][i].r*input[ant][i].r+(double)input[ant][i].i*input[ant][i].i;
+    energy+=(double)input[ant][input_offset+i].r*input[ant][input_offset+i].r
+      +(double)input[ant][input_offset+i].i*input[ant][input_offset+i].i;
   double original_gain=*gain;
   *gain*=state.gain;
   *sigma=state.valid?sqrt(energy/fmax(n,1)*(*gain)*(*gain)*state.noise_ratio/2):

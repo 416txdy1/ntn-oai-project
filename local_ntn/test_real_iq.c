@@ -61,7 +61,7 @@ int main(int argc,char **argv)
   enum {N=1024};c16_t in[N];cf_t out[N];c16_t *inputs[]={in};
   for(int i=0;i<N;i++)in[i]=(c16_t){.r=1000,.i=2000};
   if(clock_mode) {
-    for(int i=0;i<=60;i++)update_channel_model(&ch,N,(uint64_t)i*384000);
+    for(int i=0;i<=60;i++)update_channel_model(&ch,384000,(uint64_t)i*384000);
     puts("PASS actual sample clock log fixture");return 0;
   }
   if(legacy) {

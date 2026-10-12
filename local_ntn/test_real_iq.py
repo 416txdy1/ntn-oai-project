@@ -45,7 +45,7 @@ with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
                         -100 if i==0 else -110,-100,20,20,int(i<3),int(i<3)])
     src=repo/'radio/rfsimulator'
     subprocess.run(['cc',*args,str(base/'test_real_iq.c'),str(src/'apply_channelmod.c'),
-                    str(src/'stk_trace.c'),str(src/'stk_trace_channel.c'),
+                    str(src/'stk_trace.c'),str(src/'stk_trace_channel.c'),str(src/'stk_schedule.c'),
                     str(src/'qd_channel_reader.c'),str(src/'qd_channel_adapter.c'),
                     '-lcrypto','-lm','-lpthread','-o',str(d/'test')],check=True,cwd=build)
     subprocess.run([str(d/'test'),'--phase'],check=True)

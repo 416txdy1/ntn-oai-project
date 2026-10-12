@@ -6,6 +6,7 @@ add_library(rfsimulator MODULE
             apply_channelmod.c
             stk_channel_model.c
             stk_trace.c
+            stk_schedule.c
             stk_trace_channel.c
             qd_channel_reader.c
             qd_channel_adapter.c
