@@ -33,6 +33,12 @@ class AcceptanceParsingTests(unittest.TestCase):
             records, _ = module.numeric_state(path)
             self.assertEqual(records, [(1.0, 1)])
 
+    def test_actual_nondefault_sample_rate(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'numeric.log'
+            path.write_text('STKTRACE2 DL IQ=0.000000 STK=8200.000000 valid=1 samples=1000\n')
+            self.assertEqual(module.numeric_state(path,2000),([(.5,1)],path.read_text()))
+
     def test_interrupted_summary_recovers_interval_bytes(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'udp.json'

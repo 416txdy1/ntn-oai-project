@@ -23,10 +23,12 @@ def write_timeline(output,observer,probes,business_start,business_end,report):
     for index in range(math.ceil(end)):
         lo=float(index);hi=min(lo+1,end)
         if hi<=lo:continue
-        active=lo>=business_start and hi<=business_end
+        active=hi>business_start and lo<business_end
         row=dict(iq_start_s=lo,iq_end_s=hi,iq_s=(lo+hi)/2,
                  stk_s=epoch+rate*(lo+hi)/2,
-                 business_state='continuous' if active else 'startup_unavailable' if lo<business_start else 'intentional_tail_drain',
+                 business_state='partial_startup_measurement' if active and lo<business_start else 'partial_tail_drain' if active and hi>business_end
+                                else 'establishing_business' if active and lo<report.get('traffic_ready_iq_s',business_start)
+                                else 'continuous' if active else 'startup_unavailable' if lo<business_start else 'intentional_tail_drain',
                  max_event_uncertainty_iq_s=max(report['clock_max_iq_gap_s'].values()))
         wall_spans={}
         for side in ('gnb','ue'):
@@ -97,7 +99,8 @@ def draw(rows,output,report,epoch,rate,start,end):
         axes[1].plot(x,value(side+'_doppler_hz'),label=side)
         axes[2].plot(x,value(side+'_cn_db'),label=side)
     axes[0].set_ylabel('Physical delay (ms)');axes[1].set_ylabel('Doppler (Hz)');axes[2].set_ylabel('C/N (dB)')
-    axes[3].errorbar(x,value('ping_wall_rtt_ms'),
+    rtt=value('ping_wall_rtt_ms');finite=[i for i,v in enumerate(rtt) if math.isfinite(v)]
+    axes[3].errorbar([x[i] for i in finite],[rtt[i] for i in finite],
                      xerr=max(report['clock_max_iq_gap_s'].values())*(rate if rate else 1)/2,
                      linewidth=.7,elinewidth=.4,label='ICMP wall RTT / horizontal anchor precision')
     axes[3].set_ylabel('Wall RTT (ms)')
@@ -123,7 +126,8 @@ def draw(rows,output,report,epoch,rate,start,end):
     schedule_rows=[row for row in rows if row.get('ue_handover_phase')=='blend']
     for axis in axes:
         axis.grid(alpha=.25);axis.legend(loc='upper right',fontsize=8)
-        axis.axvspan(x[0],epoch+rate*start if rate else start,color='gray',alpha=.15)
+        confirmed=report.get('traffic_ready_iq_s',start)
+        axis.axvspan(x[0],epoch+rate*confirmed if rate else confirmed,color='gray',alpha=.15)
         axis.axvspan(epoch+rate*end if rate else end,x[-1],color='gray',alpha=.08)
         for complete in completions:
             axis.axvspan(complete-5,complete+5,color='orange',alpha=.1)

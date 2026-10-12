@@ -152,10 +152,10 @@ class Observer:
                         satellite_id=values[3],phase=values[7],switched=int(values[6]),samples=int(values[10])))
                 self.qd_loaded[side]+=int('QDCHANNEL1 loaded' in line)
                 self.pbch_errors+=int('Error decoding PBCH' in line)
-                self.rrc_idle+=int(self.initial_access and ('RRC_IDLE' in line or 'RRC IDLE' in line))
+                self.rrc_idle+=int(self.initial_access and any(marker in line for marker in ('RRC_IDLE','RRC IDLE','RRC moved into IDLE state','going to IDLE','Go to IDLE.')))
                 if side=='ue':
                     if 'PDU Session Establishment Accept' in line:self.initial_access=True
-                    if self.initial_access and ('Starting Initial synchronization' in line or 'RA procedure started' in line):
+                    if self.initial_access and any(marker in line for marker in ('Starting Initial synchronization','RA procedure started','Initialization of 4-Step','Initialization of 2-Step','Triggering new RA procedure','Generating RRCReestablishmentComplete','Received RRCReestablishment')):
                         self.reaccess_count+=1
                 # Keep only recognized startup lines, not raw UE credentials.
                 if 'sample_rate' in line or 'STKRUNTIME' in line:self.startup[side].append(line)
@@ -200,6 +200,15 @@ def worker_observation(events,expected_role):
         raise ValueError('worker observation gap')
     if expected_role=='sender' and events[0].get('offered_wall_bits_per_second')!=100000:
         raise ValueError('wrong offered wall rate')
+    sends=[event for event in events if event['event']=='send']
+    receives=[event for event in events if event['event']=='receive']
+    if expected_role in ('sender','ping'):
+        if events[-1]['sent']!=len(sends) or [event['sequence'] for event in sends]!=list(range(1,len(sends)+1)):
+            raise ValueError('sender event/sequence gap')
+    if expected_role=='receiver' and events[-1]['received_datagrams']!=len(receives):
+        raise ValueError('receiver event accounting gap')
+    if expected_role=='ping' and events[-1]['received']!=len({event['sequence'] for event in receives}):
+        raise ValueError('ping receiver accounting gap')
     return [times[0],times[-1]]
 
 
@@ -225,8 +234,18 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
         raise ValueError('unmatched/foreign receiver evidence')
     # PDU readiness and traffic readiness require bracketing on both physical sides.
     pdu=[maps[side].map(readiness['pdu_ns']) for side in maps]
-    traffic=[maps[side].map(readiness['traffic_ns']) for side in maps]
-    start=max(max(p['iq_bounds_s']) for p in traffic)
+    first_receives=[]
+    first_sends=[]
+    for probe in probes.values():
+        delivered=[packet for packet in probe['packets'] if packet['received']]
+        if not delivered:raise ValueError('business direction never delivered a real packet')
+        first_receives.append(min(packet['receive_ns'] for packet in delivered))
+        if not probe['packets']:raise ValueError('business direction has no sender evidence')
+        first_sends.append(min(packet['send_ns'] for packet in probe['packets']))
+    readiness['confirmed_traffic_ns']=max(first_receives)
+    traffic=[maps[side].map(readiness['confirmed_traffic_ns']) for side in maps]
+    measurement=[maps[side].map(max(first_sends)) for side in maps]
+    start=max(max(p['iq_bounds_s']) for p in measurement)
     stop=[maps[side].map(traffic_stop_ns) for side in maps]
     end=min(min(p['iq_bounds_s']) for p in stop)
     report.update(sample_rate_hz=fs,clock_sample_rates={side:rows[-1]['sampling_rate'] for side,rows in observer.anchors.items()},
@@ -235,7 +254,7 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
                   pdu_ready_stk_s=max(max(p['stk_bounds_s']) for p in pdu),
                   traffic_ready_stk_s=max(max(p['stk_bounds_s']) for p in traffic),
                   pdu_ready_iq_s=max(max(p['iq_bounds_s']) for p in pdu),
-                  traffic_ready_iq_s=start,business_iq_interval_s=[start,end],
+                  traffic_ready_iq_s=max(max(p['iq_bounds_s']) for p in traffic),business_iq_interval_s=[start,end],
                   pbch_errors=observer.pbch_errors,rrc_idle=observer.rrc_idle,reaccess_count=observer.reaccess_count,
                   clock_observation_ok=True,worker_observation_ok=True,
                   offered_wall_bits_per_second=100000,
@@ -244,13 +263,15 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
                   traffic_stop_monotonic_ns=traffic_stop_ns,
                   readiness=readiness,qd_loaded=observer.qd_loaded)
     elapsed_wall=(traffic_stop_ns-readiness['traffic_ns'])/1e9
-    report['ping']=cohort_summary(probes['ping']['packets'],start,end,wall_interval_s=elapsed_wall)
+    report['ping']=cohort_summary(probes['ping']['packets'],0,case_spec(report['case'])['duration_iq_s'],wall_interval_s=elapsed_wall)
     report['ping']['wall_rtt_ms_mean']=report['ping'].pop('wall_latency_ms_mean')
     report['udp']={}
     for direction in ('uplink','downlink'):
-        report['udp'][direction]=cohort_summary(probes[direction]['packets'],start,end,wall_interval_s=elapsed_wall)
+        report['udp'][direction]=cohort_summary(probes[direction]['packets'],0,case_spec(report['case'])['duration_iq_s'],wall_interval_s=elapsed_wall)
         send_events=[event for event in events[direction+'-sender'] if event['event']=='send']
-        report['udp'][direction]['actual_offered_wall_bits_per_second']=sum(event['bytes'] for event in send_events)*8/elapsed_wall
+        offered_span=(traffic_stop_ns-min(event['send_ns'] for event in send_events))/1e9
+        report['udp'][direction]['actual_offered_wall_bits_per_second']=sum(event['bytes'] for event in send_events)*8/offered_span
+        report['udp'][direction]['offered_wall_interval_s']=offered_span
     report['packet_accounting']={key:{name:value for name,value in probe.items() if name!='packets'} for key,probe in probes.items()}
     report['windows']=[]
     for complete in case_spec(report['case'])['completions']:
@@ -392,8 +413,16 @@ def run_acceptance(argv=None):
     except Exception as error:
         report['error']=str(error)
     finally:
+        # Complete bounded owned cleanup even if a second signal arrives.
+        signal.signal(signal.SIGINT,signal.SIG_IGN);signal.signal(signal.SIGTERM,signal.SIG_IGN)
         try:children.close()
         except Exception as error:report['cleanup_error']=str(error)
+        if manifest_path.is_file():
+            try:
+                final_manifest=json.loads(manifest_path.read_text())
+                owned=(final_manifest.get('run_id')==config.run_id and final_manifest.get('profile')==config.profile
+                       and final_manifest.get('workspace')==str(config.root))
+            except (ValueError,OSError):owned=False
         if owned and config.state_file.is_file():
             try:
                 result=subprocess.run([sys.executable,str(ROOT/'local_ntn/experiment.py'),'stop',

@@ -16,5 +16,9 @@ def experiment(*args: str, **kwargs):
     return subprocess.run([sys.executable, str(BASE / 'experiment.py'), *args], **kwargs)
 
 
+def acceptance(argv=None):
+    return subprocess.run([sys.executable,str(BASE.parent/'scripts/handover_acceptance.py'),*(argv or [])]).returncode
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(acceptance(sys.argv[2:]) if sys.argv[1:2]==['--acceptance'] else main())

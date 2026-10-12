@@ -49,5 +49,44 @@ class ProvenanceTests(unittest.TestCase):
         self.assertRegex(value,r'^[0-9a-f]{40}$')
 
 
+    def archive_fixture(self,root):
+        import hashlib
+        vendor=root/'vendor';vendor.mkdir()
+        archive=vendor/'oai-source.tar.gz';archive.write_bytes(b'verified archive fixture')
+        digest=hashlib.sha256(archive.read_bytes()).hexdigest()
+        (vendor/'checksums.json').write_text(json.dumps({'oai-source.tar.gz':digest}))
+        (vendor/'source-manifest.json').write_text(json.dumps({'oai':{'commit':'1e0c78bfbb80424f275e73a3103f582e0f903413'},'oai-source.tar.gz':{'sha256':digest}}))
+        repo=root/'.runtime/oai';repo.mkdir(parents=True)
+        (repo/'.archive-sha256').write_text(digest)
+        overlay=root/'oai_patch/current/radio/rfsimulator';overlay.mkdir(parents=True)
+        (overlay/'fixture.c').write_text('actual deployed overlay\n')
+        deployed=repo/'radio/rfsimulator';deployed.mkdir(parents=True)
+        (deployed/'fixture.c').write_text('actual deployed overlay\n')
+        quadriga=root/'quadriga/oai';quadriga.mkdir(parents=True)
+        for name in ('qd_channel_reader.c','qd_channel_reader.h','qd_channel_adapter.c'):
+            (quadriga/name).write_text('QD '+name)
+            (deployed/name).write_text('QD '+name)
+        return repo
+
+    def test_archive_stamp_and_overlay_tampering_rejected(self):
+        for changed in ('archive','stamp','overlay'):
+            with tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);repo=self.archive_fixture(root)
+                self.assertEqual(e.source_identity(root,repo)['kind'],'verified_archive')
+                target={'archive':root/'vendor/oai-source.tar.gz','stamp':repo/'.archive-sha256',
+                        'overlay':repo/'radio/rfsimulator/fixture.c'}[changed]
+                target.write_text('tampered')
+                with self.assertRaises(ValueError):e.source_identity(root,repo)
+
+    def test_genuine_external_git_source_uses_own_root(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);subprocess.run(['git','init','-q',str(root)],check=True)
+            (root/'source.c').write_text('external source fixture')
+            subprocess.run(['git','-C',str(root),'add','source.c'],check=True)
+            subprocess.run(['git','-C',str(root),'-c','user.email=test@example.invalid','-c','user.name=fixture','commit','-qm','fixture'],check=True)
+            identity=e.source_identity(ROOT,root)
+            self.assertEqual(identity['kind'],'git')
+            self.assertEqual(identity['commit'],e.commit_at(root))
+
 if __name__=='__main__':unittest.main()
 

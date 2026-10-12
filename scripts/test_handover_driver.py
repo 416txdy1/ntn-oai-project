@@ -27,9 +27,49 @@ class DriverBoundaryTests(unittest.TestCase):
         config,_=d.selected_runtime('legacy','legacy-handover','case-test',{})
         self.assertIsNone(config.dl_bundle)
 
+    def test_actual_production_rrc_idle_and_ra_only_after_pdu(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);gnb=root/'gnb.log';ue=root/'ue.log'
+            gnb.write_text('');ue.write_text('RRC moved into IDLE state\nInitialization of 4-Step CBRA procedure\n')
+            observer=d.Observer({'logs':{'gnb':str(gnb),'ue':str(ue)},'sample_rate_hz':None,'epoch':8200,'rate':1})
+            observer.update()
+            self.assertEqual(observer.rrc_idle,0);self.assertEqual(observer.reaccess_count,0)
+            with ue.open('a') as stream:
+                stream.write('Received PDU Session Establishment Accept, UE IPv4: 12.2.1.2\nRRC moved into IDLE state\nTriggering new RA procedure for UE with RNTI fixture\n')
+            observer.update()
+            self.assertEqual(observer.rrc_idle,1);self.assertEqual(observer.reaccess_count,1)
+
+    def test_launch_interruption_cleans_only_matching_selected_manifest(self):
+        import os
+        for matching in (True,False):
+            with tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);run=root/'run'
+                config=SimpleNamespace(root=root,run_dir=run,state_file=run/'processes.json',
+                                       profile='integrated-handover',run_id='interrupt-test')
+                launch=__import__('unittest.mock',fromlist=['Mock']).Mock()
+                launch.poll.side_effect=RuntimeError('controlled interruption fixture')
+                class Children:
+                    def __init__(self,output):self.closed=False
+                    def spawn(self,*_args):
+                        (run/'run.json').write_text(json.dumps({'run_id':'interrupt-test' if matching else 'foreign',
+                            'profile':config.profile,'workspace':str(root),'logs':{}}))
+                        config.state_file.write_text('{}')
+                        return launch
+                    def close(self):self.closed=True
+                    def evidence(self):return {}
+                with patch.object(d.os,'geteuid',return_value=0),patch.object(d,'selected_runtime',return_value=(config,{})),\
+                     patch.object(d,'OwnedChildren',Children),patch.object(d.subprocess,'run',return_value=__import__('subprocess').CompletedProcess([],0,'','')) as stop:
+                    self.assertEqual(d.main(['--run-id','interrupt-test']),1)
+                    self.assertEqual(stop.call_count,int(matching))
+                    if matching:
+                        argv=stop.call_args.args[0]
+                        self.assertIn('stop',argv);self.assertIn('integrated-handover',argv);self.assertIn('interrupt-test',argv)
+                result=json.loads((run/'acceptance/report.json').read_text())
+                self.assertFalse(result['passed'])
+
     def test_receiver_crash_missing_end_or_observation_gap_fails(self):
         ready=dict(event='ready',role='receiver',monotonic_ns=100)
-        end=dict(event='end',role='receiver',monotonic_ns=1000000000,failed=False)
+        end=dict(event='end',role='receiver',monotonic_ns=1000000000,failed=False,received_datagrams=0)
         self.assertEqual(d.worker_observation([ready,end],'receiver'),[100,1000000000])
         for rows in ([ready],[ready,{**end,'failed':True}],
                      [ready,{**end,'monotonic_ns':3000000000}],

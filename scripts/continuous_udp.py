@@ -88,7 +88,7 @@ def main(argv=None):
         running=False
     signal.signal(signal.SIGINT,stop);signal.signal(signal.SIGTERM,stop)
     writer=EventWriter(args.events,args.role)
-    sequence=0;failed=False;next_heartbeat=0
+    sequence=0;received_datagrams=0;failed=False;next_heartbeat=0
     try:
         with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sock:
             sock.bind((args.bind,args.port if args.role=='receiver' else 0))
@@ -122,11 +122,12 @@ def main(argv=None):
                         except ValueError:
                             writer.emit('rejected');continue
                         # Source emission time remains explicit; writer time is separate.
+                        received_datagrams+=1
                         writer.emit('receive',sequence=seq,send_ns=send_ns,receive_ns=receive_ns,bytes=size)
     except Exception as error:
         failed=True;writer.emit('error',reason=str(error))
     finally:
-        writer.emit('end',sent=sequence,failed=failed);writer.close()
+        writer.emit('end',sent=sequence,received_datagrams=received_datagrams,failed=failed);writer.close()
     return int(failed)
 
 
