@@ -169,6 +169,12 @@ class ProfilePreflightTest(unittest.TestCase):
                     self.assertEqual(args[args.index('--rfsimulator.[0].serveraddr')+1],'10.202.0.1')
                     self.assertEqual(args[args.index('-O')+1],str(config.ue_config))
 
+            contaminated=dict(env,OAI_NTN_RUN_DIR=str(scripts))
+            result=subprocess.run(['bash',str(scripts/'run_local.sh'),'gnb'],env=contaminated,text=True,capture_output=True)
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn('escapes',result.stderr)
+            self.assertNotIn('"args"',result.stdout)
+
     def test_integrated_requires_both_bundles(self):
         for env in ({}, {'OAI_QD_DL_CHANNEL':'/tmp/dl'}, {'OAI_QD_UL_CHANNEL':'/tmp/ul'}):
             with self.assertRaises(ValueError):channel_environments(env,qd_required=True)
