@@ -232,13 +232,22 @@ class RealHandoverDataTest(unittest.TestCase):
         for subdir, suffix, count in (("", "seamless", 621), ("firsthandover", "firsthandover", 71)):
             with self.subTest(suffix=suffix):
                 output = ROOT / "examples/handover" / subdir
-                if not (output / "provenance.json").is_file():
-                    self.skipTest("real exports are audited before being copied into examples/handover")
+                self.assertTrue((output / "provenance.json").is_file(), "real audited export is required")
                 trace = ROOT / f"local_ntn/stk_trace_{suffix}.csv"
                 schedule = ROOT / f"local_ntn/satellite_schedule_{suffix}.csv"
                 result = preflight.check_handover_bundles(output / "downlink", output / "uplink", trace, schedule)
                 self.assertEqual(result["trace_sha256"], sha(trace))
                 self.assertEqual(result["schedule_sha256"], sha(schedule))
+                self.assertEqual(result["warnings"]["trace_time_step_s"], 1)
+                warning_events = result["warnings"]["events"]
+                self.assertEqual({event["direction"] for event in warning_events}, {"downlink", "uplink"})
+                self.assertTrue(all("sampling theoreme" in event["message"] for event in warning_events))
+                environment = {"OAI_STK_TRACE": str(trace), "OAI_STK_SCHEDULE": str(schedule),
+                               "OAI_QD_DL_CHANNEL": str(output / "downlink"),
+                               "OAI_QD_UL_CHANNEL": str(output / "uplink")}
+                runtime = resolve_runtime(ROOT, "integrated-handover", "bundle-contract", environment)
+                self.assertEqual(runtime.dl_bundle, output / "downlink")
+                self.assertEqual(runtime.ul_bundle, output / "uplink")
                 for direction, frequency in (("downlink", 2488400000), ("uplink", 1614900000)):
                     manifest = json.loads((output / direction / "manifest.json").read_text())
                     self.assertEqual(manifest["dimensions"]["snapshots"], count)
