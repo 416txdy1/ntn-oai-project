@@ -28,6 +28,24 @@ static double energy(cf_t *s,int n){double e=0;for(int i=0;i<n;i++)e+=s[i].r*s[i
 int main(int argc,char **argv)
 {
   assert(argc==2);
+  if(strcmp(argv[1],"--phase")==0) {
+    struct complexd tap={.r=1};struct complexd *taps[]={&tap};float phase=0;
+    channel_desc_t ch={.nb_tx=1,.nb_rx=1,.channel_length=1,.ch=taps,.Doppler_phase_cur=&phase,
+      .sampling_rate=7680000,.noise_power_dB=-300,.Doppler_phase_inc=.125};
+    c16_t input[8];cf_t output[8]={0};c16_t *inputs[]={input};
+    for(int i=0;i<8;i++)input[i]=(c16_t){.r=1000};
+    rxAddInput(inputs,output,0,&ch,8);
+    assert(fabs(phase-1.)<1e-6);
+    ch.Doppler_phase_inc=0;memset(output,0,sizeof(output));
+    rxAddInput(inputs,output,0,&ch,8);
+    for(int i=0;i<8;i++) {
+      assert(isfinite(output[i].r) && isfinite(output[i].i));
+      assert(fabs(output[i].r-1000*cos(1.))<1e-3);
+      assert(fabs(output[i].i-1000*sin(1.))<1e-3);
+    }
+    assert(fabs(phase-1.)<1e-6);
+    puts("PASS actual rxAddInput nonzero-to-zero Doppler phase continuity");return 0;
+  }
   bool legacy=strcmp(argv[1],"--legacy")==0;
   if(!legacy){setenv("OAI_STK_TRACE",argv[1],1);setenv("OAI_STK_TRACE_NOISE","1",1);}
   struct complexd tap={.r=1,.i=0};struct complexd *taps[]={&tap};float phase=0;

@@ -4,7 +4,8 @@ from pathlib import Path
 from paths import OAI_REPO
 repo=OAI_REPO;base=Path(__file__).resolve().parent
 build_repo=Path(os.environ.get('OAI_BUILD_REPO',repo)).resolve()
-build=build_repo/'cmake_targets/ran_build/build'
+build=Path(os.environ.get('OAI_BUILD_DIR',build_repo/'cmake_targets/ran_build/build')).resolve()
+print(f'Actual IQ source={repo.resolve()} build={build}',flush=True)
 make_flags=build/'radio/rfsimulator/CMakeFiles/rfsimulator.dir/flags.make'
 if make_flags.exists():
     flags=make_flags.read_text()
@@ -31,6 +32,8 @@ else:
 args=[v for v in args if v not in ('-DT_TRACER','-DNDEBUG')]
 args=[v.replace(str(build_repo),str(repo)) for v in args]
 args.append('-UNDEBUG')
+if '--sanitize' in __import__('sys').argv:
+    args.extend(['-fsanitize=address,undefined','-fno-omit-frame-pointer'])
 has_legacy='int stk_visible;' in (repo/'openair1/SIMULATION/TOOLS/sim.h').read_text()
 if has_legacy:args.append('-DOAI_HAS_LEGACY_STK')
 with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
@@ -45,5 +48,6 @@ with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
                     str(src/'stk_trace.c'),str(src/'stk_trace_channel.c'),
                     str(src/'qd_channel_reader.c'),str(src/'qd_channel_adapter.c'),
                     '-lcrypto','-lm','-lpthread','-o',str(d/'test')],check=True,cwd=build)
+    subprocess.run([str(d/'test'),'--phase'],check=True)
     subprocess.run([str(d/'test'),str(trace)],check=True)
     if has_legacy:subprocess.run([str(d/'test'),'--legacy'],check=True)

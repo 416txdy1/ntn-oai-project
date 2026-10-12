@@ -23,7 +23,7 @@ def test_schedule_parser_and_previous_row_lookup():
         source.write_text(
             '#include "stk_schedule.h"\n'
             '#include <stdio.h>\n'
-            'int main(int argc,char **argv){stk_schedule s={0};char e[128];'
+            'int main(int argc,char **argv){(void)argc;stk_schedule s={0};char e[128];'
             'if(!stk_schedule_load(argv[1],&s,e,sizeof(e)))return 1;'
             'stk_schedule_entry x={0};if(!stk_schedule_at(&s,19,&x))return 2;'
             'printf("%s %.0f\\n",x.satellite_id,x.elevation_deg);'
@@ -52,7 +52,7 @@ def test_schedule_parser_reads_handover_phase_metadata():
         source.write_text(
             '#include "stk_schedule.h"\n'
             '#include <stdio.h>\n'
-            'int main(int argc,char **argv){stk_schedule s={0};char e[128];'
+            'int main(int argc,char **argv){(void)argc;stk_schedule s={0};char e[128];'
             'if(!stk_schedule_load(argv[1],&s,e,sizeof(e)))return 1;'
             'stk_schedule_entry x={0};if(!stk_schedule_at(&s,20,&x))return 2;'
             'printf("%s %s %s\\n",x.handover_phase,x.previous_satellite_id,x.next_satellite_id);'
