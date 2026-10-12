@@ -102,7 +102,16 @@ def resolve_runtime(root: Path, profile: str, run_id: str,
     repo = path('OAI_REPO', root / '.runtime/oai', root / '.runtime')
     build = path('OAI_BUILD_DIR', repo / 'cmake_targets/ran_build/build', root / '.runtime')
     if isolated:
-        path('OAI_BUILD_REPO', repo, root / '.runtime')
+        required_repo = root / '.runtime/oai'
+        required_build = required_repo / 'cmake_targets/ran_build/build'
+        build_repo = path('OAI_BUILD_REPO', repo, root / '.runtime')
+        for key, actual, required in (
+            ('OAI_REPO', repo, required_repo),
+            ('OAI_BUILD_DIR', build, required_build),
+            ('OAI_BUILD_REPO', build_repo, required_repo),
+        ):
+            if actual != required:
+                raise ValueError(f'{key} must use the dedicated isolated OAI checkout/build')
     ue = path('OAI_UE_CONFIG', private / 'ue.conf' if isolated else _user_home(environ) / '.local/share/oai-stk/ue.local.conf', private)
     trace_default = root / ('local_ntn/stk_trace_seamless.csv' if isolated else 'examples/fdd-pass/trace.csv')
     trace = path('OAI_STK_TRACE', trace_default)

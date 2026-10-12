@@ -121,6 +121,37 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             resolve_runtime(self.root, 'integrated-handover', 'default', {})
 
+    def test_isolated_oai_source_and_build_are_exact(self):
+        repo = self.root / '.runtime/oai'
+        build = repo / 'cmake_targets/ran_build/build'
+        accepted = {'OAI_REPO': str(repo), 'OAI_BUILD_DIR': str(build),
+                    'OAI_BUILD_REPO': str(repo)}
+        conflicting = (
+            {'OAI_REPO': str(self.root / '.runtime/alternate-oai')},
+            {'OAI_REPO': str(repo / 'alternate-source')},
+            {'OAI_BUILD_DIR': str(self.root / '.runtime/alternate-build')},
+            {'OAI_BUILD_DIR': str(repo / 'alternate-build')},
+            {'OAI_REPO': str(repo), 'OAI_BUILD_REPO': str(self.root / '.runtime/alternate-oai')},
+        )
+        for profile in ('integrated-handover', 'legacy-handover'):
+            config = resolve_runtime(self.root, profile, 'exact', accepted)
+            self.assertEqual(config.oai_repo, repo)
+            self.assertEqual(config.build_dir, build)
+            self.assertEqual(config.to_env()['OAI_BUILD_REPO'], str(repo))
+            for env in conflicting:
+                with self.subTest(profile=profile, environ=env), self.assertRaises(ValueError):
+                    resolve_runtime(self.root, profile, 'exact', env)
+        custom_repo = self.root / '.runtime/alternate-oai'
+        custom_build = self.root / '.runtime/alternate-build'
+        zky = resolve_runtime(self.root, 'zky', 'exact',
+                              {'OAI_REPO': str(custom_repo), 'OAI_BUILD_DIR': str(custom_build)})
+        self.assertEqual(zky.oai_repo, custom_repo)
+        self.assertEqual(zky.build_dir, custom_build)
+        custom_repo.mkdir(parents=True)
+        repo.symlink_to(custom_repo, target_is_directory=True)
+        for profile in ('integrated-handover', 'legacy-handover'):
+            with self.subTest(profile=profile, symlink=True), self.assertRaises(ValueError):
+                resolve_runtime(self.root, profile, 'exact', {})
     def test_env_roundtrip_and_private_settings(self):
         config = resolve_runtime(self.root, 'integrated-handover', 'first', {})
         env = config.to_env()
