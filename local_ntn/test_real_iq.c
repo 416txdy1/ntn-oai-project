@@ -92,7 +92,7 @@ int main(int argc,char **argv)
       assert(fabs((out[i].i-clean[i].i)-sigma)<1e-3*(1+sigma));
     }
     measured_noise=false;
-    uint64_t last=llround(parsed.rows[parsed.count-1].time*ch.sampling_rate);
+    uint64_t last=llround((parsed.rows[parsed.count-1].time-parsed.rows[0].time)*ch.sampling_rate);
     update_channel_model(&ch,N,last);memset(out,0,sizeof(out));rxAddInput(qd_input,out,0,&ch,N);
     for(int i=0;i<N;i++)assert(isfinite(out[i].r) && isfinite(out[i].i));
     update_channel_model(&ch,N,last+7680000);memset(out,0,sizeof(out));rxAddInput(qd_input,out,0,&ch,N);

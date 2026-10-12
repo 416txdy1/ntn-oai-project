@@ -89,8 +89,9 @@ with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
         bundle=base.parent/'examples/fdd-pass'/direction
         real_trace=base.parent/'examples/fdd-pass/trace.csv'
         qd_env={**os.environ,'OAI_QD_CHANNEL':str(bundle),'OAI_STK_TRACE_RATE':'1',
-                'OAI_STK_TRACE_EPOCH':'0','OAI_STK_TRACE_NOISE':'1'}
+                'OAI_STK_TRACE_NOISE':'1'}
         qd_env.pop('OAI_STK_SCHEDULE',None)
+        qd_env.pop('OAI_STK_TRACE_EPOCH',None)
         if direction=='uplink':qd_env['IQ_TEST_UPLINK']='1'
         else:qd_env.pop('IQ_TEST_UPLINK',None)
         subprocess.run([str(d/'test'),str(real_trace),'--qd'],check=True,env=qd_env)
