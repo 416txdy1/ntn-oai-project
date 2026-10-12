@@ -61,10 +61,12 @@ class RunStateTest(unittest.TestCase):
     def test_executable_mismatch_and_timeout_retain_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             state = self.write_state(Path(directory))
+            original=state.read_bytes()
             with patch('run_state.process_identity', return_value=('123', '/foreign')), \
                  patch('os.killpg') as signals:
                 with self.assertRaisesRegex(RuntimeError,'executable changed'):stop_owned(state, 'mine')
             signals.assert_not_called()
+            self.assertEqual(state.read_bytes(),original)
             state = self.write_state(Path(directory))
             clock = [0.0]
             with patch('run_state.process_identity', side_effect=lambda pid: ('123','/build/nr-softmodem') if pid==42000 else None), \
