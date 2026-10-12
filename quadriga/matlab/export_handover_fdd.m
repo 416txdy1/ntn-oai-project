@@ -25,7 +25,7 @@ if any(ismissing(schedule.satellite_id) | strlength(schedule.satellite_id) == 0)
     error('QDCHANNEL1:ScheduleRows', 'Schedule identity/elevation/flags are invalid');
 end
 if ismember('handover_phase', schedule.Properties.VariableNames) && ...
-        any(~ismember(schedule.handover_phase, ["steady", "blend", "complete"]))
+        any(~ismember(schedule.handover_phase, ["steady", "prepare", "blend", "complete"]))
     error('QDCHANNEL1:ScheduleRows', 'Schedule phase is invalid');
 end
 checksums = jsondecode(fileread(fullfile(root, 'vendor', 'checksums.json')));

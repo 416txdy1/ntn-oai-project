@@ -131,7 +131,7 @@ def check_handover_bundles(dl: Path, ul: Path, trace: Path, schedule: Path) -> d
                 and row['visible'] in ('0', '1') and row['switched'] in ('0', '1'),
                 'handover schedule contains an invalid identity or visibility')
         if 'handover_phase' in row:
-            require(row['handover_phase'] in ('steady', 'blend', 'complete'),
+            require(row['handover_phase'] in ('steady', 'prepare', 'blend', 'complete'),
                     'handover schedule contains an invalid phase')
     for name in ('trace', 'schedule'):
         spec = inputs[name]

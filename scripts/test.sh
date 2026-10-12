@@ -17,9 +17,18 @@ if [ -x .runtime/test-venv/bin/python ]; then PYTEST_PYTHON=.runtime/test-venv/b
 python3 local_ntn/test_trace_validation.py
 python3 local_ntn/test_real_iq.py --sanitize
 python3 quadriga/tests/test_rfsim_history.py
-python3 -m unittest quadriga.tests.test_validate_bundle quadriga.tests.test_channel_math quadriga.tests.test_audit_link_budget
+python3 -m unittest quadriga.tests.test_validate_bundle quadriga.tests.test_channel_math quadriga.tests.test_audit_link_budget quadriga.tests.test_handover_bundle
 for direction in downlink uplink; do
- python3 -m quadriga.tools.audit_link_budget "examples/fdd-pass/$direction" "$OAI_STK_TRACE"
- python3 quadriga/tests/run_qd_channel_reader_tests.py --real-bundle "examples/fdd-pass/$direction" --real-trace "$OAI_STK_TRACE"
- python3 quadriga/tests/run_qd_rfsim_adapter_test.py --sanitize --oai-repo "$OAI_REPO" --build-repo "$OAI_REPO" --bundle "examples/fdd-pass/$direction" --trace "$OAI_STK_TRACE"
+ python3 -m quadriga.tools.audit_link_budget "examples/fdd-pass/$direction" "$ROOT/examples/fdd-pass/trace.csv"
+ python3 quadriga/tests/run_qd_channel_reader_tests.py --real-bundle "examples/fdd-pass/$direction" --real-trace "$ROOT/examples/fdd-pass/trace.csv"
+ python3 quadriga/tests/run_qd_rfsim_adapter_test.py --sanitize --oai-repo "$OAI_REPO" --build-repo "$OAI_REPO" --bundle "examples/fdd-pass/$direction" --trace "$ROOT/examples/fdd-pass/trace.csv"
+done
+for dataset in seamless firsthandover; do
+ if [ "$dataset" = seamless ]; then bundle_root=examples/handover; else bundle_root=examples/handover/firsthandover; fi
+ trace="local_ntn/stk_trace_${dataset}.csv"
+ for direction in downlink uplink; do
+  python3 -m quadriga.tools.audit_link_budget "$bundle_root/$direction" "$trace"
+  python3 quadriga/tests/run_qd_channel_reader_tests.py --real-bundle "$bundle_root/$direction" --real-trace "$trace"
+  python3 quadriga/tests/run_qd_rfsim_adapter_test.py --sanitize --oai-repo "$OAI_REPO" --build-repo "$OAI_REPO" --bundle "$bundle_root/$direction" --trace "$trace"
+ done
 done
