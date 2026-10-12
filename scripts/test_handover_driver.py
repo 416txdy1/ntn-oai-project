@@ -76,6 +76,67 @@ class DriverBoundaryTests(unittest.TestCase):
                      [ready,dict(event='error',role='receiver',monotonic_ns=200),end]):
             with self.assertRaises(ValueError):d.worker_observation(rows,'receiver')
 
+    def test_drain_reserve_uses_observed_wall_to_iq_rate_and_preserves_windows(self):
+        from handover_metrics import case_spec
+        def rows(factor):
+            return [dict(samples=100000+i*100,monotonic_ns=10000000000+int(i*.1/factor*1e9)) for i in range(31)]
+        for factor,expected in [(1,612),(.1,615)]:
+            self.assertAlmostEqual(d.tail_stop_iq(case_spec('full'),{'gnb':rows(factor),'ue':rows(factor)},1000),expected)
+        with self.assertRaises(ValueError):d.tail_stop_iq(case_spec('full'),{'gnb':rows(3),'ue':rows(3)},1000)
+
+    def test_sender_event_gap_cannot_be_hidden_by_heartbeat(self):
+        rows=[dict(event='ready',role='sender',monotonic_ns=100,offered_wall_bits_per_second=100000),
+              dict(event='send',role='sender',monotonic_ns=200,sequence=2,send_ns=190,bytes=1000),
+              dict(event='end',role='sender',monotonic_ns=300,sent=1,failed=False)]
+        with self.assertRaises(ValueError):d.worker_observation(rows,'sender')
+
+    def test_final_report_keeps_loss_before_confirmed_business_and_two_full_windows(self):
+        from handover_metrics import ClockMap,evaluate_handover
+        from test_handover_metrics import good_report
+        anchors=[dict(samples=i*100,monotonic_ns=10000000000+i*100000000,sampling_rate=1000,
+                      iq_s=i*.1,stk_s=8200+i*.1,direction='DL') for i in range(6203)]
+        observer=SimpleNamespace(fs=1000,manifest={'epoch':8200,'rate':1},
+                   anchors={'gnb':anchors,'ue':anchors},pbch_errors=0,rrc_idle=0,reaccess_count=0,
+                   qd_loaded={'gnb':1,'ue':1},
+                   mapper=lambda side:ClockMap(anchors,8200,1,1000))
+        stop_ns=625000000000;drain_ns=630000000000
+        def events(role,sends,receives,end_ns):
+            ready=dict(event='ready',role=role,monotonic_ns=21000000000,offered_wall_bits_per_second=100000)
+            body=[{**event,'role':role} for event in sends+receives]
+            heartbeats=[dict(event='heartbeat',role=role,monotonic_ns=t) for t in range(22000000000,end_ns,1000000000)]
+            body.sort(key=lambda event:event['monotonic_ns'])
+            body+=heartbeats;body.sort(key=lambda event:event['monotonic_ns'])
+            return [ready]+body+[dict(event='end',role=role,monotonic_ns=end_ns,failed=False,
+                                      sent=len(sends),received=len({event['sequence'] for event in receives}),
+                                      received_datagrams=len(receives))]
+        def traffic(step,missing_first=False):
+            sends=[];receives=[]
+            count=int((615-11.2)/step)
+            for index in range(count):
+                seq=index+1;ns=10000000000+int((11.2+index*step)*1000000000)
+                sends.append(dict(event='send',sequence=seq,send_ns=ns,monotonic_ns=ns+100,bytes=1000))
+                if not (missing_first and seq==1):
+                    receives.append(dict(event='receive',sequence=seq,send_ns=ns,receive_ns=ns+10000000,
+                                         monotonic_ns=ns+10000100,bytes=1000))
+            return sends,receives
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)
+            for direction in ('uplink','downlink'):
+                sends,receives=traffic(.08)
+                (output/(direction+'-sender.jsonl')).write_text('\n'.join(json.dumps(row) for row in events('sender',sends,[],stop_ns))+'\n')
+                (output/(direction+'-receiver.jsonl')).write_text('\n'.join(json.dumps(row) for row in events('receiver',[],receives,drain_ns))+'\n')
+            sends,receives=traffic(1,True)
+            (output/'ping.jsonl').write_text('\n'.join(json.dumps(row) for row in events('ping',sends,receives,drain_ns))+'\n')
+            report=good_report()
+            with patch.object(d,'write_timeline',return_value={'fixture':True}):
+                d.build_report(report,observer,output,{'pdu_ns':20000000000,'traffic_ns':21200000000},
+                               stop_ns,drain_ns,{})
+            self.assertEqual(report['ping']['lost_packets'],1)
+            self.assertEqual(report['ping']['sent'],len(sends))
+            self.assertGreater(report['traffic_ready_iq_s'],12)
+            self.assertTrue(all(window['coverage_ok'] for window in report['windows']))
+            self.assertEqual(evaluate_handover(report),[])
+
     def test_interrupt_handler_restored_and_second_signal_does_not_abort_cleanup(self):
         old={sig:signal.getsignal(sig) for sig in (signal.SIGINT,signal.SIGTERM)}
         with d.InterruptGuard() as guard:

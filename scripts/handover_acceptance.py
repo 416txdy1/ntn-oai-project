@@ -173,6 +173,19 @@ class Observer:
         return ClockMap(self.anchors[side],self.manifest['epoch'],self.manifest['rate'],self.fs)
 
 
+def tail_stop_iq(spec,anchors,fs):
+    factors=[]
+    for rows in anchors.values():
+        a,b=rows[max(0,len(rows)-31)],rows[-1]
+        if b['monotonic_ns']<=a['monotonic_ns']:raise ValueError('no tail clock interval')
+        factors.append(((b['samples']-a['samples'])/fs)/((b['monotonic_ns']-a['monotonic_ns'])/1e9))
+    reserve=max(5.0,8.0*max(factors))
+    minimum_stop=(spec['completions'][-1]+5-spec['trace_interval_s'][0]+.3) if spec['completions'] else 30.3
+    if spec['duration_iq_s']-reserve<minimum_stop:
+        raise ValueError('observed real-time factor leaves insufficient drain after required business coverage')
+    return spec['duration_iq_s']-reserve
+
+
 def pdu_address(namespace):
     result=subprocess.run(['ip','-n',namespace,'-j','-4','addr','show','dev','oaitun_ue1'],capture_output=True,text=True)
     if result.returncode:return None
@@ -385,8 +398,10 @@ def run_acceptance(argv=None):
                 if traffic_started and traffic_stop_ns is None:
                     for name in ('ping','uplink-sender','uplink-receiver','downlink-sender','downlink-receiver'):
                         if not children.alive(name):raise RuntimeError('business worker exited: '+name)
-                    if current>=spec['duration_iq_s']-5:
+                    tail_target=tail_stop_iq(spec,observer.anchors,observer.fs) if current>=spec['duration_iq_s']-30 else spec['duration_iq_s']-5
+                    if current>=tail_target:
                         traffic_stop_ns=time.monotonic_ns()
+                        report['tail_send_stop_target_iq_s']=tail_target
                         for name in ('uplink-sender','downlink-sender','ping'):children.signal(name,signal.SIGINT)
                         drain_deadline=now+6
                         report['tail_phase']='intentional_send_stop_and_bounded_wall_drain'

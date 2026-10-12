@@ -75,6 +75,13 @@ def audit_manifest(path):
     trace=Path(manifest['trace'])
     if hashlib.sha256(trace.read_bytes()).hexdigest()!=manifest['trace_sha256']:
         raise ValueError('runtime trace hash mismatch')
+    if manifest.get('schedule'):
+        if hashlib.sha256(Path(manifest['schedule']).read_bytes()).hexdigest()!=manifest['schedule_sha256']:
+            raise ValueError('runtime schedule hash mismatch')
+    for bundle in manifest.get('bundles',{}).values():
+        for relative,expected in bundle['files'].items():
+            if hashlib.sha256((Path(bundle['path'])/relative).read_bytes()).hexdigest()!=expected:
+                raise ValueError('runtime bundle hash mismatch')
     rows=read_rows(trace);fs=manifest['sample_rate_hz']
     if manifest['epoch']!=rows[0][0]:raise ValueError('manifest epoch mismatch')
     logs={side:Path(manifest['logs'][side]).read_text(errors='replace') for side in ('gnb','ue')}

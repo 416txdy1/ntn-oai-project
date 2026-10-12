@@ -120,6 +120,12 @@ class ProbeTests(unittest.TestCase):
         self.assertTrue(result['packets'][0]['late_received'])
         self.assertTrue(result['packets'][0]['deadline_timeout'])
 
+    def test_source_receive_timestamp_is_not_log_writer_time(self):
+        result=u.match_events([dict(event='send',sequence=1,send_ns=100,monotonic_ns=110,bytes=100)],
+                              [dict(event='receive',sequence=1,send_ns=100,receive_ns=200,monotonic_ns=500,bytes=100)],300,400)
+        self.assertTrue(result['packets'][0]['received'])
+        self.assertEqual(result['packets'][0]['receive_ns'],200)
+
     def test_after_drain_not_claimed_received(self):
         result=u.match_events([dict(event='send',sequence=1,send_ns=100,monotonic_ns=100,bytes=100)],
                               [dict(event='receive',sequence=1,send_ns=100,monotonic_ns=900,bytes=100)],200,800)
