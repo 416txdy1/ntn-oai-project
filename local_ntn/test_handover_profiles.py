@@ -93,3 +93,108 @@ def test_slice_refuses_source_overwrite(tmp_path):
     result = subprocess.run(cmd, capture_output=True, text=True)
     assert result.returncode != 0
     assert trace.read_bytes() == original
+
+
+def helper(monkeypatch):
+    monkeypatch.syspath_prepend(str(BASE))
+    import handover_profiles
+    return handover_profiles
+
+
+def local_plan(tmp_path, monkeypatch):
+    from dataclasses import replace
+    module = helper(monkeypatch)
+    config = module.resolve_runtime(ROOT, 'legacy-handover', 'test-runtime', {})
+    config = replace(config, run_dir=tmp_path / 'run')
+    return module, config, module.build_plan(config, 'mock', 7, 1, 0)
+
+
+def test_unprivileged_wrapper_refuses_before_system_operation(tmp_path, monkeypatch):
+    module, config, plan = local_plan(tmp_path, monkeypatch)
+    monkeypatch.setattr(module.os, 'geteuid', lambda: 1000)
+    monkeypatch.setattr(module.subprocess, 'run', lambda *a, **k: pytest.fail('must not execute'))
+    with pytest.raises(ValueError, match='sudo -E python3'):
+        module.execute_plan(config, plan, 7, {})
+    assert not config.run_dir.exists()
+
+
+def test_failed_start_does_not_stop_an_existing_run(tmp_path, monkeypatch):
+    module, config, plan = local_plan(tmp_path, monkeypatch)
+    monkeypatch.setattr(module.os, 'geteuid', lambda: 0)
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        if command == plan['commands']['start']:
+            raise subprocess.CalledProcessError(1, command)
+        return subprocess.CompletedProcess(command, 0)
+    monkeypatch.setattr(module.subprocess, 'run', run)
+    with pytest.raises(subprocess.CalledProcessError):
+        module.execute_plan(config, plan, 7, {})
+    assert calls == [plan['commands']['core'], plan['commands']['start']]
+    for path in plan['logs'].values():
+        assert Path(path).stat().st_mode & 0o777 == 0o600
+
+
+def test_probe_failure_cleans_owned_probes_and_modems(tmp_path, monkeypatch):
+    module, config, plan = local_plan(tmp_path, monkeypatch)
+    monkeypatch.setattr(module.os, 'geteuid', lambda: 0)
+    calls, signals = [], []
+    def run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout='inet 12.2.1.2')
+    monkeypatch.setattr(module.subprocess, 'run', run)
+    monkeypatch.setattr(module, 'process_identity', lambda pid: ('123', '/usr/bin/python3'))
+    children = []
+    class Process:
+        def __init__(self, command, **kwargs):
+            assert kwargs['start_new_session'] is True
+            assert kwargs['env']['OAI_NTN_NAMESPACE'] == 'ntn-qd-ue'
+            self.command, self.pid, self.done = command, 100 + len(children), False
+            children.append(self)
+        def poll(self):
+            return 0 if self.done else None
+        def wait(self, timeout):
+            if self.command == plan['commands']['uplink'] and not self.done:
+                raise subprocess.TimeoutExpired(self.command, timeout)
+            self.done = True
+            return 0
+    monkeypatch.setattr(module.subprocess, 'Popen', Process)
+    def killpg(pid, sig):
+        signals.append((pid, sig))
+        next(p for p in children if p.pid == pid).done = True
+    monkeypatch.setattr(module.os, 'killpg', killpg)
+    with pytest.raises(subprocess.TimeoutExpired):
+        module.execute_plan(config, plan, 7, {})
+    assert calls[-1] == plan['commands']['stop']
+    assert [pid for pid, _ in signals] == [100, 101]
+    assert all(p.done for p in children)
+
+
+def test_reused_probe_pid_is_never_signalled(tmp_path, monkeypatch):
+    module = helper(monkeypatch)
+    monkeypatch.setattr(module, 'process_identity', lambda pid: ('456', '/unrelated'))
+    monkeypatch.setattr(module.os, 'killpg', lambda *a: pytest.fail('reused PID must not be signalled'))
+    class Process:
+        pid = 321
+        def poll(self): return None
+        def wait(self, timeout): raise subprocess.TimeoutExpired('foreign', timeout)
+    with pytest.raises(RuntimeError, match='shutdown timed out'):
+        module.stop_probe(Process(), ('123', '/usr/bin/python3'))
+
+
+def test_inherited_original_environment_is_rejected_without_writes(tmp_path):
+    env = clean_env()
+    env['OAI_NTN_RUN_DIR'] = str(tmp_path / 'foreign')
+    result = subprocess.run(['bash', str(BASE / 'run_seamless_validation.sh'),
+                             '--profile', 'integrated-handover', '--run-id', 'contaminated', '--dry-run'],
+                            env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert not (tmp_path / 'foreign').exists()
+
+
+@pytest.mark.parametrize('name', ['satellite_schedule.csv', 'satellite_schedule_firsthandover.csv',
+                                  'satellite_schedule_seamless.csv', 'stk_trace_firsthandover.csv',
+                                  'stk_trace_seamless.csv'])
+def test_restored_input_bytes_match_frozen_source(name):
+    source = subprocess.check_output(['git', '-C', str(ROOT), 'show', 'f30bc90:local_ntn/' + name])
+    assert (BASE / name).read_bytes() == source
