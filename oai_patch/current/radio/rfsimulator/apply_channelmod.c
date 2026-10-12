@@ -463,7 +463,7 @@ void rxAddInput(c16_t **input_sig, cf_t *after_channel_sig, int rxAnt, channel_d
       }
     }
 
-    if (channelDesc->Doppler_phase_inc != 0.0) {
+    if (channelDesc->Doppler_phase_inc != 0.0 || Doppler_phase_cur != 0.0) {
 #ifdef CMPLX
       double complex in = CMPLX(rx_tmp.r, rx_tmp.i);
 #else

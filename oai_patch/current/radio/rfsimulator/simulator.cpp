@@ -1313,13 +1313,27 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
           input[aatx] = ant_buffers[aatx].data();
         }
 
-        combine_received_beams(t,
-                               ptr->received_packets,
-                               timestamp - channel_offset - (channel_history - 1),
-                               ptr->nbAnt,
-                               nsamps + channel_history - 1,
-                               rx_beam_id,
-                               input);
+        // The IQ stream starts at sample zero. Keep unavailable startup history
+        // zero-filled and collect the available suffix without unsigned wrap.
+        AssertFatal(timestamp >= 0 && channel_offset <= INT64_MAX - (channel_history - 1),
+                    "Invalid RFsim collection timestamp or history offset\n");
+        const uint64_t needed_history = channel_offset + channel_history - 1;
+        const size_t input_count = nsamps + channel_history - 1;
+        const uint64_t now = static_cast<uint64_t>(timestamp);
+        const size_t leading_zeros = now < needed_history
+            ? std::min<uint64_t>(input_count, needed_history - now) : 0;
+        for (uint aatx = 0; aatx < ant_buffers.size(); aatx++)
+          input[aatx] += leading_zeros;
+        if (leading_zeros < input_count)
+          combine_received_beams(t,
+                                 ptr->received_packets,
+                                 now < needed_history ? 0 : now - needed_history,
+                                 ptr->nbAnt,
+                                 input_count - leading_zeros,
+                                 rx_beam_id,
+                                 input);
+        for (uint aatx = 0; aatx < ant_buffers.size(); aatx++)
+          input[aatx] = ant_buffers[aatx].data();
 
         for (int aarx = 0; aarx < nbAnt; aarx++) {
           rxAddInput(input, temp_array[aarx], aarx, ptr->channel_model, nsamps);
