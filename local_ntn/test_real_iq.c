@@ -9,6 +9,7 @@
 #include <common/utils/LOG/log.h>
 #include <openair1/SIMULATION/TOOLS/sim.h>
 #include "radio/rfsimulator/rfsimulator.h"
+#include "radio/rfsimulator/stk_trace.h"
 #include "openair2/LAYER2/NR_MAC_gNB/mac_config.h"
 static log_t log_state;
 static bool measured_noise;
@@ -35,6 +36,7 @@ int main(int argc,char **argv)
   assert(argc==2 || argc==3);
   log_state.log_component[HW].level=OAILOG_INFO;
   bool clock_mode=argc==3 && strcmp(argv[2],"--clock")==0;
+  bool qd_mode=argc==3 && strcmp(argv[2],"--qd")==0;
   if(strcmp(argv[1],"--phase")==0) {
     struct complexd tap={.r=1};struct complexd *taps[]={&tap};float phase=0;
     channel_desc_t ch={.nb_tx=1,.nb_rx=1,.channel_length=1,.ch=taps,.Doppler_phase_cur=&phase,
@@ -62,8 +64,42 @@ int main(int argc,char **argv)
   enum {N=1024};c16_t in[N];cf_t out[N];c16_t *inputs[]={in};
   for(int i=0;i<N;i++)in[i]=(c16_t){.r=1000,.i=2000};
   if(clock_mode) {
-    for(int i=0;i<=60;i++)update_channel_model(&ch,384000,(uint64_t)i*384000);
+    float ul_phase=0;channel_desc_t ul=ch;ul.is_uplink=true;ul.center_freq=1614900000;ul.Doppler_phase_cur=&ul_phase;
+    for(int i=0;i<=60;i++) {
+      update_channel_model(&ch,537600,(uint64_t)i*537600);
+      update_channel_model(&ul,537600,(uint64_t)i*537600);
+    }
     puts("PASS actual sample clock log fixture");return 0;
+  }
+  if(qd_mode) {
+    ch.is_uplink=getenv("IQ_TEST_UPLINK")!=NULL;
+    if(ch.is_uplink)ch.center_freq=1614900000;
+    update_channel_model(&ch,N,0);
+    const size_t history=qd_channel_history_length(&ch);assert(history>255);
+    c16_t *storage=calloc(history+N-1,sizeof(*storage));assert(storage);
+    c16_t *qd_input[]={storage};
+    for(size_t i=0;i<history+N-1;i++)storage[i]=(c16_t){.r=i<history-1?20000:1000,.i=i<history-1?10000:2000};
+    double gain=1,sigma=0;stk_trace_iq_parameters(&ch,qd_input,history-1,N,&gain,&sigma);
+    stk_trace parsed={0};char error[256];assert(stk_trace_load(argv[1],&parsed,error,sizeof(error)));
+    double cn=ch.is_uplink?parsed.rows[0].ul_cn:parsed.rows[0].dl_cn;
+    const double expected_sigma=sqrt(5000000.*gain*gain*pow(10.,-cn/10.)*ch.sampling_rate/2000000./2.);
+    assert(fabs(sigma/expected_sigma-1)<1e-8); // poisoned history must not enter current-block RMS
+    cf_t clean[N];memset(clean,0,sizeof(clean));phase=0;rxAddInput(qd_input,clean,0,&ch,N);
+    measured_noise=true;memset(out,0,sizeof(out));phase=0;rxAddInput(qd_input,out,0,&ch,N);
+    for(int i=0;i<N;i++) {
+      assert(isfinite(out[i].r) && isfinite(out[i].i));
+      assert(fabs((out[i].r-clean[i].r)-sigma)<1e-3*(1+sigma));
+      assert(fabs((out[i].i-clean[i].i)-sigma)<1e-3*(1+sigma));
+    }
+    measured_noise=false;
+    uint64_t last=llround(parsed.rows[parsed.count-1].time*ch.sampling_rate);
+    update_channel_model(&ch,N,last);memset(out,0,sizeof(out));rxAddInput(qd_input,out,0,&ch,N);
+    for(int i=0;i<N;i++)assert(isfinite(out[i].r) && isfinite(out[i].i));
+    update_channel_model(&ch,N,last+7680000);memset(out,0,sizeof(out));rxAddInput(qd_input,out,0,&ch,N);
+    assert(energy(out,N)==0);
+    measured_noise=true;memset(out,0,sizeof(out));rxAddInput(qd_input,out,0,&ch,N);assert(energy(out,N)>0);
+    printf("PASS actual QD rxAddInput %s: history=%zu current-RMS noise applied once, finite tail, exhausted mute/background\n",ch.is_uplink?"UL":"DL",history);
+    free(storage);stk_trace_free(&parsed);return 0;
   }
   if(legacy) {
 #ifdef OAI_HAS_LEGACY_STK

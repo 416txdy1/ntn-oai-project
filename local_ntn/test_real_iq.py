@@ -66,19 +66,31 @@ with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
     output=subprocess.check_output([str(d/'test'),str(trace),'--clock'],text=True,env=clock_env)
     clocks=[line.split() for line in output.splitlines() if line.startswith('STKCLOCK ')]
     assert clocks,'actual channel must emit STKCLOCK anchors'
-    previous=None
+    previous={}
     for words in clocks:
-        assert words[1]=='DL'
+        assert words[1] in ('DL','UL')
         fields=dict(word.split('=',1) for word in words[2:])
         samples=int(fields['samples']);fs=float(fields['sampling_rate']);iq=float(fields['iq_s']);stk=float(fields['stk_s'])
         monotonic=int(fields['monotonic_ns'])
         assert fs==7680000 and abs(iq-samples/fs)<1e-8 and abs(stk-(1+iq*.5))<1e-8
         assert monotonic>0
-        if previous:
-            assert monotonic>=previous[0] and 0<iq-previous[1]<=.100001
+        if words[1] in previous:
+            old=previous[words[1]]
+            assert monotonic>=old[0] and 0<iq-old[1]<=.170001
         else:assert samples==0
-        previous=monotonic,iq
+        previous[words[1]]=monotonic,iq
+    assert set(previous)=={'DL','UL'}
     schedules=[line for line in output.splitlines() if line.startswith('STKSCHEDULE ')]
     assert any('satellite_id=SAT_A ' in line and 'phase=steady ' in line for line in schedules)
     assert any('satellite_id=SAT_B ' in line and 'phase=complete ' in line and 'previous=SAT_A ' in line for line in schedules)
     print(f'PASS actual STKCLOCK: {len(clocks)} monotonic/IQ/STK anchors; schedule identity and phase')
+
+    for direction in ('downlink','uplink'):
+        bundle=base.parent/'examples/fdd-pass'/direction
+        real_trace=base.parent/'examples/fdd-pass/trace.csv'
+        qd_env={**os.environ,'OAI_QD_CHANNEL':str(bundle),'OAI_STK_TRACE_RATE':'1',
+                'OAI_STK_TRACE_EPOCH':'0','OAI_STK_TRACE_NOISE':'1'}
+        qd_env.pop('OAI_STK_SCHEDULE',None)
+        if direction=='uplink':qd_env['IQ_TEST_UPLINK']='1'
+        else:qd_env.pop('IQ_TEST_UPLINK',None)
+        subprocess.run([str(d/'test'),str(real_trace),'--qd'],check=True,env=qd_env)
