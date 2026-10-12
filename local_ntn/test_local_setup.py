@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
     private.write_text('imsi = "001010000000001"; nssai_sst = 1; dnn = "oai";\n'
                        'position0 = { x = 6377900; y = 0; z = 0; };\n')
     env = dict(os.environ, OAI_REPO=str(OAI_REPO), OAI_UE_CONFIG=str(private),
-               OAI_AMF_IP='192.168.70.132', OAI_GNB_IP_CIDR='192.168.70.129/26')
+               OAI_AMF_IP='192.168.70.132', OAI_GNB_IP_CIDR='192.168.70.129/26', OAI_NTN_RUN_DIR=str(work))
     env['OAI_STK_TRACE'] = str(work / 'stk_trace.csv')  # 测试只使用临时输入。
     template = OAI_REPO / 'ci-scripts/conf_files/gnb.sa.band254.u0.25prb.rfsim.ntn-leo.conf'
     original = template.read_bytes()
@@ -129,3 +129,4 @@ with tempfile.TemporaryDirectory(prefix='ntn-run-config-') as directory:
         except ValueError:pass
         else:raise AssertionError('invalid initial lead accepted')
     print('PASS: test_generated_files_stay_in_run, bounded initial lead and unchanged epoch/template')
+

@@ -1,152 +1,250 @@
-"""Local experiment controller, run in WSL as root. Only stops its own recorded PIDs."""
-import argparse,ipaddress,json,math,os,re,shutil,signal,socket,subprocess,sys,time
+"""Run-scoped experiment controller; no system operations during import."""
+import argparse
+import hashlib
+import json
+import math
+import os
 from pathlib import Path
-from paths import OAI_REPO, UE_CONFIG, BUILD_DIR, STK_TRACE
-from preflight import preflight, channel_environments
-from network_config import check_network
-BASE=Path(__file__).resolve().parent
-STATE=BASE/'processes.json'
-EXT_DN_IP=str(ipaddress.IPv4Address(os.environ.get('OAI_EXT_DN_IP','192.168.70.135')))
-EXT_DN_CONTAINER=os.environ.get('OAI_EXT_DN_CONTAINER','oai-ext-dn')
-p=argparse.ArgumentParser();p.add_argument('action',choices=['preflight','start','stop','status','ping','iperf'])
-p.add_argument('--rate',type=float,default=0);p.add_argument('--label',default='static-final')
-p.add_argument('--reverse',action='store_true')
-a=p.parse_args()
-def call(cmd,**kw):return subprocess.run(cmd,check=True,**kw)
-def identity(pid):
-    try:
-        fields = Path(f'/proc/{pid}/stat').read_text().split()
-        return None if fields[2] == 'Z' else fields[21]
-    except FileNotFoundError:return None
-def safe_tail(path):
-    lines=Path(path).read_text(errors='replace').splitlines()
-    pattern='STKTRACE2|successful|succeeded|Reject|REJECT|PDU|oaitun|Assertion|Write queue|RRC_CONNECTED|Authentication|SECURITY|Error decoding PBCH'
-    selected=[s for s in lines if re.search(pattern,s) and 'STKTRACE2' not in s][-10:]
-    selected += [s for s in lines if 'STKTRACE2' in s][-5:]
-    for line in selected:
-        print(re.sub(r'\b(Ki|OPc|K|key)=[^, ]+',r'\1=[REDACTED]',line))
-def checked_preflight():
-    try:
-        return preflight(a.rate)
-    except (ValueError, OSError, KeyError, ImportError) as error:
-        raise SystemExit(f'Preflight failed: {error}') from None
+import re
+import shutil
+import subprocess
+import time
 
-if a.action=='preflight':
-    print(json.dumps(checked_preflight(),ensure_ascii=False,indent=2))
-elif a.action=='stop':
-    if STATE.exists():
-        owned = json.loads(STATE.read_text())
-        def alive(value):
-            return value['start'] is not None and identity(value['pid']) == value['start']
-        # TERM 只是请求退出；必须等待结束，才能安全启动下一轮实验。
-        for sig, timeout in ((signal.SIGTERM, 10), (signal.SIGKILL, 5)):
-            for value in owned.values():
-                if alive(value):
-                    try: os.killpg(value['pid'], sig)
-                    except ProcessLookupError: pass
-            deadline = time.monotonic() + timeout
-            while any(alive(value) for value in owned.values()) and time.monotonic() < deadline:
-                time.sleep(.1)
-            if not any(alive(value) for value in owned.values()):
-                STATE.write_text('{}\n')
-                print('Owned modem processes stopped')
-                break
-        else:
-            raise SystemExit('Owned modem shutdown timed out; state retained for inspection')
-elif a.action=='start':
-    if not re.fullmatch(r'[a-zA-Z0-9_-]+',a.label):p.error('invalid label')
-    if not math.isfinite(a.rate) or not 0 <= a.rate <= 1:p.error('--rate must be between 0 and 1')
-    report=checked_preflight()
+from network_config import check_network
+from network_owner import NetworkManager
+from preflight import preflight, channel_environments, read_trace
+from run_state import process_identity, read_state, matches, save_state, stop_owned
+from runtime_config import resolve_runtime
+
+BASE = Path(__file__).resolve().parent
+
+
+def call(command, **kwargs):
+    return subprocess.run(command, check=True, **kwargs)
+
+
+def sha256(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def commit_at(path):
+    return subprocess.check_output(['git','-C',str(path),'rev-parse','HEAD'],text=True).strip()
+
+
+def build_manifest(config, rate, environment):
+    rows=read_trace(config.trace)
+    bundles={}
+    if config.profile!='legacy-handover':
+        for direction,bundle in (('downlink',config.dl_bundle),('uplink',config.ul_bundle)):
+            if bundle and bundle.is_dir():
+                bundles[direction]={'path':str(bundle),'files':{str(p.relative_to(bundle)):sha256(p) for p in sorted(bundle.rglob('*')) if p.is_file()}}
+    return {'schema':1,'profile':config.profile,'run_id':config.run_id,'workspace':str(config.root),
+            'source_commit':commit_at(config.root),'oai_source':{'commit':commit_at(config.oai_repo),'path':str(config.oai_repo)},
+            'source_repo':str(config.oai_repo),'build_dir':str(config.build_dir),
+            'binaries':{name:sha256(config.build_dir/name) for name in ('nr-softmodem','nr-uesoftmodem','librfsimulator.so','libparams_libconfig.so','libldpc.so','libdfts.so')},
+            'trace':str(config.trace),'trace_sha256':sha256(config.trace),
+            'schedule':str(config.schedule) if config.schedule else None,
+            'schedule_sha256':sha256(config.schedule) if config.schedule else None,
+            'bundles':bundles,'epoch':rows[0][0],'rate':rate,'interpolation':config.interpolation,
+            'timing_assist':environment.get('OAI_STK_BLEND_TIMING_ASSIST','0')=='1',
+            'gnb_config':str(config.gnb_config),'initial_delay_file':str(config.initial_delay_file),
+            'state_file':str(config.state_file),'logs':{},'sample_rate_hz':None,
+            'network':{'namespace':config.namespace,'host_veth':config.host_veth,'ue_veth':config.ue_veth,
+                       'rf_host_ip':config.rf_host_ip,'rf_ue_ip':config.rf_ue_ip,'rf_port':config.rf_port,
+                       'core_project':config.core_project,'owner_file':str(config.owner_file)}}
+
+
+def observed_sample_rate(logs):
+    values=[]
+    for kind in ('gnb','ue'):
+        text=logs.get(kind,'')
+        # Only explicit modem/RFsim rate diagnostics qualify; no inferred PRB constant.
+        found=re.findall(r'\b(?:sample_rate_hz|sample_rate|sampling rate)\s*(?:[=:,]|is)?\s*([0-9]+(?:\.[0-9]+)?)',text,re.I)
+        rates={float(value) for value in found if math.isfinite(float(value)) and float(value)>0}
+        if len(rates)>1:raise ValueError('Conflicting sample rate in '+kind+' startup log')
+        if not rates:return None
+        values.append(rates.pop())
+    if values[0]!=values[1]:raise ValueError('gNB/UE sample rate mismatch')
+    return values[0]
+
+
+def environments(config, environment, rate):
+    env=dict(environment)
+    env.update(config.to_env())
+    if config.profile=='zky':
+        for key in ('OAI_QD_DL_CHANNEL','OAI_QD_UL_CHANNEL'):
+            if not environment.get(key):env.pop(key,None)
+    elif config.profile=='legacy-handover':
+        for key in ('OAI_QD_CHANNEL','OAI_QD_DL_CHANNEL','OAI_QD_UL_CHANNEL'):env.pop(key,None)
+    env['OAI_STK_TRACE_RATE']=str(rate)
+    env['OAI_STK_TRACE_EPOCH']=str(read_trace(config.trace)[0][0])
+    return env
+
+
+def write_manifest(path, manifest, exclusive=False):
+    if exclusive:
+        fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        with os.fdopen(fd,'w') as stream:json.dump(manifest,stream,indent=2)
+    else:save_state(path,manifest)
+
+
+def refresh_manifest(config):
+    path=config.run_dir/'run.json'
+    if not path.is_file():return
+    manifest=json.loads(path.read_text())
+    if manifest.get('run_id')!=config.run_id:raise ValueError('Manifest belongs to another run')
+    logs={kind:Path(log).read_text(errors='replace') for kind,log in manifest['logs'].items()}
+    manifest['sample_rate_hz']=observed_sample_rate(logs)
+    write_manifest(path,manifest)
+
+
+def record_modem(record):
+    current=process_identity(record['pid'])
+    if current and current[0]==record['start'] and current[1]==record['expected_executable']:
+        record['executable']=current[1]
+        record['phase']='running'
+        return True
+    return False
+
+
+def start(config,args,environment):
+    manifest_path=config.run_dir/'run.json'
+    if config.profile!='zky' and (manifest_path.exists() or manifest_path.is_symlink()):
+        raise ValueError('Run manifest already exists; choose a new run-id')
+    if os.geteuid()!=0:raise SystemExit('start requires root: use sudo -E python3 local_ntn/experiment.py start')
+    for name in ('nr-softmodem','nr-uesoftmodem'):
+        if subprocess.run(['pgrep','-x',name],stdout=subprocess.DEVNULL).returncode==0:
+            raise SystemExit(name+' already running; refusing duplicate')
+    report=preflight(args.rate,environment,runtime=config)
     print(json.dumps(report,ensure_ascii=False,indent=2),flush=True)
-    if os.geteuid()!=0:raise SystemExit('start requires root: use sudo python3 local_ntn/experiment.py start')
-    if subprocess.run(['pgrep','-x','nr-softmodem'],stdout=subprocess.DEVNULL).returncode==0:
-        raise SystemExit('gNB already running; use stop for this controller or stop your manual process')
-    if subprocess.run(['pgrep','-x','nr-uesoftmodem'],stdout=subprocess.DEVNULL).returncode==0:
-        raise SystemExit('UE already running; refusing duplicate')
+    env=environments(config,environment,args.rate)
+    print(json.dumps(check_network(env)),flush=True)
+    children=channel_environments(env,qd_required=config.profile=='integrated-handover')
+    config.run_dir.mkdir(parents=True,exist_ok=True)
+    manifest=build_manifest(config,args.rate,env)
+    manifest['initial_lead_rfsim']=args.initial_lead_rfsim
+    write_manifest(manifest_path,manifest,exclusive=config.profile!='zky')
+    state={'schema':2,'run_id':config.run_id,'profile':config.profile,'status':'launching','processes':{}}
+    manager=NetworkManager(config)
+    network_up=False
     try:
-        print(json.dumps(check_network()), flush=True)
-    except (ValueError, OSError) as error:
-        raise SystemExit(f'Network preflight failed: {error}') from None
-    call(['python3',str(BASE/'prepare_local.py'),'--rate',str(a.rate)])
-    call(['bash',str(BASE/'local_network.sh')])
-    env=os.environ.copy()
-    env.update(OAI_STK_TRACE_RATE=str(a.rate), OAI_STK_TRACE=str(STK_TRACE),
-               OAI_REPO=str(OAI_REPO), OAI_BUILD_DIR=str(BUILD_DIR), OAI_UE_CONFIG=str(UE_CONFIG))
-    environments=channel_environments(env)
-    state={}
-    started=[]
-    try:
+        call(['python3',str(BASE/'prepare_local.py'),'--profile',config.profile,'--run-id',config.run_id,
+              '--rate',str(args.rate),'--initial-lead-rfsim',str(args.initial_lead_rfsim)],env=env)
+        manifest['network']['owner']=manager.up()
+        network_up=True
+        write_manifest(manifest_path,manifest)
         for kind in ('gnb','ue'):
-            log=BASE/f'{kind}-{a.label}.log'
-            with log.open('w') as f:
-                process=subprocess.Popen(['bash',str(BASE/'run_local.sh'),kind],stdout=f,stderr=subprocess.STDOUT,
-                    env=environments[kind],start_new_session=True)
-            started.append(process)
-            state[kind]={'pid':process.pid,'start':identity(process.pid),'log':str(log),'rate':a.rate}
-            STATE.write_text(json.dumps(state,indent=2))
+            log=config.run_dir/f'{kind}-{args.label}.log'
+            fd=os.open(log,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|os.O_NOFOLLOW,0o600)
+            with os.fdopen(fd,'w') as stream:
+                process=subprocess.Popen(['bash',str(BASE/'run_local.sh'),kind],stdout=stream,
+                    stderr=subprocess.STDOUT,env=children[kind],start_new_session=True)
+            identity=process_identity(process.pid)
+            record={'pid':process.pid,'start':identity[0] if identity else None,
+                    'executable':identity[1] if identity else None,'phase':'launching',
+                    'expected_executable':str(config.build_dir/('nr-softmodem' if kind=='gnb' else 'nr-uesoftmodem')),
+                    'log':str(log),'rate':args.rate}
+            state['processes'][kind]=record
+            save_state(config.state_file,state)
+            manifest['logs'][kind]=str(log)
+            write_manifest(manifest_path,manifest)
             print('Started',kind,process.pid,flush=True)
-            if kind=='gnb':
-                deadline=time.monotonic()+30
-                # RFsim 会把 TCP 探测当成 UE；只查看日志就绪标记。
-                while time.monotonic()<deadline:
-                    if process.poll() is not None: raise SystemExit('gNB exited; inspect private log')
-                    if 'No connected device' in log.read_text(errors='replace'):break
-                    time.sleep(.2)
-                else:raise SystemExit('gNB readiness timeout')
-            else:
-                time.sleep(1)
-                if process.poll() is not None: raise SystemExit('UE exited; inspect private log')
+            deadline=time.monotonic()+30
+            while time.monotonic()<deadline:
+                if process.poll() is not None:raise SystemExit(kind+' exited; inspect private log')
+                # A log marker alone is insufficient: wait for the shell to exec the selected binary.
+                ready=kind=='ue' or 'No connected device' in log.read_text(errors='replace')
+                if ready and record_modem(record):break
+                time.sleep(.2)
+            else:raise SystemExit(kind+' readiness timeout')
+            save_state(config.state_file,state)
+        state['status']='running'
+        save_state(config.state_file,state)
+        refresh_manifest(config)
     except BaseException:
-        # 只清理本次已创建且身份仍匹配的进程组，不影响手动启动的实例。
-        for owned in state.values():
-            if owned['start'] is not None and identity(owned['pid'])==owned['start']:
-                try: os.killpg(owned['pid'],signal.SIGTERM)
-                except ProcessLookupError: pass
-        for process in started:
-            try: process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                owned=next(value for value in state.values() if value['pid']==process.pid)
-                if owned['start'] is not None and identity(process.pid)==owned['start']:
-                    try: os.killpg(process.pid,signal.SIGKILL)
-                    except ProcessLookupError: pass
-                process.wait(timeout=5)
-        STATE.write_text('{}\n')
+        state['status']='launch_failed'
+        save_state(config.state_file,state)
+        # Shutdown handles shell→selected modem transitions only during launch, with unchanged starttime.
+        # Timeout leaves state intact and intentionally prevents network teardown.
+        stop_owned(config.state_file,config.run_id)
+        if network_up and config.profile!='zky':manager.down()
         raise
-elif a.action=='status':
-    if STATE.exists():
-        for kind,v in json.loads(STATE.read_text()).items():
-            print(kind,'alive=',v['start'] is not None and identity(v['pid'])==v['start']);safe_tail(v['log'])
-    if Path('/run/netns/oai-stk-ue').exists():
-        call(['ip','-n','oai-stk-ue','-br','addr'])
-    else:
-        print('UE namespace is not present. Keep a WSL terminal open, then start the experiment to create it.')
-else:
-    call(['python3',str(BASE/'verify_network.py')])
-    ns=['ip','netns','exec','oai-stk-ue']
-    info=json.loads(subprocess.check_output(['ip','-n','oai-stk-ue','-j','-4','addr','show','dev','oaitun_ue1']))
+
+
+def safe_tail(path):
+    # Only structured numerical trace records are safe to display from private modem logs.
+    lines=Path(path).read_text(errors='replace').splitlines()
+    for line in [line for line in lines if re.search(r'\b(STKTRACE2|STKSCHEDULE)\b',line)][-5:]:
+        if re.search(r'\b(?:Ki|OPc|K|key|imsi|password)\b',line,re.I):continue
+        print(line)
+
+
+def traffic(config,args,env):
+    call(['python3',str(BASE/'verify_network.py'),'--profile',config.profile,'--run-id',config.run_id],env=env)
+    ns=['ip','netns','exec',config.namespace]
+    info=json.loads(subprocess.check_output(['ip','-n',config.namespace,'-j','-4','addr','show','dev','oaitun_ue1']))
     addr=info[0]['addr_info'][0]['local']
-    call(['ip','-n','oai-stk-ue','route','replace',EXT_DN_IP+'/32','dev','oaitun_ue1','src',addr])
-    print('UE source',addr,'destination ext-DN',EXT_DN_IP,'through oaitun_ue1',flush=True)
-    if a.action=='ping':call(ns+['ping','-n','-I','oaitun_ue1','-c','10','-W','5',EXT_DN_IP])
-    else:
-        # nsenter -n only changes the network namespace, not the container rootfs.
-        # Resolve one host-visible binary and use it at both ends so versions match.
-        iperf_bin=os.environ.get('OAI_IPERF3_BIN') or shutil.which('iperf3')
-        if not iperf_bin:
-            raise SystemExit('iperf3 not found; install it or export OAI_IPERF3_BIN to a host-visible executable')
-        iperf_prefix=[]
-        if library_path:=os.environ.get('OAI_IPERF3_LIBRARY_PATH'):
-            iperf_prefix=['env','LD_LIBRARY_PATH='+library_path]
-        iperf=iperf_prefix+[iperf_bin]
-        container=json.loads(subprocess.check_output(['docker','inspect',EXT_DN_CONTAINER]))[0]
-        pid=container['State']['Pid']
-        server=subprocess.Popen(['nsenter','-t',str(pid),'-n']+iperf+['-s','-1','-p','5203'],
-            stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
-        try:
-            time.sleep(.3)
-            if server.poll() is not None:raise RuntimeError(server.stderr.read().decode())
-            call(ns+iperf+['-c',EXT_DN_IP,'-p','5203','-B',addr,'-u','-b','100K','-t','15','-i','5']
-                 +(['-R'] if a.reverse else []))
-        finally:
-            if server.poll() is None:server.terminate()
-            server.wait(timeout=5)
+    call(['ip','-n',config.namespace,'route','replace',config.ext_dn_ip+'/32','dev','oaitun_ue1','src',addr])
+    print('UE source',addr,'destination ext-DN',config.ext_dn_ip,'through oaitun_ue1',flush=True)
+    if args.action=='ping':
+        call(ns+['ping','-n','-I','oaitun_ue1','-c',str(args.ping_count),'-W','5',config.ext_dn_ip])
+        return
+    iperf_bin=env.get('OAI_IPERF3_BIN') or shutil.which('iperf3')
+    if not iperf_bin:raise ValueError('iperf3 not found; install it or export OAI_IPERF3_BIN')
+    prefix=['env','LD_LIBRARY_PATH='+env['OAI_IPERF3_LIBRARY_PATH']] if env.get('OAI_IPERF3_LIBRARY_PATH') else []
+    iperf=prefix+[iperf_bin]
+    container=json.loads(subprocess.check_output(['docker','inspect',config.ext_dn_container]))[0]
+    pid=container['State']['Pid']
+    server=subprocess.Popen(['nsenter','-t',str(pid),'-n']+iperf+['-s','-1','-p','5203'],
+                            stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+    try:
+        time.sleep(.3)
+        if server.poll() is not None:raise RuntimeError('iperf server exited')
+        call(ns+iperf+['-c',config.ext_dn_ip,'-p','5203','-B',addr,'-u','-b','100K','-t',str(args.iperf_seconds),'-i','5']
+             +(['-R'] if args.reverse else []))
+    finally:
+        if server.poll() is None:server.terminate()
+        server.wait(timeout=5)
+
+
+def main(argv=None):
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action',choices=('preflight','start','stop','status','ping','iperf'))
+    parser.add_argument('--profile',default='')
+    parser.add_argument('--run-id',default='')
+    parser.add_argument('--rate',type=float,default=0)
+    parser.add_argument('--label',default='static-final')
+    parser.add_argument('--reverse',action='store_true')
+    parser.add_argument('--ping-count',type=int,default=10)
+    parser.add_argument('--iperf-seconds',type=int,default=15)
+    parser.add_argument('--initial-lead-rfsim',type=float,default=0)
+    args=parser.parse_args(argv)
+    if not re.fullmatch(r'[A-Za-z0-9_-]+',args.label):parser.error('invalid label')
+    if not math.isfinite(args.rate) or not 0<=args.rate<=1:parser.error('--rate must be finite and between 0 and 1')
+    if not math.isfinite(args.initial_lead_rfsim) or args.initial_lead_rfsim<0:parser.error('--initial-lead-rfsim must be finite and nonnegative')
+    if args.ping_count<1 or args.iperf_seconds<1:parser.error('traffic counts and duration must be positive')
+    try:
+        config=resolve_runtime(BASE.parent,args.profile,args.run_id,os.environ)
+        if args.action=='preflight':print(json.dumps(preflight(args.rate,dict(os.environ),runtime=config),ensure_ascii=False,indent=2))
+        elif args.action=='start':start(config,args,dict(os.environ))
+        elif args.action=='stop':
+            stop_owned(config.state_file,config.run_id)
+            if config.profile!='zky' and config.owner_file.exists():NetworkManager(config).down()
+            print('Owned modem processes stopped')
+        elif args.action=='status':
+            refresh_manifest(config)
+            if config.state_file.exists():
+                _,records=read_state(config.state_file,config.run_id)
+                for kind,record in records.items():
+                    print(kind,'alive=',matches(record));safe_tail(record['log'])
+            if Path('/run/netns',config.namespace).exists():call(['ip','-n',config.namespace,'-br','addr'])
+            else:print('UE namespace is not present')
+        else:
+            env=dict(os.environ)
+            env.update(config.to_env())
+            traffic(config,args,env)
+    except (ValueError,OSError,KeyError,RuntimeError,subprocess.CalledProcessError) as error:
+        parser.exit(1,f'Experiment failed: {error}\n')
+
+
+if __name__=='__main__':main()

@@ -89,17 +89,19 @@ class RunStateTest(unittest.TestCase):
                     processes.append(process)
                     return process
                 def identity(pid):
-                    return ('123', '/bin/bash') if pid == 42000 else ('124', '/bin/bash')
+                    kind='gnb' if pid==42000 else 'ue'
+                    return ('123' if pid==42000 else '124', '/bin/bash' if kind==failed_kind else str(config.build_dir/('nr-softmodem' if kind=='gnb' else 'nr-uesoftmodem')))
                 with patch('experiment.preflight', return_value={}), \
                      patch('experiment.check_network', return_value={}), \
-                     patch('experiment.build_manifest', return_value={'run_id':'failure'}), \
+                     patch('experiment.build_manifest', return_value={'run_id':'failure','network':{},'logs':{}}), \
                      patch('experiment.NetworkManager') as network, \
-                     patch('experiment.call'), patch('os.geteuid', return_value=0), \
+                     patch('experiment.read_trace', return_value=[[0]*22]), patch('experiment.call'), patch('os.geteuid', return_value=0), \
                      patch('subprocess.run', return_value=Mock(returncode=1)), \
                      patch('subprocess.Popen', side_effect=popen), \
                      patch('experiment.process_identity', side_effect=identity), \
                      patch('experiment.stop_owned') as stop, patch('time.sleep'), \
                      contextlib.redirect_stdout(io.StringIO()):
+                    network.return_value.up.return_value={}
                     with self.assertRaisesRegex(SystemExit, 'exited'):
                         experiment.start(config, Mock(rate=0, label='failure', initial_lead_rfsim=0), {})
                     stop.assert_called_once_with(config.state_file, 'failure')
@@ -120,18 +122,20 @@ class RunStateTest(unittest.TestCase):
                 kwargs['stdout'].write('No connected device\n');kwargs['stdout'].flush()
                 created.append(process);return process
             with patch('experiment.preflight',return_value={}), patch('experiment.check_network',return_value={}), \
-                 patch('experiment.build_manifest',return_value={'run_id':'ready'}), patch('experiment.NetworkManager'), \
-                 patch('experiment.call'), patch('os.geteuid',return_value=0), \
+                 patch('experiment.build_manifest',return_value={'run_id':'ready','network':{},'logs':{}}), patch('experiment.NetworkManager') as network, \
+                 patch('experiment.read_trace',return_value=[[0]*22]), patch('experiment.call'), patch('os.geteuid',return_value=0), \
                  patch('subprocess.run',return_value=Mock(returncode=1)), patch('subprocess.Popen',side_effect=popen), \
                  patch('experiment.process_identity',side_effect=lambda pid:next(sequence[pid])), \
                  patch('time.sleep'),contextlib.redirect_stdout(io.StringIO()):
+                network.return_value.up.return_value={}
                 experiment.start(config,Mock(rate=0,label='ready',initial_lead_rfsim=0),{})
             records=json.loads(config.state_file.read_text())['processes']
             self.assertEqual(records['gnb']['executable'],str(config.build_dir/'nr-softmodem'))
             self.assertEqual(records['ue']['executable'],str(config.build_dir/'nr-uesoftmodem'))
             with patch('experiment.preflight') as check:
                 with self.assertRaisesRegex(ValueError,'exists'):
-                    experiment.start(config,Mock(rate=0,label='ready',initial_lead_rfsim=0),{})
+                    network.return_value.up.return_value={}
+                experiment.start(config,Mock(rate=0,label='ready',initial_lead_rfsim=0),{})
                 check.assert_not_called()
 
     def test_sample_rate_must_be_observed_on_both_sides(self):
@@ -143,4 +147,5 @@ class RunStateTest(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
 

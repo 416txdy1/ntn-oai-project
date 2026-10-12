@@ -9,16 +9,20 @@ from pathlib import Path
 import re
 import sys
 
-from paths import OAI_REPO, BUILD_DIR, UE_CONFIG, STK_TRACE, DL_FREQUENCY_HZ, UL_FREQUENCY_HZ
+# Radio constants are invariant; runtime paths are resolved only after CLI selection.
+DL_FREQUENCY_HZ = 2488400000
+UL_FREQUENCY_HZ = 1614900000
 from network_config import addresses
 
 
-def channel_environments(environment: dict[str, str]) -> dict[str, dict[str, str]]:
+def channel_environments(environment: dict[str, str], *, qd_required: bool = False) -> dict[str, dict[str, str]]:
     """gNB 接收 UL，UE 接收 DL；两个子进程使用独立字典。"""
     dl = environment.get('OAI_QD_DL_CHANNEL', '')
     ul = environment.get('OAI_QD_UL_CHANNEL', '')
     if environment.get('OAI_QD_CHANNEL'):
         raise ValueError('联合启动不能共用 OAI_QD_CHANNEL；请改用 OAI_QD_DL_CHANNEL 和 OAI_QD_UL_CHANNEL')
+    if qd_required and not (dl and ul):
+        raise ValueError('integrated profile requires both DL and UL bundles')
     if bool(dl) != bool(ul):
         raise ValueError('必须同时指定 OAI_QD_DL_CHANNEL 和 OAI_QD_UL_CHANNEL')
     result = {kind: dict(environment) for kind in ('gnb', 'ue')}
@@ -77,11 +81,25 @@ def check_bundle(bundle: Path, trace: Path, direction: str, frequency: int) -> d
     return audit_link_budget(bundle, trace)
 
 
-def preflight(rate: float, environment: dict[str, str] | None = None) -> dict:
+def preflight(rate: float, environment: dict[str, str] | None = None, runtime=None) -> dict:
     env = dict(os.environ if environment is None else environment)
     if not math.isfinite(rate) or not 0 <= rate <= 1:
         raise ValueError('rate 必须在 [0,1] 内')
-    children = channel_environments(env)
+    if runtime is None:
+        from paths import OAI_REPO, BUILD_DIR, UE_CONFIG, STK_TRACE
+        qd_required = False  # Preserve direct zky calls with optional QD.
+    else:
+        OAI_REPO, BUILD_DIR, UE_CONFIG, STK_TRACE = runtime.oai_repo, runtime.build_dir, runtime.ue_config, runtime.trace
+        original=dict(env)
+        env.update(runtime.to_env())
+        if runtime.profile == 'zky':
+            for key in ('OAI_QD_DL_CHANNEL','OAI_QD_UL_CHANNEL'):
+                if not original.get(key):env.pop(key,None)
+        qd_required = runtime.profile == 'integrated-handover'
+        if runtime.profile == 'legacy-handover':
+            for key in ('OAI_QD_CHANNEL','OAI_QD_DL_CHANNEL','OAI_QD_UL_CHANNEL'):
+                env.pop(key, None)
+    children = channel_environments(env, qd_required=qd_required)
     amf_ip, gnb_ip_cidr = addresses(env)
     required = [STK_TRACE, UE_CONFIG] + [BUILD_DIR / name for name in ('nr-softmodem', 'nr-uesoftmodem', 'librfsimulator.so', 'libparams_libconfig.so', 'libldpc.so', 'libdfts.so')]
     missing = [str(path) for path in required if not path.is_file()]
@@ -131,3 +149,5 @@ if __name__ == '__main__':
         print(json.dumps(preflight(parser.parse_args().rate), ensure_ascii=False, indent=2))
     except (ValueError, OSError, KeyError, ImportError) as error:
         raise SystemExit(f'Preflight failed: {error}') from None
+
+

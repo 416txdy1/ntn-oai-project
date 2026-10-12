@@ -104,82 +104,29 @@ class PreflightTest(unittest.TestCase):
                     self.assertEqual(args[args.index('-C') + 1], '2488400000')
                     self.assertEqual(args[args.index('--CO') + 1], '-873500000')
 
-    def test_stop_waits_for_owned_exit_and_preserves_unowned(self):
-        source = Path(__file__).with_name('experiment.py').read_text()
-        for needs_kill in (False, True):
-            with self.subTest(needs_kill=needs_kill), tempfile.TemporaryDirectory() as directory:
-                script = Path(directory) / 'experiment.py'
-                script.write_text(source)
-                state = Path(directory) / 'processes.json'
-                state.write_text(json.dumps({'gnb': {'pid': 42000, 'start': '123'},
-                                             'ue': {'pid': 42001, 'start': 'old'}}))
-                live = {42000: '123', 42001: 'reused'}
-                clock = [0.0]
-                term = [False]
-                real_read = Path.read_text
-                def read(path, *args, **kwargs):
-                    if str(path).startswith('/proc/'):
-                        value = live.get(int(path.parts[2]))
-                        if value is None: raise FileNotFoundError()
-                        return ' '.join(['0'] * 21 + [value])
-                    return real_read(path, *args, **kwargs)
-                def kill(pid, sig):
-                    self.assertEqual(pid, 42000)
-                    if sig == signal.SIGTERM: term[0] = True
-                    else: live.pop(pid)
+    def test_legacy_stop_waits_and_preserves_unowned(self):
+        from run_state import stop_owned
+        for needs_kill in (False,True):
+            with self.subTest(needs_kill=needs_kill),tempfile.TemporaryDirectory() as directory:
+                state=Path(directory)/'processes.json'
+                state.write_text(json.dumps({'gnb':{'pid':42000,'start':'123'},'ue':{'pid':42001,'start':'old'}}))
+                live={42000:('123','/build/nr-softmodem'),42001:('reused','/build/nr-uesoftmodem')}
+                clock=[0.0];term=[False]
+                def kill(pid,sig):
+                    self.assertEqual(pid,42000)
+                    if sig==signal.SIGTERM:term[0]=True
+                    else:live.pop(pid)
                 def sleep(seconds):
-                    clock[0] += seconds
-                    if term[0] and not needs_kill and clock[0] >= .3:
-                        live.pop(42000, None)
-                with patch.object(sys, 'argv', [str(script), 'stop']), \
-                     patch.object(Path, 'read_text', read), patch('os.killpg', side_effect=kill) as kills, \
-                     patch('time.sleep', side_effect=sleep), patch('time.monotonic', side_effect=lambda: clock[0]), \
-                     contextlib.redirect_stdout(io.StringIO()):
-                    runpy.run_path(str(script), run_name='__main__')
-                self.assertGreaterEqual(clock[0], 10 if needs_kill else .3)
-                self.assertEqual(kills.call_count, 2 if needs_kill else 1)
-                self.assertEqual(live, {42001: 'reused'})
-                self.assertEqual(json.loads(state.read_text()), {})
-
-    def test_start_failure_cleans_only_created_groups(self):
-        # 运行真实 controller 代码，隔离所有进程/网络调用和输出文件。
-        source = Path(__file__).with_name('experiment.py').read_text()
-        for failed_kind in ('gnb', 'ue'):
-            with self.subTest(failed_kind=failed_kind), tempfile.TemporaryDirectory() as directory:
-                script = Path(directory) / 'experiment.py'
-                script.write_text(source)
-                created = []
-                real_read = Path.read_text
-                def read(path, *args, **kwargs):
-                    if str(path).startswith('/proc/'):
-                        return ' '.join(['0'] * 21 + ['123'])
-                    return real_read(path, *args, **kwargs)
-                def popen(command, **kwargs):
-                    kind = command[-1]
-                    process = Mock(pid=42000 + len(created))
-                    process.poll.return_value = 1 if kind == failed_kind else None
-                    kwargs['stdout'].write('No connected device\n')
-                    kwargs['stdout'].flush()
-                    created.append(process)
-                    return process
-                def run(command, **kwargs):
-                    return subprocess.CompletedProcess(command, 1 if command[0] == 'pgrep' else 0)
-                with patch.object(sys, 'argv', [str(script), 'start']), \
-                     patch('preflight.preflight', return_value={}), patch('network_config.check_network', return_value={}), \
-                     patch('os.geteuid', return_value=0), patch('subprocess.run', side_effect=run), \
-                     patch('subprocess.Popen', side_effect=popen), patch.object(Path, 'read_text', read), \
-                     patch('os.killpg') as kill, patch('time.sleep'), \
-                     patch.dict(os.environ, {}, clear=True), contextlib.redirect_stdout(io.StringIO()):
-                    with self.assertRaisesRegex(SystemExit, 'exited'):
-                        runpy.run_path(str(script), run_name='__main__')
-                self.assertEqual(kill.call_count, len(created))
-                for process in created:
-                    kill.assert_any_call(process.pid, signal.SIGTERM)
-                    process.wait.assert_called_once_with(timeout=5)
-                self.assertEqual(json.loads((Path(directory) / 'processes.json').read_text()), {})
-
-
-
+                    clock[0]+=seconds
+                    if term[0] and not needs_kill and clock[0]>=.3:live.pop(42000,None)
+                with patch('run_state.process_identity',side_effect=lambda pid:live.get(pid)), \
+                     patch('os.killpg',side_effect=kill) as signals, \
+                     patch('time.monotonic',side_effect=lambda:clock[0]),patch('time.sleep',side_effect=sleep):
+                    stop_owned(state,'default')
+                self.assertGreaterEqual(clock[0],10 if needs_kill else .3)
+                self.assertEqual(signals.call_count,2 if needs_kill else 1)
+                self.assertEqual(live,{42001:('reused','/build/nr-uesoftmodem')})
+                self.assertEqual(json.loads(state.read_text()),{})
 
 class ProfilePreflightTest(unittest.TestCase):
     def test_integrated_requires_both_bundles(self):
@@ -206,4 +153,5 @@ class ProfilePreflightTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
 
