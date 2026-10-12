@@ -2,8 +2,9 @@
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "$0")" && pwd)
 # Profile/run selectors are resolved before importing paths; all consumers share this env.
-export OAI_NTN_RUN_DIR="${OAI_NTN_RUN_DIR:-$HERE}"
-if [[ ${OAI_NTN_PROFILE:-zky} != zky && $OAI_NTN_RUN_DIR == "$HERE" ]]; then unset OAI_NTN_RUN_DIR; fi
+if [[ ${OAI_NTN_PROFILE:-zky} == zky ]]; then
+  export OAI_NTN_RUN_DIR="${OAI_NTN_RUN_DIR:-$HERE}"
+fi
 RUNTIME_EXPORTS=$(python3 "$HERE/runtime_config.py" --format env)
 source /dev/stdin <<< "$RUNTIME_EXPORTS"
 BUILD_DIR=$OAI_BUILD_DIR
