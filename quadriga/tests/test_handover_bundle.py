@@ -129,6 +129,11 @@ class HandoverBundleTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "schedule.*time"):
             self.check()
 
+    def test_prepare_phase_is_preserved_as_valid_schedule_input(self):
+        self.schedule.write_text(self.schedule.read_text().replace(',steady,', ',prepare,', 1))
+        self.provenance['inputs']['schedule']['sha256'] = sha(self.schedule)
+        self.save()
+        self.assertEqual(self.check()['schedule_sha256'], sha(self.schedule))
     def test_manifest_hash_mismatch(self):
         path = self.bundles["uplink"] / "manifest.json"
         path.write_text(path.read_text() + "\n")
