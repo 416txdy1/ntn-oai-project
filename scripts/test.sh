@@ -10,8 +10,12 @@ python3 local_ntn/test_stk_timing_assist.py
 python3 local_ntn/test_network_config.py
 python3 local_ntn/test_preflight.py
 python3 local_ntn/test_local_setup.py
+python3 local_ntn/test_legacy_interpolation.py
+PYTEST_PYTHON=${PYTEST_PYTHON:-python3}
+if [ -x .runtime/test-venv/bin/python ]; then PYTEST_PYTHON=.runtime/test-venv/bin/python; fi
+"$PYTEST_PYTHON" -m pytest -q local_ntn/test_stk_schedule.py
 python3 local_ntn/test_trace_validation.py
-python3 local_ntn/test_real_iq.py
+python3 local_ntn/test_real_iq.py --sanitize
 python3 quadriga/tests/test_rfsim_history.py
 python3 -m unittest quadriga.tests.test_validate_bundle quadriga.tests.test_channel_math quadriga.tests.test_audit_link_budget
 for direction in downlink uplink; do

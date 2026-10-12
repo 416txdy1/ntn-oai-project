@@ -11,6 +11,7 @@
 #include "radio/rfsimulator/rfsimulator.h"
 #include "openair2/LAYER2/NR_MAC_gNB/mac_config.h"
 static log_t log_state;
+static bool measured_noise;
 log_t *g_log=&log_state;
 void logRecord_mt(const char *f,const char *fn,int l,int c,int level,const char *format,...)
 { (void)f; (void)fn; (void)l; (void)c; (void)level;
@@ -21,7 +22,7 @@ void logRecord_mt(const char *f,const char *fn,int l,int c,int level,const char 
 void exit_function(const char *f,const char *fn,const int line,const char *s,const int kind)
 { (void)f; (void)fn; (void)line; (void)s; (void)kind; abort(); }
 double gaussZiggurat(double mean,double variance)
-{ (void)mean; (void)variance; return 0; }
+{ (void)mean; (void)variance; return measured_noise?1:0; }
 int32_t signal_energy(int32_t *s,uint32_t n)
 { (void)s; (void)n; return 0; }
 bool nr_update_sib19(const gnb_sat_position_update_t *s)
@@ -91,5 +92,15 @@ int main(int argc,char **argv)
   assert(fabs(ratio-(pow(10,-20./10)*7680000/2000000))<1e-8);
   update_channel_model(&ch,N,3*7680000);memset(out,0,sizeof(out));rxAddInput(inputs,out,0,&ch,N);
   assert(energy(out,N)==0);
+  measured_noise=true;memset(out,0,sizeof(out));rxAddInput(inputs,out,0,&ch,N);
+  assert(energy(out,N)>0);
+  for(int i=0;i<N;i++)assert(isfinite(out[i].r) && isfinite(out[i].i));
+  measured_noise=false;
+  update_channel_model(&ch,N,5*7680000);memset(out,0,sizeof(out));rxAddInput(inputs,out,0,&ch,N);
+  assert(energy(out,N)==0);
+  measured_noise=true;memset(out,0,sizeof(out));rxAddInput(inputs,out,0,&ch,N);
+  assert(energy(out,N)>0);
+  for(int i=0;i<N;i++)assert(isfinite(out[i].r) && isfinite(out[i].i));
+  puts("PASS actual rxAddInput: invisible and exhausted signal mute preserve finite background noise");
   printf("PASS actual rxAddInput: 10dB loss energy ratio=%.9f; outage=0; noise ratio=%.9f; delay and Doppler changed\n",e1/e0,ratio);
 }

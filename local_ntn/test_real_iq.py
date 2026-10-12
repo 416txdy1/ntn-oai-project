@@ -3,6 +3,9 @@ import csv,json,os,re,shlex,subprocess,tempfile
 from pathlib import Path
 from paths import OAI_REPO
 repo=OAI_REPO;base=Path(__file__).resolve().parent
+canonical=base.parent/'oai_patch/current/radio/rfsimulator'
+for name in ('stk_trace.h','stk_trace.c','stk_trace_channel.c','stk_schedule.c','stk_schedule.h'):
+    assert (base/name).read_bytes()==(canonical/name).read_bytes(),f'canonical/test mirror drift: {name}'
 build_repo=Path(os.environ.get('OAI_BUILD_REPO',repo)).resolve()
 build=Path(os.environ.get('OAI_BUILD_DIR',build_repo/'cmake_targets/ran_build/build')).resolve()
 print(f'Actual IQ source={repo.resolve()} build={build}',flush=True)
