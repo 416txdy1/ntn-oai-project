@@ -6,6 +6,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <time.h>
 #include <common/utils/LOG/log.h>
 #include <openair1/SIMULATION/TOOLS/sim.h>
 #include "openair2/LAYER2/NR_MAC_gNB/mac_config.h"
@@ -25,7 +26,7 @@ static bool noise_enabled=true, dynamic_delay=true, dynamic_doppler=true;
 static openair0_ntn_sync_state_t last_sync;
 static bool have_sync;
 static bool observed_dl;
-typedef struct {channel_desc_t *channel;double gain, noise_ratio;bool valid;} iq_state;
+typedef struct {channel_desc_t *channel;double gain, noise_ratio;bool valid;bool clock_seen;uint64_t clock_ts;} iq_state;
 static iq_state iq[16];
 
 static double number(const char *name,double fallback,double lo,double hi)
@@ -108,9 +109,22 @@ bool update_channel_model_from_stk_trace(channel_desc_t *ch,int n,uint64_t ts)
   pthread_mutex_lock(&lock);
   int k=0;for(;k<16;k++)if(!iq[k].channel || iq[k].channel==ch)break;
   AssertFatal(k<16,"Too many STK trace channels\n");
-  iq[k]=(iq_state){.channel=ch,.gain=gain,.valid=valid,
+  const bool emit_clock=!iq[k].clock_seen || ts<iq[k].clock_ts
+      || ts-iq[k].clock_ts>=(uint64_t)ceil(ch->sampling_rate*.1);
+  uint64_t monotonic_ns=0;
+  if(emit_clock) {
+    struct timespec now;
+    AssertFatal(clock_gettime(CLOCK_MONOTONIC,&now)==0,"Cannot sample STK IQ monotonic clock\n");
+    monotonic_ns=(uint64_t)now.tv_sec*UINT64_C(1000000000)+(uint64_t)now.tv_nsec;
+  }
+  const uint64_t clock_ts=emit_clock?ts:iq[k].clock_ts;
+  iq[k]=(iq_state){.channel=ch,.gain=gain,.valid=valid,.clock_seen=true,.clock_ts=clock_ts,
       .noise_ratio=noise_enabled?pow(10,-clamp(cn,-60,150)/10)*ch->sampling_rate/bandwidth:0};
   pthread_mutex_unlock(&lock);
+  if(emit_clock)
+    LOG_I(HW,"STKCLOCK %s monotonic_ns=%" PRIu64 " samples=%" PRIu64 " sampling_rate=%.9f iq_s=%.9f stk_s=%.9f\n",
+          ch->is_uplink?"UL":"DL",monotonic_ns,ts,ch->sampling_rate,ts/ch->sampling_rate,
+          stk_trace_epoch(epoch,ts,ch->sampling_rate,rate));
   if(!inrange) {
     if(!ch->is_uplink){pthread_mutex_lock(&lock);observed_dl=true;have_sync=false;pthread_mutex_unlock(&lock);}
     if(ts/(uint64_t)ch->sampling_rate!=(ts+n)/(uint64_t)ch->sampling_rate)
