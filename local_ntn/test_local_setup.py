@@ -15,7 +15,7 @@ from paths import OAI_REPO
 BASE = Path(__file__).resolve().parent
 with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
     work = Path(directory)
-    for name in ('prepare_local.py', 'paths.py', 'network_config.py'):
+    for name in ('prepare_local.py', 'paths.py', 'network_config.py', 'runtime_config.py'):
         shutil.copy2(BASE / name, work / name)
     private = work / 'identity.conf'
     private.write_text('imsi = "001010000000001"; nssai_sst = 1; dnn = "oai";\n'

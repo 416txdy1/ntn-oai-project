@@ -76,7 +76,7 @@ class PreflightTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='qd launch ') as directory:
             root = Path(directory)
             here = Path(__file__).parent
-            for name in ('paths.py', 'run_local.sh'):
+            for name in ('paths.py', 'run_local.sh', 'runtime_config.py'):
                 shutil.copy2(here / name, root / name)
             build = root / 'chosen build'
             build.mkdir()

@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
-# 必须 source；使用此文件位置计算路径，不依赖调用目录或用户名。
-NTN_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-export OAI_REPO="$NTN_ROOT/.runtime/oai"
-export OAI_BUILD_DIR="$OAI_REPO/cmake_targets/ran_build/build"
-export OAI_BUILD_REPO="$OAI_REPO"
-export OAI_STK_TRACE="$NTN_ROOT/examples/fdd-pass/trace.csv"
-export OAI_QD_DL_CHANNEL="$NTN_ROOT/examples/fdd-pass/downlink"
-export OAI_QD_UL_CHANNEL="$NTN_ROOT/examples/fdd-pass/uplink"
-export OAI_UE_CONFIG="$NTN_ROOT/.private/ue.conf"
-export OAI_AMF_IP=192.168.70.132 OAI_GNB_IP_CIDR=192.168.70.129/26
+# Source this file; resolve everything before exporting any configuration.
+NTN_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd) || return 1
+if [ "${OAI_NTN_PROFILE:-zky}" = zky ]; then
+  # Preserve the existing shell defaults (paths.py has a different private UE default).
+  NTN_RESOLVED_ENV=$(OAI_REPO="$NTN_ROOT/.runtime/oai" \
+    OAI_BUILD_DIR="$NTN_ROOT/.runtime/oai/cmake_targets/ran_build/build" \
+    OAI_BUILD_REPO="$NTN_ROOT/.runtime/oai" \
+    OAI_STK_TRACE="$NTN_ROOT/examples/fdd-pass/trace.csv" \
+    OAI_QD_DL_CHANNEL="$NTN_ROOT/examples/fdd-pass/downlink" \
+    OAI_QD_UL_CHANNEL="$NTN_ROOT/examples/fdd-pass/uplink" \
+    OAI_UE_CONFIG="$NTN_ROOT/.private/ue.conf" \
+    OAI_AMF_IP=192.168.70.132 OAI_GNB_IP_CIDR=192.168.70.129/26 \
+    python3 "$NTN_ROOT/local_ntn/runtime_config.py" --format env) || return 1
+else
+  NTN_RESOLVED_ENV=$(python3 "$NTN_ROOT/local_ntn/runtime_config.py" --format env) || return 1
+fi
+eval "$NTN_RESOLVED_ENV"
+unset NTN_RESOLVED_ENV
 unset OAI_QD_CHANNEL OAI_STK_TRACE_EPOCH OAI_STK_PORT
 unset OAI_STK_TRACE_EXTRA_LOSS_DB OAI_STK_TRACE_CN_OFFSET_DB OAI_STK_TRACE_BW_HZ OAI_STK_TRACE_NOISE
-if [ -f "$NTN_ROOT/.private/settings.json" ]; then
-  read -r OAI_AMF_IP OAI_GNB_IP_CIDR OAI_EXT_DN_IP OAI_EXT_DN_CONTAINER < <(
-    python3 -c 'import json,sys;s=json.load(open(sys.argv[1]));print(s["amf_ip"],s["gnb_ip_cidr"],s["ext_dn_ip"],s["ext_dn_container"])' "$NTN_ROOT/.private/settings.json")
-  export OAI_AMF_IP OAI_GNB_IP_CIDR OAI_EXT_DN_IP OAI_EXT_DN_CONTAINER
-fi
-export OAI_IPERF3_BIN="$NTN_ROOT/.runtime/iperf3/iperf3"
-export OAI_IPERF3_LIBRARY_PATH="$NTN_ROOT/.runtime/iperf3/lib"
