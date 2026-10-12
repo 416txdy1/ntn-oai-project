@@ -99,7 +99,7 @@ int main(int argc,char **argv)
     assert(energy(out,N)==0);
     measured_noise=true;memset(out,0,sizeof(out));rxAddInput(qd_input,out,0,&ch,N);assert(energy(out,N)>0);
     printf("PASS actual QD rxAddInput %s: history=%zu current-RMS noise applied once, finite tail, exhausted mute/background\n",ch.is_uplink?"UL":"DL",history);
-    free(storage);stk_trace_free(&parsed);return 0;
+    free(storage);free(parsed.rows);return 0;
   }
   if(legacy) {
 #ifdef OAI_HAS_LEGACY_STK
