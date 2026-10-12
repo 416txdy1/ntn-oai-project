@@ -85,6 +85,15 @@ def environments(config, environment, rate):
     return env
 
 
+def launcher_environments(environment, *, qd_required=False):
+    """Validate role channels, then send only directional inputs across the resolver boundary."""
+    children=channel_environments(environment,qd_required=qd_required)
+    if environment.get('OAI_NTN_PROFILE','zky')!='zky':
+        for child in children.values():
+            child.pop('OAI_QD_CHANNEL',None)
+    return children
+
+
 def write_manifest(path, manifest, exclusive=False):
     if exclusive:
         fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
@@ -123,7 +132,7 @@ def start(config,args,environment):
     print(json.dumps(report,ensure_ascii=False,indent=2),flush=True)
     env=environments(config,environment,args.rate)
     print(json.dumps(check_network(env)),flush=True)
-    children=channel_environments(env,qd_required=config.profile=='integrated-handover')
+    children=launcher_environments(env,qd_required=config.profile=='integrated-handover')
     config.run_dir.mkdir(parents=True,exist_ok=True)
     manifest=build_manifest(config,args.rate,env)
     manifest['initial_lead_rfsim']=args.initial_lead_rfsim
@@ -252,7 +261,11 @@ def main(argv=None):
             else:print('UE namespace is not present')
         else:
             env=dict(os.environ)
-            env.update(config.to_env())
+            runtime_env=config.to_env()
+            if config.profile=='zky':
+                for key in ('OAI_IPERF3_BIN','OAI_IPERF3_LIBRARY_PATH'):
+                    runtime_env.pop(key,None)
+            env.update(runtime_env)
             traffic(config,args,env)
     except (ValueError,OSError,KeyError,RuntimeError,subprocess.CalledProcessError) as error:
         parser.exit(1,f'Experiment failed: {error}\n')

@@ -19,13 +19,27 @@ else
   export LD_LIBRARY_PATH="$BUILD_DIR"
 fi
 cd "$BUILD_DIR"
+if [[ $OAI_NTN_PROFILE != zky ]]; then
+  # Verification consumes directional inputs only; generic role channel is modem-only.
+  python3 "$HERE/verify_network.py" --profile "$OAI_NTN_PROFILE" --run-id "$OAI_NTN_RUN_ID"
+  if [[ $OAI_NTN_PROFILE == integrated-handover ]]; then
+    case "${1:-}" in
+      gnb) export OAI_QD_CHANNEL="$OAI_QD_UL_CHANNEL" ;;
+      ue) export OAI_QD_CHANNEL="$OAI_QD_DL_CHANNEL" ;;
+    esac
+  else
+    unset OAI_QD_CHANNEL
+  fi
+fi
 case "${1:-}" in
   gnb)
     exec ./nr-softmodem -O "$OAI_GNB_CONFIG" --rfsim \
       --rfsimulator.[0].serveraddr server --rfsimulator.[0].serverport "$OAI_RF_PORT"
     ;;
   ue)
-    python3 "$HERE/verify_network.py" --profile "$OAI_NTN_PROFILE" --run-id "$OAI_NTN_RUN_ID"
+    if [[ $OAI_NTN_PROFILE == zky ]]; then
+      python3 "$HERE/verify_network.py" --profile "$OAI_NTN_PROFILE" --run-id "$OAI_NTN_RUN_ID"
+    fi
     read -r DELAY < "$OAI_INITIAL_DELAY_FILE"
     exec ip netns exec "$OAI_NTN_NAMESPACE" ./nr-uesoftmodem \
       -O "$UE_CONFIG" \
