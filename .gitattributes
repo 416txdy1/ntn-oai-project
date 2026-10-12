@@ -21,3 +21,6 @@ examples/fdd-pass/trace.csv text eol=crlf
 local_ntn/satellite_schedule*.csv text eol=lf
 local_ntn/stk_trace_firsthandover.csv text eol=lf
 local_ntn/stk_trace_seamless.csv text eol=lf
+
+# Completion and manifest hashes are independent of host text conventions.
+examples/handover/**/*.json text eol=lf

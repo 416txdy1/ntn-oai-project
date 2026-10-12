@@ -81,6 +81,101 @@ def check_bundle(bundle: Path, trace: Path, direction: str, frequency: int) -> d
     return audit_link_budget(bundle, trace)
 
 
+HANDOVER_SOURCE_FILES = (
+    'quadriga/matlab/export_handover_fdd.m',
+    'quadriga/matlab/export_stk_to_qdchannel.m',
+    'quadriga/matlab/normalize_qd_channel.m',
+    'quadriga/matlab/write_qdchannel1.m',
+    'quadriga/matlab/read_stktrace2.m',
+    'quadriga/matlab/ecef_to_enu_track.m',
+    'quadriga/matlab/sha256_file.m',
+)
+
+
+def check_handover_bundles(dl: Path, ul: Path, trace: Path, schedule: Path) -> dict:
+    """Require one complete export, tied to the exact trace and identity schedule."""
+    def require(condition, message):
+        if not condition:
+            raise ValueError(message)
+
+    def sha(path):
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+    dl, ul, trace = (Path(value).resolve() for value in (dl, ul, trace))
+    require(schedule is not None, 'handover requires a schedule')
+    schedule = Path(schedule).resolve()
+    require(dl.parent == ul.parent and dl.name == 'downlink' and ul.name == 'uplink',
+            'handover DL and UL must belong to the same export')
+    sidecar = dl.parent / 'provenance.json'
+    require(sidecar.is_file(), 'handover completion provenance.json is missing')
+    metadata = json.loads(sidecar.read_text(encoding='utf-8'))
+    require(metadata.get('format') == 'NTN_HANDOVER_FDD1' and metadata.get('schema_version') == 1
+            and metadata.get('state') == 'complete', 'handover export is not complete')
+    inputs = metadata.get('inputs', {})
+    for name, path in (('trace', trace), ('schedule', schedule)):
+        require(inputs.get(name, {}).get('sha256') == sha(path), f'handover {name} SHA256 mismatch')
+    rows = read_trace(trace)
+    times = [row[0] for row in rows]
+    with schedule.open(encoding='utf-8', newline='') as stream:
+        reader = csv.DictReader(stream)
+        require({'time', 'satellite_id', 'elevation_deg', 'visible', 'switched'} <= set(reader.fieldnames or []),
+                'handover schedule missing required columns')
+        schedule_rows = list(reader)
+    require(len(schedule_rows) == len(rows), 'handover schedule time row count mismatch')
+    for expected, row in zip(times, schedule_rows):
+        instant = float(row['time'])
+        require(math.isfinite(instant) and abs(instant - expected) <= 1e-9,
+                'handover schedule time axis mismatch')
+        elevation = float(row['elevation_deg'])
+        require(row.get('satellite_id') and math.isfinite(elevation) and -90 <= elevation <= 90
+                and row['visible'] in ('0', '1') and row['switched'] in ('0', '1'),
+                'handover schedule contains an invalid identity or visibility')
+        if 'handover_phase' in row:
+            require(row['handover_phase'] in ('steady', 'blend', 'complete'),
+                    'handover schedule contains an invalid phase')
+    for name in ('trace', 'schedule'):
+        spec = inputs[name]
+        require(spec.get('rows') == len(rows) and spec.get('start_time_s') == times[0]
+                and spec.get('end_time_s') == times[-1], f'handover {name} interval metadata mismatch')
+    tools = metadata.get('tools', {})
+    require(isinstance(tools.get('matlab_version'), str) and bool(tools['matlab_version'])
+            and tools.get('quadriga_version') == '2.8.1-0'
+            and tools.get('scenario') == 'QuaDRiGa_NTN_Rural_LOS'
+            and tools.get('random_seed') == 20260925, 'handover export tool provenance mismatch')
+    source = metadata.get('source', {})
+    require(isinstance(source.get('commit'), str) and re.fullmatch(r'[0-9a-f]{40}', source['commit']),
+            'handover source commit is missing or invalid')
+    root = Path(__file__).resolve().parents[1]
+    checksums = json.loads((root / 'vendor/checksums.json').read_text(encoding='utf-8'))
+    require(source.get('quadriga_archive_sha256') == checksums['quadriga-source.tar.gz'],
+            'handover QuaDRiGa archive provenance mismatch')
+    source_files = source.get('files', {})
+    require(set(source_files) == set(HANDOVER_SOURCE_FILES), 'handover exporter source files missing')
+    for name in HANDOVER_SOURCE_FILES:
+        require(source_files[name] == sha(root / name), f'handover exporter source SHA256 mismatch: {name}')
+    recorded_bundles = metadata.get('bundles', {})
+    require(set(recorded_bundles) == {'downlink', 'uplink'}, 'handover completion requires both directions')
+    audits = {}
+    for direction, bundle, frequency in (('downlink', dl, DL_FREQUENCY_HZ), ('uplink', ul, UL_FREQUENCY_HZ)):
+        record = recorded_bundles[direction]
+        require(record.get('path') == direction, 'handover bundle path is not its standard direction')
+        manifest_path = bundle / 'manifest.json'
+        require(record.get('manifest_sha256') == sha(manifest_path),
+                f'handover {direction} manifest SHA256 mismatch')
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        recorded_data = record.get('data_sha256', {})
+        require(set(recorded_data) == set(manifest['files']), 'handover bundle data SHA256 fields mismatch')
+        for name, spec in manifest['files'].items():
+            require(recorded_data[name] == spec['sha256'], f'handover {direction} data SHA256 mismatch')
+        provenance = manifest['provenance']
+        require(provenance.get('quadriga_version') == tools['quadriga_version']
+                and provenance.get('scenario') == tools['scenario']
+                and provenance.get('random_seed') == tools['random_seed'],
+                f'handover {direction} tool provenance differs from completion record')
+        audits[direction] = check_bundle(bundle, trace, direction, frequency)
+    return {'path': str(sidecar), 'trace_sha256': inputs['trace']['sha256'],
+            'schedule_sha256': inputs['schedule']['sha256'], 'audits': audits}
+
 def preflight(rate: float, environment: dict[str, str] | None = None, runtime=None) -> dict:
     env = dict(os.environ if environment is None else environment)
     if not math.isfinite(rate) or not 0 <= rate <= 1:
@@ -131,6 +226,9 @@ def preflight(rate: float, environment: dict[str, str] | None = None, runtime=No
               'rate': rate, 'trace_interval_s': [rows[0][0], rows[-1][0]],
               'dl_frequency_hz': DL_FREQUENCY_HZ, 'ul_frequency_hz': UL_FREQUENCY_HZ,
               'mode': 'STK-only', 'bundles': {}, 'amf_ip': amf_ip, 'gnb_ip_cidr': gnb_ip_cidr}
+    if qd_required:
+        result['handover_provenance'] = check_handover_bundles(
+            runtime.dl_bundle, runtime.ul_bundle, STK_TRACE, runtime.schedule)
     if 'OAI_QD_CHANNEL' in children['gnb']:
         if b'QDCHANNEL1' not in (BUILD_DIR / 'librfsimulator.so').read_bytes():
             raise ValueError('选定 RFsim 库未发现 QDCHANNEL1 支持，请构建正确源码')
