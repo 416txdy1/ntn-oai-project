@@ -28,7 +28,49 @@ def sha256(path):
 
 
 def commit_at(path):
-    return subprocess.check_output(['git','-C',str(path),'rev-parse','HEAD'],text=True).strip()
+    path=Path(path).resolve()
+    command=['git','-c','safe.directory='+str(path),'-C',str(path),'rev-parse']
+    try:
+        top=subprocess.run(command+['--show-toplevel'],check=True,capture_output=True,text=True).stdout.strip()
+        if Path(top).resolve()!=path:
+            raise ValueError('Source directory is not its own git repository')
+        value=subprocess.run(command+['HEAD'],check=True,capture_output=True,text=True).stdout.strip()
+    except subprocess.CalledProcessError as error:
+        raise ValueError('Cannot verify exact source git identity') from error
+    if not re.fullmatch(r'[0-9a-f]{40}',value):
+        raise ValueError('Invalid source commit identity')
+    return value
+
+
+def source_identity(root,repo):
+    root=Path(root).resolve();repo=Path(repo).resolve()
+    stamp=repo/'.archive-sha256'
+    if not stamp.is_file():
+        return {'kind':'git','commit':commit_at(repo),'path':str(repo)}
+    if repo!=root/'.runtime/oai':
+        raise ValueError('Archive source must be the dedicated prepared OAI directory')
+    source=json.loads((root/'vendor/source-manifest.json').read_text(encoding='utf-8-sig'))
+    checks=json.loads((root/'vendor/checksums.json').read_text(encoding='utf-8-sig'))
+    expected=checks['oai-source.tar.gz']
+    if stamp.read_text()!=expected or sha256(root/'vendor/oai-source.tar.gz')!=expected or source['oai-source.tar.gz']['sha256']!=expected:
+        raise ValueError('OAI archive/stamp provenance mismatch')
+    commit=source['oai']['commit']
+    if not re.fullmatch(r'[0-9a-f]{40}',commit):
+        raise ValueError('Invalid pinned archive commit')
+    overlays={}
+    for path in sorted((root/'oai_patch/current').rglob('*')):
+        if path.is_file():
+            overlays[str(path.relative_to(root/'oai_patch/current'))]=sha256(path)
+    for name in ('qd_channel_reader.c','qd_channel_reader.h','qd_channel_adapter.c'):
+        overlays['radio/rfsimulator/'+name]=sha256(root/'quadriga/oai'/name)
+    for relative,expected_hash in overlays.items():
+        deployed=repo/relative
+        if not deployed.is_file() or sha256(deployed)!=expected_hash:
+            raise ValueError('Deployed OAI overlay mismatch: '+relative)
+    return {'kind':'verified_archive','commit':commit,'path':str(repo),
+            'archive_sha256':expected,'source_manifest_sha256':sha256(root/'vendor/source-manifest.json'),
+            'overlay_sha256':overlays}
+
 
 
 def build_manifest(config, rate, environment):
@@ -39,7 +81,7 @@ def build_manifest(config, rate, environment):
             if bundle and bundle.is_dir():
                 bundles[direction]={'path':str(bundle),'files':{str(p.relative_to(bundle)):sha256(p) for p in sorted(bundle.rglob('*')) if p.is_file()}}
     return {'schema':1,'profile':config.profile,'run_id':config.run_id,'workspace':str(config.root),
-            'source_commit':commit_at(config.root),'oai_source':{'commit':commit_at(config.oai_repo),'path':str(config.oai_repo)},
+            'source_commit':commit_at(config.root),'oai_source':source_identity(config.root,config.oai_repo),
             'source_repo':str(config.oai_repo),'build_dir':str(config.build_dir),
             'binaries':{name:sha256(config.build_dir/name) for name in ('nr-softmodem','nr-uesoftmodem','librfsimulator.so','libparams_libconfig.so','libldpc.so','libdfts.so')},
             'trace':str(config.trace),'trace_sha256':sha256(config.trace),
@@ -272,3 +314,5 @@ def main(argv=None):
 
 
 if __name__=='__main__':main()
+
+

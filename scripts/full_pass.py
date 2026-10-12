@@ -26,9 +26,9 @@ def finish(process, sig=signal.SIGINT, timeout=8):
         process.kill()
         process.wait(timeout=5)
 
-def numeric_state(path):
+def numeric_state(path, fs=FS):
     text = path.read_text(errors='replace') if path.exists() else ''
-    rows = [(int(m[5]) / FS, int(m[4])) for m in NUMERIC.finditer(text)]
+    rows = [(int(m[5]) / fs, int(m[4])) for m in NUMERIC.finditer(text)]
     return rows, text
 
 def udp_summary(path):
@@ -107,6 +107,12 @@ def main():
         if not address:
             raise RuntimeError('PDU timeout')
         report['pdu_ready'] = True
+        import sys
+        sys.path.insert(0,str(BASE))
+        from experiment import observed_sample_rate
+        actual_fs=observed_sample_rate({kind:(BASE/f'{kind}-{label}.log').read_text(errors='replace') for kind in ('gnb','ue')})
+        if actual_fs is None:raise RuntimeError('both actual startup sampling rates required')
+        report['sample_rate_hz']=actual_fs
         run('python3', str(BASE / 'verify_network.py'), stdout=subprocess.DEVNULL)
         destination = os.environ['OAI_EXT_DN_IP']
         container = json.loads(subprocess.check_output(['docker', 'inspect', os.environ['OAI_EXT_DN_CONTAINER']]))[0]
@@ -124,7 +130,7 @@ def main():
         clients = [spawn(direction + '-client', ue_prefix + iperf + ['-c', destination, '-p', str(port), '-B', address, '-u', '-b', '100K', '-t', str(args.max_wall_seconds + 60), '-i', '10', '-J'] + flags) for direction, port, flags in [('uplink', 5203, []), ('downlink', 5204, ['-R'])]]
         report['traffic_start_iq_s'] = {}
         for kind in ('gnb', 'ue'):
-            records, _ = numeric_state(BASE / f'{kind}-{label}.log')
+            records, _ = numeric_state(BASE / f'{kind}-{label}.log',actual_fs)
             report['traffic_start_iq_s'][kind] = records[-1][0] if records else None
         print(json.dumps({'label': label, 'state': 'traffic_started', 'traffic_start_iq_s': report['traffic_start_iq_s']}), flush=True)
         last_progress = time.monotonic()
@@ -133,7 +139,7 @@ def main():
         while True:
             values = {}
             for kind in ('gnb', 'ue'):
-                records, _ = numeric_state(BASE / f'{kind}-{label}.log')
+                records, _ = numeric_state(BASE / f'{kind}-{label}.log',actual_fs)
                 values[kind] = records[-1][0] if records else 0
                 if any(valid != 1 for iq, valid in records if iq <= duration):
                     raise RuntimeError('invalid trace inside valid interval: ' + kind)
@@ -197,7 +203,7 @@ def main():
                 report[direction]['sent_minus_received_packets'] = sender['packets'] - report[direction]['packets']
                 # 收发结束时刻可能不同；差额不能直接当丢包率，也不能当成零丢包。
             for kind in ('gnb', 'ue'):
-                records, text = numeric_state(BASE / f'{kind}-{label}.log')
+                records, text = numeric_state(BASE / f'{kind}-{label}.log',actual_fs)
                 valid = [iq for iq, flag in records if flag == 1 and iq <= duration]
                 report[kind] = {'valid_iq_interval_s': [min(valid), max(valid)], 'valid_rows': len(valid), 'exhausted_log_rows': text.count('STKTRACE2 exhausted'), 'qd_loaded': text.count('QDCHANNEL1 loaded'), 'trace_loaded': text.count('STKTRACE2 loaded'), 'pbch_failures': text.count('Error decoding PBCH'), 'blend_timing_logs': text.count('STK blend timing:')}
             report['passed'] = bool(report.get('reached_end') and 'error' not in report and report.get('stop_exit') == 0 and report['ping']['sent'] == report['ping']['received'] and not report['ping']['clock_backwards'] and all(report[d]['lost_packets'] == 0 and report[d]['sent_minus_received_packets'] == 0 for d in ('uplink', 'downlink')) and all(report[k]['qd_loaded'] == report[k]['trace_loaded'] == 1 and report[k]['pbch_failures'] == 0 for k in ('gnb', 'ue')))

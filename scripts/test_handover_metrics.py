@@ -43,7 +43,7 @@ def good_report(case='full'):
 class ClockTests(unittest.TestCase):
     def test_nonuniform_bracket_and_nonzero_epoch(self):
         mapper=m.ClockMap([anchor(10_000_000_000,0),anchor(11_000_000_000,100),
-                           anchor(13_000_000_000,300)],8200,1,1000)
+                           anchor(13_000_000_000,300)],8200,1,1000,max_iq_gap=.25)
         event=mapper.map(12_000_000_000)
         self.assertAlmostEqual(event['iq_s'],.2)
         self.assertAlmostEqual(event['stk_s'],8200.2)
@@ -158,9 +158,15 @@ class AcceptanceTests(unittest.TestCase):
     def test_threshold_exact_and_just_outside(self):
         report=good_report()
         for item in [report['ping'],report['udp']['uplink'],report['windows'][0]['udp']['downlink']]:
-            item['loss_upper_bound']=.01
+            item.update(loss_upper_bound=.01,received=990,lost_packets=10)
         self.assertEqual(m.evaluate_handover(report),[])
-        report['windows'][0]['udp']['downlink']['loss_upper_bound']=.010001
+        report['windows'][0]['udp']['downlink'].update(loss_upper_bound=.011,received=989,lost_packets=11)
+        self.assertTrue(m.evaluate_handover(report))
+
+    def test_forged_zero_loss_and_absent_observer_cannot_pass(self):
+        report=good_report();report['udp']['uplink'].update(received=0,lost_packets=1000,loss_upper_bound=0)
+        self.assertTrue(m.evaluate_handover(report))
+        report=good_report();report['worker_observation_ok']=False
         self.assertTrue(m.evaluate_handover(report))
 
     def test_static_needs_thirty_iq_business(self):
