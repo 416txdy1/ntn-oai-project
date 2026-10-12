@@ -57,6 +57,7 @@ options.scenario = 'QuaDRiGa_NTN_Rural_LOS';
 mkdir(output_dir);
 bundles = struct();
 quadriga_version = '';
+warning_events = {};
 for direction = {'downlink', 'uplink'}
     name = direction{1};
     options.link_direction = name;
@@ -66,7 +67,14 @@ for direction = {'downlink', 'uplink'}
         options.center_frequency_hz = 1614900000;
     end
     bundle = fullfile(output_dir, name);
+    lastwarn('');
     manifest_path = export_stk_to_qdchannel(trace_path, bundle, options);
+    [warning_message, warning_identifier] = lastwarn;
+    if ~isempty(warning_message)
+        warning_events{end + 1} = struct('direction', name, ...
+            'center_frequency_hz', options.center_frequency_hz, ...
+            'identifier', warning_identifier, 'message', warning_message); %#ok<AGROW>
+    end
     % Only the newly generated JSON text is canonicalized to LF. Binary arrays
     % and existing exporter math are untouched; hashes survive OS checkouts.
     manifest_text = strrep(fileread(manifest_path), sprintf('\r\n'), sprintf('\n'));
@@ -95,6 +103,11 @@ provenance.tools = struct('matlab_version', version, 'quadriga_version', quadrig
     'scenario', options.scenario, 'random_seed', options.random_seed);
 provenance.source = struct('commit', commit, 'quadriga_archive_sha256', archive_sha, 'files', file_hashes);
 provenance.bundles = bundles;
+track_speeds = sqrt(sum(diff(trace.satellite_ecef_m, 1, 2).^2, 1)) ./ diff(trace.times_s).';
+provenance.warnings = struct('capture', 'last_warning_per_direction', ...
+    'events', {warning_events}, 'trace_time_step_s', median(diff(trace.times_s)), ...
+    'max_satellite_track_speed_m_s', max(track_speeds), ...
+    'center_frequency_hz', struct('downlink', 2488400000, 'uplink', 1614900000));
 % Write the completion record last. A failure in either direction cannot make
 % a valid completed dataset. A temporary file is never accepted by preflight.
 provenance_path = fullfile(output_dir, 'provenance.json');

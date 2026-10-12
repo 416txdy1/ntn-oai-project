@@ -137,7 +137,25 @@ def check_handover_bundles(dl: Path, ul: Path, trace: Path, schedule: Path) -> d
         spec = inputs[name]
         require(spec.get('rows') == len(rows) and spec.get('start_time_s') == times[0]
                 and spec.get('end_time_s') == times[-1], f'handover {name} interval metadata mismatch')
-    tools = metadata.get('tools', {})
+    warning_record = metadata.get('warnings', {})
+    intervals = [b - a for a, b in zip(times, times[1:])]
+    max_track_speed = max(math.dist(a[1:4], b[1:4]) / (b[0] - a[0])
+                          for a, b in zip(rows, rows[1:]))
+    step = warning_record.get('trace_time_step_s')
+    speed = warning_record.get('max_satellite_track_speed_m_s')
+    require(isinstance(step, (int, float)) and math.isfinite(step)
+            and all(abs(value - step) <= 1e-9 for value in intervals)
+            and isinstance(speed, (int, float)) and math.isfinite(speed)
+            and math.isclose(speed, max_track_speed, rel_tol=1e-9, abs_tol=1e-5)
+            and warning_record.get('center_frequency_hz') == {
+                'downlink': DL_FREQUENCY_HZ, 'uplink': UL_FREQUENCY_HZ}
+            and isinstance(warning_record.get('events'), list), 'handover warning provenance missing or invalid')
+    for warning in warning_record['events']:
+        require(isinstance(warning, dict) and warning.get('direction') in ('downlink', 'uplink')
+                and warning.get('center_frequency_hz') == warning_record['center_frequency_hz'][warning['direction']]
+                and isinstance(warning.get('identifier'), str)
+                and isinstance(warning.get('message'), str) and bool(warning['message']),
+                'handover warning provenance event is invalid')    tools = metadata.get('tools', {})
     require(isinstance(tools.get('matlab_version'), str) and bool(tools['matlab_version'])
             and tools.get('quadriga_version') == '2.8.1-0'
             and tools.get('scenario') == 'QuaDRiGa_NTN_Rural_LOS'
@@ -174,7 +192,7 @@ def check_handover_bundles(dl: Path, ul: Path, trace: Path, schedule: Path) -> d
                 f'handover {direction} tool provenance differs from completion record')
         audits[direction] = check_bundle(bundle, trace, direction, frequency)
     return {'path': str(sidecar), 'trace_sha256': inputs['trace']['sha256'],
-            'schedule_sha256': inputs['schedule']['sha256'], 'audits': audits}
+            'schedule_sha256': inputs['schedule']['sha256'], 'warnings': warning_record, 'audits': audits}
 
 def preflight(rate: float, environment: dict[str, str] | None = None, runtime=None) -> dict:
     env = dict(os.environ if environment is None else environment)
