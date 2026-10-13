@@ -36,6 +36,20 @@ def fingerprint(path):
         for data in iter(lambda:stream.read(1024*1024),b''):digest.update(data)
     return {'type':'file','sha256':digest.hexdigest(),'mtime_ns':info.st_mtime_ns}
 
+def process_cwd(pid):
+    return Path(os.readlink(f'/proc/{pid}/cwd')).resolve()
+
+def ip_executable():
+    value=shutil.which('ip')
+    if not value:raise ValueError('Local ip executable missing')
+    return str(Path(value).resolve())
+
+def original_initial_delay():
+    value=(ORIGINAL/'local_ntn/initial_delay_ms.txt').read_text().strip()
+    if not re.fullmatch(r'[0-9]+\.[0-9]+',value):raise ValueError('Invalid original delay')
+    return value
+
+
 def source_snapshot(root,runner=command):
     root=Path(root).resolve();argv=['git','-c','safe.directory='+str(root),'-C',str(root)]
     if Path(runner(argv+['rev-parse','--show-toplevel']).strip()).resolve()!=root:raise ValueError('Git root differs')
@@ -268,11 +282,30 @@ class OriginalShortRun:
                 raise ValueError('Unknown token launch shell')
             if kind and argv[2]!=kind:raise ValueError('Wrong launch kind')
             record={'pid':pid,'start':identity[0],'executable':identity[1],'phase':'launching','expected_executable':expected[argv[2]]}
+        elif identity[1]==ip_executable():
+            if kind not in (None,'ue'):raise ValueError('Wrong namespace launch kind')
+            argv=['ip','netns','exec','oai-stk-ue','./nr-uesoftmodem',
+              '-O','/home/kayoko/.local/share/oai-stk/ue.local.conf',
+              '--rfsimulator.[0].serveraddr','10.201.0.1',
+              '--rfsimulator.[0].prop_delay',original_initial_delay(),
+              '--band','254','-C','2488400000','--CO','-873500000','-r','25',
+              '--numerology','0','--ssb','60','--rfsim',
+              '--rfsimulator.[0].options','chanmod','--time-sync-I','0.1',
+              '--autonomous-ta','--cont-fo-comp','2','--num-ul-actors','1']
+            actual=process_argv(pid)
+            if not actual or Path(actual[0]).name!='ip' or actual[1:]!=argv[1:] or process_cwd(pid)!=BUILD.resolve():
+                raise ValueError('Unknown namespace launch arguments')
+            record={'pid':pid,'start':identity[0],'executable':identity[1],'phase':'launching',
+              'expected_executable':expected['ue'],'intermediate':'original-ue-ip'}
         else:raise ValueError('Unknown token executable')
         current=process_identity(pid)
         if current is None:return None
         allowed={record['executable'],record.get('expected_executable')}
-        if current[0]!=identity[0] or current[1] not in allowed:raise ValueError('Launch identity changed while checking')
+        if current[0]!=identity[0]:raise ValueError('Launch PID reused while checking')
+        if current[1] not in allowed:
+            if record.get('phase')=='launching' and record['executable'] in ('/usr/bin/bash','/bin/bash') and record['expected_executable']==expected['ue'] and current[1]==ip_executable():
+                return self.approved_process(pid,current,'ue')
+            raise ValueError('Launch identity changed while checking')
         return record
     def remember(self,pid,identity,launch_record=None):
         previous=self.records.get(str(pid))
@@ -280,6 +313,8 @@ class OriginalShortRun:
             if previous['start']!=identity[0]:raise ValueError('PID reused')
             allowed={previous['executable']}
             if previous.get('phase')=='launching':allowed.add(previous['expected_executable'])
+            if launch_record and launch_record.get('intermediate')=='original-ue-ip' and previous.get('phase')=='launching' and previous['executable'] in ('/usr/bin/bash','/bin/bash') and previous.get('expected_executable')==launch_record.get('expected_executable'):
+                allowed.add(launch_record['executable'])
             if identity[1] not in allowed:raise ValueError('Unknown executable transition')
         elif identity[1] not in self.expected and launch_record is None:
             raise ValueError('Unknown first executable')
