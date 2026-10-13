@@ -100,5 +100,47 @@ class ProtectionTests(unittest.TestCase):
         current={'a':True,'b':True,'foreign':False}
         self.assertEqual(protection.started_container_ids(before,current,{'a','b'}),['a'])
 
+
+class ConcreteBoundaryTests(unittest.TestCase):
+    def make_ops(self,root):
+        with patch.object(protection,'ROOT',root):
+            return protection.OriginalShortRun('fresh',{},root/'.private/check')
+    def test_failed_preflight_does_not_archive_existing_log(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);ops=self.make_ops(root)
+            log=root/'preexisting.log';log.write_text('private existing data')
+            ops.log_paths=[log]
+            with patch.object(ops,'collect'):
+                ops.cleanup()
+            self.assertEqual(log.read_text(),'private existing data')
+            self.assertFalse((ops.output/log.name).exists())
+    def test_foreign_state_record_not_replaced(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);ops=self.make_ops(root);ops.state=root/'state.json'
+            foreign=json.dumps({'ue':{'pid':7,'start':'99'}}).encode();ops.state.write_bytes(foreign)
+            ops.old_state=b'original inactive';ops.records={'7':{'pid':7,'start':'98','executable':'/modem'}}
+            with self.assertRaises(ValueError):ops.restore_state()
+            self.assertEqual(ops.state.read_bytes(),foreign)
+    def test_reused_pid_cannot_replace_owned_record(self):
+        with tempfile.TemporaryDirectory() as d:
+            ops=self.make_ops(Path(d));ops.records={'7':dict(pid=7,start='98',executable='/modem')}
+            with self.assertRaises(ValueError):ops.remember(7,('99','/modem'))
+    def test_replaced_container_cleanup_has_no_stop(self):
+        with tempfile.TemporaryDirectory() as d:
+            ops=self.make_ops(Path(d));before={'id':'a','name':'oai-amf','labels':{}}
+            ops.started={'oai-amf':before}
+            raw={'Id':'b','Name':'/oai-amf','State':{'Running':True},'Config':{'Labels':{}}}
+            with patch.object(ops,'collect'),patch.object(protection,'command',return_value=json.dumps([raw])),patch.object(ops,'capture') as stop:
+                with self.assertRaises(RuntimeError):ops.cleanup()
+                stop.assert_not_called()
+    def test_true_sigterm_runs_owned_cleanup(self):
+        ops=FakeOps()
+        def interrupt():os.kill(os.getpid(),signal.SIGTERM)
+        import os
+        ops.business=interrupt
+        with protection.SignalGuard():
+            result=protection.run_short(ops)
+        self.assertFalse(result['passed']);self.assertEqual(ops.calls[-1],'cleanup')
+
 if __name__=='__main__':unittest.main()
 
