@@ -293,4 +293,36 @@ class ConcreteBoundaryTests(unittest.TestCase):
             with self.assertRaises(ValueError):ops.remember(777,('99','/unknown'))
             with self.assertRaises(ValueError):ops.remember(777,('100',record['expected_executable']))
 
+
+    def test_exact_original_ip_stage_then_target_is_accepted(self):
+        argv=['ip','netns','exec','oai-stk-ue','./nr-uesoftmodem',
+          '-O','/home/kayoko/.local/share/oai-stk/ue.local.conf',
+          '--rfsimulator.[0].serveraddr','10.201.0.1','--rfsimulator.[0].prop_delay','3.125000000000',
+          '--band','254','-C','2488400000','--CO','-873500000','-r','25','--numerology','0','--ssb','60',
+          '--rfsim','--rfsimulator.[0].options','chanmod','--time-sync-I','0.1',
+          '--autonomous-ta','--cont-fo-comp','2','--num-ul-actors','1']
+        with tempfile.TemporaryDirectory() as d:
+            ops=self.make_ops(Path(d));ip='/usr/sbin/ip';target=str(protection.BUILD/'nr-uesoftmodem')
+            ops.records['777']={'pid':777,'start':'99','executable':'/usr/bin/bash','phase':'launching','expected_executable':target}
+            with patch.object(protection,'process_identity',return_value=('99',ip)),patch.object(protection.os,'getpgid',return_value=777),patch.object(protection.os,'getsid',return_value=777),patch.object(protection,'process_argv',return_value=argv),patch.object(protection,'ip_executable',return_value=ip,create=True),patch.object(protection,'process_cwd',return_value=str(protection.BUILD),create=True),patch.object(protection,'original_initial_delay',return_value='3.125000000000',create=True):
+                record=ops.approved_process(777,('99',ip),'ue')
+                ops.remember(777,('99',ip),record)
+            self.assertEqual(ops.records['777']['expected_executable'],target)
+            import run_state
+            with patch.object(run_state,'process_identity',return_value=('99',target)):
+                self.assertTrue(run_state.matches(ops.records['777']))
+            ops.remember(777,('99',target))
+            self.assertEqual(ops.records['777']['executable'],target)
+    def test_ip_stage_rejects_foreign_namespace_target_and_kind(self):
+        # Only the fixed original launch operation may reach the target.
+        with tempfile.TemporaryDirectory() as d:
+            ops=self.make_ops(Path(d));ip='/usr/sbin/ip'
+            for argv in [['ip','netns','exec','foreign','./nr-uesoftmodem'],
+                         ['ip','netns','exec','oai-stk-ue','./foreign-program'],
+                         ['ip','netns','exec','oai-stk-ue','./nr-uesoftmodem','--unexpected']]:
+                with patch.object(protection,'process_identity',return_value=('99',ip)),patch.object(protection.os,'getpgid',return_value=777),patch.object(protection.os,'getsid',return_value=777),patch.object(protection,'process_argv',return_value=argv),patch.object(protection,'ip_executable',return_value=ip,create=True),patch.object(protection,'process_cwd',return_value=str(protection.BUILD),create=True),patch.object(protection,'original_initial_delay',return_value='3.125000000000',create=True):
+                    with self.assertRaises(ValueError):ops.approved_process(777,('99',ip),'ue')
+            with patch.object(protection.os,'getpgid',return_value=777),patch.object(protection.os,'getsid',return_value=777),patch.object(protection,'ip_executable',return_value=ip,create=True):
+                with self.assertRaises(ValueError):ops.approved_process(777,('99',ip),'gnb')
+
 if __name__=='__main__':unittest.main()
