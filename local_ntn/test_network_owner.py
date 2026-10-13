@@ -140,7 +140,7 @@ class OwnerTests(unittest.TestCase):
             c=replace(self.c,profile=profile)
             c.owner_file.write_text(json.dumps(create_owner(c,self.t)))
             commands=[];manager=NetworkManager(c,runner=lambda cmd:commands.append(cmd))
-            with patch('network_owner.os.lstat',side_effect=lambda *a,**kw:rooted(real_lstat(*a,**kw))),patch('network_owner.os.fstat',side_effect=lambda fd:rooted(real_fstat(fd))),patch.object(manager,'topology',return_value=self.t):
+            with patch('network_owner.os.lstat',side_effect=lambda *a,**kw:rooted(real_lstat(*a,**kw))),patch('network_owner.os.fstat',side_effect=lambda fd:rooted(real_fstat(fd))),patch.object(manager,'topology',return_value=self.t),patch.object(manager,'inode',return_value=99):
                 manager.verify()
                 replacement=self.root/'replacement.json';replacement.write_bytes(c.owner_file.read_bytes())
                 os.replace(replacement,c.owner_file)
