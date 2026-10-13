@@ -52,7 +52,7 @@ def source_snapshot(root,runner=command):
 def container_info(item):
     labels=item.get('Config',{}).get('Labels') or {}
     return {'id':item['Id'],'name':item['Name'].lstrip('/'),'running':bool(item['State']['Running']),
-      'health':item['State'].get('Health',{}).get('Status'),
+      'health':item['State'].get('Health',{}).get('Status'),'started_at':item['State'].get('StartedAt'),
       'labels':{k:labels.get(k) for k in ('com.docker.compose.project','com.docker.compose.service',
       'com.docker.compose.project.working_dir','com.docker.compose.project.config_files')}}
 
@@ -90,7 +90,7 @@ def compare_snapshots(before,after):
     if before.get('schema')!=1 or after.get('schema')!=1:raise ValueError('Snapshot schema differs')
     differences=[k for k in ('sources','files','network') if before[k]!=after[k]]
     def stable(items):
-        return {n:{k:v for k,v in i.items() if k!='health'} for n,i in items.items()}
+        return {n:{k:v for k,v in i.items() if k not in ('health','started_at')} for n,i in items.items()}
     if stable(before['containers'])!=stable(after['containers']):differences.append('containers')
     return differences
 
@@ -107,6 +107,8 @@ def compare_early(early,current):
 
 def require_container_identity(before,current):
     if any(before[k]!=current[k] for k in ('id','name','labels')):raise ValueError('Container identity changed')
+    if 'owned_started_at' in before and before['owned_started_at']!=current.get('started_at'):
+        raise ValueError('Container was restarted by another operation')
 
 def started_container_ids(before,current,selected):
     return sorted(k for k in selected if not before[k] and current[k])
@@ -225,8 +227,17 @@ class OriginalShortRun:
             current=container_info(json.loads(command(['docker','inspect',expected['id']]))[0])
             require_container_identity(expected,current)
             if current['running']:raise ValueError('Container running state changed')
-            self.started[name]=expected
-            self.capture('start-'+name,['docker','start',expected['id']])
+            begin_ns=time.time_ns()
+            result=self.capture('start-'+name,['docker','start',expected['id']])
+            end_ns=time.time_ns()
+            if result.strip()!=expected['id']:raise ValueError('Start command did not confirm exact ID')
+            current=container_info(json.loads(command(['docker','inspect',expected['id']]))[0])
+            require_container_identity(expected,current)
+            stamp=current.get('started_at') or ''
+            normalized=re.sub(r'(\.\d{6})\d+',r'\1',stamp).replace('Z','+00:00')
+            started_ns=int(datetime.fromisoformat(normalized).timestamp()*1e9)
+            if not begin_ns<=started_ns<=end_ns:raise ValueError('Container start is not attributable to this command')
+            self.started[name]=dict(expected,owned_started_at=stamp)
             deadline=time.monotonic()+120
             while True:
                 current=container_info(json.loads(command(['docker','inspect',expected['id']]))[0])
