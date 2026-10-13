@@ -88,7 +88,7 @@ def main(argv=None):
         running=False
     signal.signal(signal.SIGINT,stop);signal.signal(signal.SIGTERM,stop)
     writer=EventWriter(args.events,args.role)
-    sequence=0;received_datagrams=0;failed=False;next_heartbeat=0
+    sequence=0;sent_bytes=0;received_datagrams=0;failed=False;next_heartbeat=0
     try:
         with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sock:
             sock.bind((args.bind,args.port if args.role=='receiver' else 0))
@@ -107,6 +107,7 @@ def main(argv=None):
                         wire=encode_packet(token,args.direction,sequence,send_ns,args.payload_bytes)
                         written=sock.sendto(wire,(args.peer,args.port))
                         if written!=len(wire):raise RuntimeError('partial UDP datagram')
+                        sent_bytes+=written
                         writer.emit('send',sequence=sequence,send_ns=send_ns,bytes=len(wire))
                         # No catch-up burst: measure actual observed offered rate too.
                         next_send=now+interval
@@ -127,7 +128,7 @@ def main(argv=None):
     except Exception as error:
         failed=True;writer.emit('error',reason=str(error))
     finally:
-        writer.emit('end',sent=sequence,received_datagrams=received_datagrams,failed=failed);writer.close()
+        writer.emit('end',sent=sequence,sent_bytes=sent_bytes,received_datagrams=received_datagrams,failed=failed);writer.close()
     return int(failed)
 
 

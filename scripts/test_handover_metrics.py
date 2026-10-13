@@ -23,6 +23,11 @@ def good_report(case='full'):
     counters=dict(sent=1000, received=1000, packets=1000, lost_packets=0,
                   definite_sent=1000, loss_upper_bound=0.0,
                   observation_ok=True)
+    workload=dict(configured_wall_bits_per_second=100000,actual_offered_wall_bits_per_second=100000,
+                  offered_wall_interval_s=79.92,sender_packets=1000,sender_bytes=1000000,payload_bytes=1000,
+                  interval_payload_bytes=999000,first_send_monotonic_ns=1000000000,last_send_monotonic_ns=80920000000,
+                  endpoint_rule='exclude_first_packet_from_first_to_last_send_interval',measurement_tolerance_fraction=.05)
+    udp_counters={**counters,'workload':workload}
     return dict(case=case, qd_enabled=qd, profile='legacy-handover' if not qd else 'integrated-handover',
                 rate=spec['rate'], sample_rate_hz=1000, clock_sample_rates={'gnb':1000,'ue':1000},
                 trace_interval_s=spec['trace_interval_s'], iq_interval_s={'gnb':[0,spec['duration_iq_s']], 'ue':[0,spec['duration_iq_s']]},
@@ -33,7 +38,7 @@ def good_report(case='full'):
                               'ue':spec['trace_interval_s'][0]+spec['rate']*spec['duration_iq_s']},
                 pdu_address_changes=0, pbch_errors=0, rrc_idle=0, reaccess_count=0,
                 numeric_audit_ok=True, clock_observation_ok=True, worker_observation_ok=True, stop_exit=0,
-                ping=copy.deepcopy(counters), udp={'uplink':copy.deepcopy(counters),'downlink':copy.deepcopy(counters)},
+                ping=copy.deepcopy(counters), udp={'uplink':copy.deepcopy(udp_counters),'downlink':copy.deepcopy(udp_counters)},
                 windows=[dict(complete_stk_s=x, start_stk_s=x-5, end_stk_s=x+5,
                               coverage_ok=True, ping=copy.deepcopy(counters),
                               udp={'uplink':copy.deepcopy(counters),'downlink':copy.deepcopy(counters)})
@@ -41,6 +46,13 @@ def good_report(case='full'):
 
 
 class ClockTests(unittest.TestCase):
+    def test_summary_cannot_claim100k_with_forged_workload(self):
+        self.assertEqual(m.evaluate_handover(good_report()),[])
+        for field,value in [('sender_bytes',1),('sender_packets',2),('configured_wall_bits_per_second',99999),
+                            ('last_send_monotonic_ns',800000000000),('actual_offered_wall_bits_per_second',1)]:
+            report=good_report();report['udp']['uplink']['workload'][field]=value
+            self.assertTrue(m.evaluate_handover(report),field)
+
     def test_nonuniform_bracket_and_nonzero_epoch(self):
         mapper=m.ClockMap([anchor(10_000_000_000,0),anchor(11_000_000_000,100),
                            anchor(13_000_000_000,300)],8200,1,1000,max_iq_gap=.25)

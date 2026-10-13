@@ -219,6 +219,34 @@ def private_events(path):
     return [json.loads(line) for line in lines]
 
 
+def validate_udp_workload(events):
+    """Verify payload pacing on this sender's first/last actual emission times."""
+    ready,end=events[0],events[-1]
+    sends=[event for event in events if event['event']=='send']
+    size=ready['payload_bytes']
+    if ready.get('offered_wall_bits_per_second')!=100000 or not isinstance(size,int) or not 33<=size<=1400:
+        raise ValueError('invalid configured UDP workload')
+    if len(sends)<21 or end['sent']!=len(sends) or [event['sequence'] for event in sends]!=list(range(1,len(sends)+1)):
+        raise ValueError('insufficient/inconsistent UDP sender cohort')
+    if any(event['bytes']!=size for event in sends) or end['sent_bytes']!=sum(event['bytes'] for event in sends):
+        raise ValueError('UDP sender byte accounting mismatch')
+    times=[event['send_ns'] for event in sends]
+    if any(b<=a for a,b in zip(times,times[1:])):
+        raise ValueError('UDP emission clock regression')
+    span=(times[-1]-times[0])/1e9
+    # First packet defines the left endpoint: N-1 packet intervals carry N-1
+    # payloads. This removes the one-packet endpoint bias without shared ready time.
+    interval_bytes=end['sent_bytes']-sends[0]['bytes']
+    actual=interval_bytes*8/span
+    if not 95000-1e-4<=actual<=105000+1e-4:
+        raise ValueError('actual UDP offered wall rate outside 100K +/-5% workload tolerance')
+    return dict(configured_wall_bits_per_second=100000,actual_offered_wall_bits_per_second=actual,
+                offered_wall_interval_s=span,sender_packets=len(sends),sender_bytes=end['sent_bytes'],
+                payload_bytes=size,first_send_monotonic_ns=times[0],last_send_monotonic_ns=times[-1],
+                interval_payload_bytes=interval_bytes,endpoint_rule='exclude_first_packet_from_first_to_last_send_interval',
+                measurement_tolerance_fraction=.05)
+
+
 def worker_observation(events,expected_role):
     if not events or events[0]['event']!='ready' or events[-1]['event']!='end' or events[-1].get('failed'):
         raise ValueError('worker did not complete')
@@ -240,6 +268,7 @@ def worker_observation(events,expected_role):
         raise ValueError('receiver event accounting gap')
     if expected_role=='ping' and events[-1]['received']!=len({event['sequence'] for event in receives}):
         raise ValueError('ping receiver accounting gap')
+    if expected_role=='sender':validate_udp_workload(events)
     return [times[0],times[-1]]
 
 
@@ -299,10 +328,10 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
     report['udp']={}
     for direction in ('uplink','downlink'):
         report['udp'][direction]=cohort_summary(probes[direction]['packets'],0,case_spec(report['case'])['duration_iq_s'],wall_interval_s=elapsed_wall)
-        send_events=[event for event in events[direction+'-sender'] if event['event']=='send']
-        offered_span=(traffic_stop_ns-min(event['send_ns'] for event in send_events))/1e9
-        report['udp'][direction]['actual_offered_wall_bits_per_second']=sum(event['bytes'] for event in send_events)*8/offered_span
-        report['udp'][direction]['offered_wall_interval_s']=offered_span
+        workload=validate_udp_workload(events[direction+'-sender'])
+        report['udp'][direction]['workload']=workload
+        report['udp'][direction]['actual_offered_wall_bits_per_second']=workload['actual_offered_wall_bits_per_second']
+        report['udp'][direction]['offered_wall_interval_s']=workload['offered_wall_interval_s']
     report['packet_accounting']={key:{name:value for name,value in probe.items() if name!='packets'} for key,probe in probes.items()}
     report['windows']=[]
     for complete in case_spec(report['case'])['completions']:
@@ -420,6 +449,7 @@ def run_acceptance(argv=None):
                     if current>=tail_target:
                         traffic_stop_ns=time.monotonic_ns()
                         report['tail_send_stop_target_iq_s']=tail_target
+                        report['tail_reserved_iq_s']=spec['duration_iq_s']-tail_target
                         for name in ('uplink-sender','downlink-sender','ping'):children.signal(name,signal.SIGINT)
                         drain_deadline=now+6
                         report['tail_phase']='intentional_send_stop_and_bounded_wall_drain'

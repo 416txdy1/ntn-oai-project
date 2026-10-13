@@ -144,6 +144,19 @@ def evaluate_handover(report):
             require(report[field]==0,field+' is nonzero')
         for field in ('numeric_audit_ok','clock_observation_ok','worker_observation_ok'):
             require(report[field] is True,field+' failed')
+        for direction in ('uplink','downlink'):
+            udp=report['udp'][direction];work=udp['workload']
+            count=work['sender_packets'];size=work['payload_bytes']
+            require(isinstance(count,int) and count>=21 and isinstance(size,int) and 33<=size<=1400,'insufficient UDP workload')
+            require(count==udp['sent']+udp.get('boundary_ambiguous_sent',0),'UDP sender/report count mismatch')
+            require(work['sender_bytes']==count*size and work['interval_payload_bytes']==(count-1)*size,'UDP workload byte mismatch')
+            span=(work['last_send_monotonic_ns']-work['first_send_monotonic_ns'])/1e9
+            require(span>0 and abs(work['offered_wall_interval_s']-span)<1e-9,'UDP workload time mismatch')
+            actual=work['interval_payload_bytes']*8/span
+            require(work['configured_wall_bits_per_second']==100000 and work['measurement_tolerance_fraction']==.05,'wrong UDP workload specification')
+            require(work['endpoint_rule']=='exclude_first_packet_from_first_to_last_send_interval','wrong UDP workload endpoint rule')
+            require(math.isfinite(actual) and 95000-1e-4<=actual<=105000+1e-4,'actual UDP workload outside100K +/-5%')
+            require(abs(work['actual_offered_wall_bits_per_second']-actual)<1e-4,'unsubstantiated actual UDP workload')
         require(report['stop_exit']==0,'owned stop failed')
         windows=report['windows']
         require(len(windows)==len(spec['completions']),'wrong number of switch windows')

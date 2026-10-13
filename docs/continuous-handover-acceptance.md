@@ -137,3 +137,16 @@ vendor archive. Parent integration HEAD is never recorded as OAI source commit.
 Archive identity contains the pinned commit, verified archive checksum/stamp and
 deployed current/QuaDRiGa overlay hashes. Git trusted-directory exceptions are
 scoped to exact commands, never global configuration.
+
+
+The 100K wall workload is independently verified in each UDP direction. Sender
+sequences, end.sent, payload sizes and end.sent_bytes must exactly agree. Actual
+offered rate uses the first-to-last real send_ns span and excludes the first
+packet's payload from the numerator (N-1 packet intervals); startup and the other
+direction's ready time do not dilute it. At least 21 packets are required so the
+sample contains at least 20 packet intervals. The observed payload bit rate must
+be within +/-5% of 100000 wall bit/s, an explicit measurement/pacing tolerance.
+This validates that the requested workload ran; it does not alter the existing
+ping success or UDP loss thresholds. Heartbeat observation gaps still fail.
+The report records packet/byte totals, exact first/last times, endpoint rule,
+tolerance, actual wall rate, and actual IQ time reserved for bounded draining.

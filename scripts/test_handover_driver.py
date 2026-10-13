@@ -136,13 +136,13 @@ class DriverBoundaryTests(unittest.TestCase):
                    mapper=lambda side:ClockMap(anchors,8200,1,1000))
         stop_ns=625000000000;drain_ns=630000000000
         def events(role,sends,receives,end_ns):
-            ready=dict(event='ready',role=role,monotonic_ns=21000000000,offered_wall_bits_per_second=100000)
+            ready=dict(event='ready',role=role,monotonic_ns=21000000000,offered_wall_bits_per_second=100000,payload_bytes=1000)
             body=[{**event,'role':role} for event in sends+receives]
             heartbeats=[dict(event='heartbeat',role=role,monotonic_ns=t) for t in range(22000000000,end_ns,1000000000)]
             body.sort(key=lambda event:event['monotonic_ns'])
             body+=heartbeats;body.sort(key=lambda event:event['monotonic_ns'])
             return [ready]+body+[dict(event='end',role=role,monotonic_ns=end_ns,failed=False,
-                                      sent=len(sends),received=len({event['sequence'] for event in receives}),
+                                      sent=len(sends),sent_bytes=sum(row['bytes'] for row in sends),received=len({event['sequence'] for event in receives}),
                                       received_datagrams=len(receives))]
         def traffic(step,missing_first=False):
             sends=[];receives=[]
