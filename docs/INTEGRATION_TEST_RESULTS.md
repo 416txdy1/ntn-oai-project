@@ -1,6 +1,6 @@
 # 整合测试结果（pre-live checkpoint）
 
-候选保护代码 3f8e96c；Task7审阅通过基点49a353f26e2304dca8acde9e1da1a875860c6a96。
+候选保护代码 7f40221（最终pre-live补充验证）；Task7审阅通过基点49a353f26e2304dca8acde9e1da1a875860c6a96。
 此文档当前只记录真实离线结果，四组live与原最终复验尚未执行，不代表发布完成。
 
 | 测试 | 实际结果 |
@@ -44,3 +44,9 @@ Task8新的成功快照将明确标时点，覆盖随后live阶段源码status�
 七项文件、容器ID/labels/running和网络身份；它不补造此前缺失证据。
 真实四case结果、命令/退出码、time precision/workload/two windows及原最终复验应在执行后追加；
 所有失败记录保留，只有验收与保护审阅全部通过才允许新分支push。
+最终pre-live checkpoint：7f40221。23项阶段又观察到容器归属RED d23a5b9 exit1：
+失败start后同ID被外部启动，旧实现错误调用stop。5b0b09f只在精确start成功ID确认且
+StartedAt处于本次命令区间时登记，未知partial保留失败；cleanup还匹配owned StartedAt，
+外部同ID重启拒绝停止。7f40221补充成功/区间外启动/外部重启三场景验证。
+最终24保护tests、run_state12、network_owner10、core_lab6、compile及全范围diffcheck aggregate exit0。
+真实private Python子会话SIGTERM停止与无关会话保留通过；这不是任何modem或业务live测试。
