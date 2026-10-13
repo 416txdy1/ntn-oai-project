@@ -294,6 +294,18 @@ class ConcreteBoundaryTests(unittest.TestCase):
             with self.assertRaises(ValueError):ops.remember(777,('100',record['expected_executable']))
 
 
+    def test_empty_namespace_listing_is_a_valid_empty_snapshot(self):
+        def runner(argv):
+            if argv==['ip','-j','netns','list']:return ''
+            if argv==['ip','-d','-j','link','show']:return '[]'
+            raise AssertionError(argv)
+        with patch.object(protection,'fingerprint',return_value={'type':'missing'}):
+            self.assertEqual(protection.network_snapshot(runner)['namespaces'],[])
+        with patch.object(protection,'fingerprint',return_value={'type':'missing'}):
+            with self.assertRaises(json.JSONDecodeError):
+                protection.network_snapshot(lambda argv:'not-json')
+
+
     def test_exact_original_ip_stage_then_target_is_accepted(self):
         argv=['ip','netns','exec','oai-stk-ue','./nr-uesoftmodem',
           '-O','/home/kayoko/.local/share/oai-stk/ue.local.conf',
