@@ -104,6 +104,27 @@ class DriverBoundaryTests(unittest.TestCase):
               dict(event='end',role='sender',monotonic_ns=300,sent=1,failed=False)]
         with self.assertRaises(ValueError):d.worker_observation(rows,'sender')
 
+    def test_udp_workload_requires_real_pacing_and_complete_bytes(self):
+        def fixture(rate=100000,count=101):
+            period=8000/rate
+            sends=[dict(event='send',sequence=i+1,send_ns=10_000_000_000+round(i*period*1e9),
+                        monotonic_ns=10_000_000_000+round(i*period*1e9)+100,bytes=1000) for i in range(count)]
+            return [dict(event='ready',offered_wall_bits_per_second=100000,payload_bytes=1000)]+sends+[
+                dict(event='end',sent=count,sent_bytes=count*1000)]
+        for rate in (95000,100000,105000):
+            result=d.validate_udp_workload(fixture(rate))
+            self.assertAlmostEqual(result['actual_offered_wall_bits_per_second'],rate,places=3)
+            self.assertEqual(result['sender_bytes'],101000)
+        for rows in (fixture(1000),fixture(count=2),fixture(count=1)):
+            with self.assertRaises(ValueError):d.validate_udp_workload(rows)
+        for field,value in [('sent',100),('sent_bytes',100000)]:
+            rows=fixture();rows[-1][field]=value
+            with self.assertRaises(ValueError):d.validate_udp_workload(rows)
+        rows=fixture();rows[50]['bytes']=999
+        with self.assertRaises(ValueError):d.validate_udp_workload(rows)
+        rows=fixture();rows[50]['send_ns']=rows[49]['send_ns']
+        with self.assertRaises(ValueError):d.validate_udp_workload(rows)
+
     def test_final_report_keeps_loss_before_confirmed_business_and_two_full_windows(self):
         from handover_metrics import ClockMap,evaluate_handover
         from test_handover_metrics import good_report
