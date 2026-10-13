@@ -23,6 +23,7 @@ class OwnerTests(unittest.TestCase):
                 manager=NetworkManager(replace(self.c,profile=profile),runner=lambda argv:output)
                 with self.assertRaises((ValueError,TypeError)):
                     manager.ip('-j','netns','list')
+            manager=NetworkManager(replace(self.c,profile=profile),runner=lambda argv:'')
             with self.assertRaises(json.JSONDecodeError):manager.ip('-j','link','show')
 
     def test_identity(self):
