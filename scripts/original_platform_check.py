@@ -42,11 +42,12 @@ def source_snapshot(root,runner=command):
     head=runner(argv+['rev-parse','HEAD']).strip()
     if not re.fullmatch('[0-9a-f]{40}',head):raise ValueError('Invalid HEAD')
     status_text=runner(argv+['status','--porcelain=v1','-z'])
-    names=runner(argv+['ls-files','--modified','--others','--exclude-standard','-z']).split('\0');hashes={}
+    names=(runner(argv+['diff','--name-only','--no-renames','HEAD','-z'])+runner(argv+['ls-files','--others','--exclude-standard','-z'])).split('\0');hashes={}
+    index_sha256=hashlib.sha256(runner(argv+['ls-files','--stage','-z']).encode()).hexdigest()
     for relative in sorted(set(names)-{''}):
         if Path(relative).is_absolute() or '..' in Path(relative).parts:raise ValueError('Invalid source path')
         hashes[relative]=fingerprint(root/relative)
-    return {'head':head,'status':status_text,'dirty_files':hashes}
+    return {'head':head,'status':status_text,'dirty_files':hashes,'index_sha256':index_sha256}
 
 def container_info(item):
     labels=item.get('Config',{}).get('Labels') or {}
