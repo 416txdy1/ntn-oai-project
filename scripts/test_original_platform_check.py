@@ -178,4 +178,26 @@ class ConcreteBoundaryTests(unittest.TestCase):
             self.assertNotEqual(one['dirty_files'],two['dirty_files'])
             self.assertNotEqual(one['index_sha256'],two['index_sha256'])
 
+
+    def test_dead_owned_launcher_state_still_restored(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);ops=self.make_ops(root);ops.state=root/'state.json'
+            ops.log_paths=[root/'gnb-fresh.log',root/'ue-fresh.log'];ops.old_state=b'old inactive bytes'
+            value={'gnb':{'pid':777,'start':'99','log':str(ops.log_paths[0]),'rate':1}}
+            raw=json.dumps(value).encode();ops.state.write_bytes(raw)
+            with patch.object(protection,'process_identity',return_value=None):
+                ops.claim_state(raw,value)
+            self.assertTrue(ops.state_owned)
+            ops.restore_state();self.assertEqual(ops.state.read_bytes(),ops.old_state)
+    def test_state_changes_after_claim_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);ops=self.make_ops(root);ops.state=root/'state.json'
+            ops.log_paths=[root/'gnb-fresh.log'];ops.old_state=b'old'
+            value={'gnb':{'pid':777,'start':'99','log':str(ops.log_paths[0]),'rate':1}}
+            raw=json.dumps(value).encode();ops.state.write_bytes(raw)
+            with patch.object(protection,'process_identity',return_value=None):ops.claim_state(raw,value)
+            foreign=b'foreign state';ops.state.write_bytes(foreign)
+            with self.assertRaises(ValueError):ops.restore_state()
+            self.assertEqual(ops.state.read_bytes(),foreign)
+
 if __name__=='__main__':unittest.main()
