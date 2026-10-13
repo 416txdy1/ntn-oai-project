@@ -213,4 +213,22 @@ class ConcreteBoundaryTests(unittest.TestCase):
         valid['files'].pop(str(protection.PROTECTED[0]))
         with self.assertRaises(ValueError):protection.validate_snapshot(valid)
 
+
+    def test_failed_start_then_external_running_container_is_not_stopped(self):
+        with tempfile.TemporaryDirectory() as d:
+            ops=self.make_ops(Path(d))
+            raw={'Id':'a','Name':'/oai-amf','State':{'Running':False},'Config':{'Labels':{}}}
+            original=protection.container_info(raw)
+            ops.before={'containers':{'oai-amf':original}}
+            calls=[]
+            def fail_start(name,argv,timeout=120):
+                calls.append(argv)
+                raw['State']['Running']=True
+                raise RuntimeError('start command failed; other actor started this container')
+            with patch.object(protection,'CORE_ORDER',('oai-amf',)),patch.object(protection,'command',side_effect=lambda _:json.dumps([raw])),patch.object(ops,'capture',side_effect=fail_start),patch.object(ops,'collect'):
+                with self.assertRaises(RuntimeError):ops.core_up()
+                try:ops.cleanup()
+                except RuntimeError:pass
+            self.assertFalse(any(argv[:2]==['docker','stop'] for argv in calls))
+
 if __name__=='__main__':unittest.main()
