@@ -77,11 +77,20 @@ def command(argv):
     return result.stdout
 
 
+def namespace_inventory(output):
+    # iproute2 emits no bytes for a successful empty namespace inventory.
+    rows=json.loads(output) if output.strip() else []
+    if not isinstance(rows,list) or any(not isinstance(row,dict) or not isinstance(row.get('name'),str) or not row['name'] for row in rows):
+        raise ValueError('Invalid namespace inventory')
+    return rows
+
+
 class NetworkManager:
     def __init__(self, config, runner=command):
         self.config=config; self.run=runner; self.marker_identity=None; self.created_marker_identity=None
     def ip(self,*args):
-        return json.loads(self.run(['ip',*args]))
+        output=self.run(['ip',*args])
+        return namespace_inventory(output) if args==('-j','netns','list') else json.loads(output)
     def inode(self):
         path=Path('/run/netns')/self.config.namespace
         info=path.lstat()
