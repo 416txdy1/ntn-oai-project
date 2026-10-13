@@ -2,7 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
-import signal
+import signal,sys
 import subprocess
 import tempfile
 import unittest
@@ -142,5 +142,24 @@ class ConcreteBoundaryTests(unittest.TestCase):
             result=protection.run_short(ops)
         self.assertFalse(result['passed']);self.assertEqual(ops.calls[-1],'cleanup')
 
-if __name__=='__main__':unittest.main()
 
+    def test_capture_sigterm_stops_only_its_session(self):
+        import os,threading
+        unrelated=subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)'],start_new_session=True)
+        try:
+            with tempfile.TemporaryDirectory() as d,patch.object(protection,'ROOT',Path(d)):
+                ops=self.make_ops(Path(d))
+                timer=threading.Timer(.3,lambda:os.kill(os.getpid(),signal.SIGTERM))
+                timer.start()
+                try:
+                    with protection.SignalGuard(),self.assertRaises(KeyboardInterrupt):
+                        ops.capture('owned-python',[sys.executable,'-c','import time;time.sleep(30)'],10)
+                finally:timer.join()
+                self.assertIsNone(unrelated.poll())
+                owned=json.loads(next(ops.output.glob('capture-*-owned.json')).read_text())
+                self.assertEqual(owned['processes'],{})
+                for record in owned['stopped_processes'].values():
+                    self.assertIsNone(protection.process_identity(record['pid']))
+        finally:unrelated.terminate();unrelated.wait(timeout=5)
+
+if __name__=='__main__':unittest.main()

@@ -345,4 +345,3 @@ def main(argv=None):
         print(json.dumps({'passed':False,'error':type(error).__name__}));return 1
 
 if __name__=='__main__':raise SystemExit(main())
-
