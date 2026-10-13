@@ -15,6 +15,16 @@ class OwnerTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.c = replace(resolve_runtime(self.root, 'integrated-handover', 'run1', {}), owner_file=self.root/'owner.json')
         self.t = {'host': {'ifname':self.c.host_veth,'ifindex':11,'link_index':12,'linkinfo':{'info_kind':'veth'}}, 'peer':{'ifname':self.c.ue_veth,'ifindex':12,'link_index':11,'linkinfo':{'info_kind':'veth'}}, 'netns_inode':99,'host_addresses':[{'local':self.c.rf_host_ip,'prefixlen':30}], 'peer_addresses':[{'local':self.c.rf_ue_ip,'prefixlen':30}], 'interfaces':['lo',self.c.ue_veth]}
+    def test_native_empty_namespace_list_and_malformed_refusal(self):
+        for profile in ('integrated-handover','zky'):
+            manager=NetworkManager(replace(self.c,profile=profile),runner=lambda argv:'  \n')
+            self.assertEqual(manager.ip('-j','netns','list'),[])
+            for output in ('broken','{}','[{}]','[{"name":null}]','[{"name":""}]'):
+                manager=NetworkManager(replace(self.c,profile=profile),runner=lambda argv:output)
+                with self.assertRaises((ValueError,TypeError)):
+                    manager.ip('-j','netns','list')
+            with self.assertRaises(json.JSONDecodeError):manager.ip('-j','link','show')
+
     def test_identity(self):
         marker=create_owner(self.c,self.t)
         validate_owner(self.c,self.t,marker)
