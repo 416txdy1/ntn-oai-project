@@ -109,7 +109,8 @@ bool update_channel_model_from_stk_trace(channel_desc_t *ch,int n,uint64_t ts)
   pthread_mutex_lock(&lock);
   int k=0;for(;k<16;k++)if(!iq[k].channel || iq[k].channel==ch)break;
   AssertFatal(k<16,"Too many STK trace channels\n");
-  const bool emit_clock=!iq[k].clock_seen || ts<iq[k].clock_ts
+  const bool first_actual_callback=!iq[k].clock_seen;
+  const bool emit_clock=first_actual_callback || ts<iq[k].clock_ts
       || ts-iq[k].clock_ts>=(uint64_t)ceil(ch->sampling_rate*.1);
   uint64_t monotonic_ns=0;
   if(emit_clock) {
@@ -121,6 +122,10 @@ bool update_channel_model_from_stk_trace(channel_desc_t *ch,int n,uint64_t ts)
   iq[k]=(iq_state){.channel=ch,.gain=gain,.valid=valid,.clock_seen=true,.clock_ts=clock_ts,
       .noise_ratio=noise_enabled?pow(10,-clamp(cn,-60,150)/10)*ch->sampling_rate/bandwidth:0};
   pthread_mutex_unlock(&lock);
+  if(first_actual_callback)
+    LOG_I(HW,"STKCHANNELSTART %s monotonic_ns=%" PRIu64 " samples=%" PRIu64 " sampling_rate=%.9f iq_s=%.9f stk_s=%.9f\n",
+          ch->is_uplink?"UL":"DL",monotonic_ns,ts,ch->sampling_rate,ts/ch->sampling_rate,
+          stk_trace_epoch(epoch,ts,ch->sampling_rate,rate));
   if(emit_clock)
     LOG_I(HW,"STKCLOCK %s monotonic_ns=%" PRIu64 " samples=%" PRIu64 " sampling_rate=%.9f iq_s=%.9f stk_s=%.9f\n",
           ch->is_uplink?"UL":"DL",monotonic_ns,ts,ch->sampling_rate,ts/ch->sampling_rate,
@@ -146,11 +151,11 @@ bool update_channel_model_from_stk_trace(channel_desc_t *ch,int n,uint64_t ts)
       .dl_time_drift_us_s=(path_rate(&s,s.ue,rs)+path_rate(&s,s.gnb,rf))/SPEED_OF_LIGHT*1e6};
     have_sync=valid;observed_dl=true;pthread_mutex_unlock(&lock);
   }
-  if(ts/(uint64_t)ch->sampling_rate!=(ts+n)/(uint64_t)ch->sampling_rate)
+  if(first_actual_callback || ts/(uint64_t)ch->sampling_rate!=(ts+n)/(uint64_t)ch->sampling_rate)
     LOG_I(HW,"STKTRACE2 %s IQ=%.6f STK=%.6f delay=%.6fms Doppler=%.3fHz gain=%.3fdB C/N=%.3fdB valid=%d samples=%" PRIu64 "\n",
       ch->is_uplink?"UL":"DL",ts/ch->sampling_rate,s.time,delay*1000,doppler,
       gain>0?20*log10(gain):-300,cn,valid,ts);
-  if(schedule_enabled && ts/(uint64_t)ch->sampling_rate!=(ts+n)/(uint64_t)ch->sampling_rate) {
+  if(schedule_enabled && (first_actual_callback || ts/(uint64_t)ch->sampling_rate!=(ts+n)/(uint64_t)ch->sampling_rate)) {
     stk_schedule_entry selected={0};
     if(stk_schedule_at(&schedule,s.time,&selected))
       LOG_I(HW,"STKSCHEDULE %s IQ=%.6f STK=%.6f satellite_id=%s elevation_deg=%.3f visible=%d switched=%d phase=%s previous=%s next=%s samples=%" PRIu64 "\n",

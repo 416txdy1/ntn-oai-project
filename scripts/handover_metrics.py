@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 
 CLOCK = re.compile(r'STKCLOCK (UL|DL) monotonic_ns=(\d+) samples=(\d+) sampling_rate=([\d.]+) iq_s=([\d.]+) stk_s=([\d.]+)')
+CHANNEL_START = re.compile(CLOCK.pattern.replace('STKCLOCK','STKCHANNELSTART'))
 NUMERIC = re.compile(r'STKTRACE2 (UL|DL) IQ=([\d.]+) STK=([\d.]+) delay=([\d.]+)ms Doppler=([-\d.]+)Hz gain=([-\d.]+)dB C/N=([-\d.]+)dB valid=(\d+) samples=(\d+)')
 SCHEDULE = re.compile(r'STKSCHEDULE (UL|DL) IQ=([\d.]+) STK=([\d.]+) satellite_id=(\S+) elevation_deg=([-\d.]+) visible=(\d+) switched=(\d+) phase=(\S+) previous=(.*?) next=(.*?) samples=(\d+)')
 
@@ -46,6 +47,34 @@ def parse_clock(line):
     direction,ns,samples,fs,iq,stk=match.groups()
     return dict(direction=direction,monotonic_ns=int(ns),samples=int(samples),
                 sampling_rate=float(fs),iq_s=float(iq),stk_s=float(stk))
+
+
+def parse_channel_start(line):
+    match=CHANNEL_START.search(line)
+    return parse_clock(match.group().replace('STKCHANNELSTART','STKCLOCK')) if match else None
+
+
+def validate_channel_start(starts,anchors,numbers,schedules,*,direction,fs,epoch,rate,duration):
+    """Validate the real first callback; never invent channel history before it."""
+    if len(starts)!=1 or not anchors or not numbers or not schedules:
+        raise ValueError('missing or duplicate first physical channel observation')
+    start=starts[0]
+    if start['direction']!=direction or start['sampling_rate']!=fs or not math.isfinite(fs) or fs<=0:
+        raise ValueError('channel start direction/sample rate mismatch')
+    iq=start['samples']/fs
+    if not 0<=iq<duration or start['monotonic_ns']<=0:
+        raise ValueError('channel start outside RF case interval')
+    if abs(start['iq_s']-iq)>.00000000051 or abs(start['stk_s']-(epoch+rate*iq))>.00000000051:
+        raise ValueError('channel start epoch/rate mismatch')
+    if start!=anchors[0]:raise ValueError('channel start does not match first actual clock')
+    for label,row in [('numeric',numbers[0]),('schedule',schedules[0])]:
+        if row['direction']!=direction or row['samples']!=start['samples']:
+            raise ValueError('first '+label+' callback identity mismatch')
+        # Existing numeric/schedule fields print six decimals; raw samples are exact.
+        if abs(row['iq_s']-iq)>.0000005001 or abs(row['stk_s']-(epoch+rate*iq))>.0000005001:
+            raise ValueError('first '+label+' rounded timestamp mismatch')
+    if numbers[0]['valid']!=1:raise ValueError('invalid first physical channel')
+    return dict(start, startup_unobserved_iq_interval_s=[0,iq])
 
 
 class ClockMap:
@@ -128,10 +157,17 @@ def evaluate_handover(report):
         require(report['trace_interval_s']==spec['trace_interval_s'],'unexpected trace interval')
         fs=report['sample_rate_hz']
         require(isinstance(fs,(int,float)) and math.isfinite(fs) and fs>0,'invalid actual Fs')
+        require(report['rf_case_iq_interval_s']==[0,spec['duration_iq_s']], 'wrong RF counter case interval')
+        require(report['physical_start_verified'] is True,'first physical observation was not validated')
         for side in ('gnb','ue'):
             require(report['clock_sample_rates'][side]==fs,'actual Fs mismatch: '+side)
             begin,end=report['iq_interval_s'][side]
-            require(begin<=.15 and end>=spec['duration_iq_s'],'incomplete IQ coverage: '+side)
+            start=report['physical_channel_start'][side]
+            expected_direction='UL' if side=='gnb' else 'DL'
+            require(start['direction']==expected_direction and start['sampling_rate']==fs,'wrong physical start side/Fs: '+side)
+            actual_start=start['samples']/fs
+            require(0<=actual_start<spec['duration_iq_s'] and begin==actual_start and end>=spec['duration_iq_s'],'incomplete IQ coverage: '+side)
+            require(report['startup_unobserved_iq_interval_s'][side]==[0,actual_start],'unsubstantiated startup interval: '+side)
             require(report['iq_end_stk_s'][side]>=spec['trace_interval_s'][0]+spec['rate']*spec['duration_iq_s'],'incomplete STK coverage: '+side)
         if report['case']=='static':
             require(report['pdu_ready_iq_s']<spec['duration_iq_s']-30,'late static PDU')

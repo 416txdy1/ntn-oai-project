@@ -153,3 +153,6 @@ tolerance, actual wall rate, and actual IQ time reserved for bounded draining.
 
 
 The continuous driver verifies the owned UPF and ext-DN container IDs, core workspace/configuration ownership, live process and network namespace identities, UPF address and both routes before starting business workers. For the inherited exact UE-pool SNAT rule, the uplink receiver expects the verified UPF address while preserving the original PDU address in `business_path` in the manifest and report. Without source translation it expects the PDU address. Unexpected source translation, changed identities or routes fail verification. UDP token, direction, sequence and exact source checks remain active.
+
+
+实际物理观测的起点由生产信道回调一次性输出 `STKCHANNELSTART`，并与该方向首条 `STKCLOCK`、数值状态和卫星日程的原始样本计数严格匹配。RFsim 在对端尚未连接时可能推进样本计数；这段 `[0, first_actual_callback]` 记为 `startup_unobserved`，不声称已有信道观测，不补历史样本、不重置 IQ 或 STK epoch。总验收仍使用原始 RF IQ 的 `[0, duration]`，全部业务事件和 PDU 就绪均须处于双侧真实物理起点之后并具有双侧时钟括号；所有早期发送保留在全局统计中。后续时钟间隙 0.15 IQ 秒、数值/日程间隙 1.15 IQ 秒、620 IQ 秒结束点和两次切换窗口要求不变。曲线对完全或部分未观测的启动 bin 显式标记覆盖状态，物理数值留空。

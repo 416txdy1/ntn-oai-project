@@ -38,14 +38,19 @@ def write_timeline(output,observer,probes,business_start,business_end,report):
             else:
                 wall_spans[side]=iq_to_wall(anchors,hi,fs)-iq_to_wall(anchors,lo,fs)
                 row[side+'_real_time_factor']=(hi-lo)/wall_spans[side]
-            physical=[p for p in observer.numbers[side] if lo<=p['samples']/fs<hi]
+            actual_start=anchors[0]['samples']/fs
+            fully_observed=lo>=actual_start
+            row[side+'_physical_coverage']='observed' if fully_observed else 'startup_unobserved' if hi<=actual_start else 'partial_startup_unobserved'
+            row[side+'_physical_observed_iq_start_s']=max(lo,actual_start) if hi>actual_start else None
+            # A partial startup bin has unknown geometry over part of its width.
+            physical=[p for p in observer.numbers[side] if lo<=p['samples']/fs<hi] if fully_observed else []
             if physical:
                 for key in ('delay_ms','doppler_hz','cn_db','gain_db'):
                     row[side+'_'+key]=sum(p[key] for p in physical)/len(physical)
                 row[side+'_physical_sample_iq_s']=physical[0]['samples']/fs
             else:
                 for key in ('delay_ms','doppler_hz','cn_db','gain_db','physical_sample_iq_s'):row[side+'_'+key]=None
-            selected=[p for p in observer.schedules[side] if p['samples']/fs<=hi]
+            selected=[p for p in observer.schedules[side] if p['samples']/fs<=hi] if fully_observed else []
             row[side+'_satellite_id']=selected[-1]['satellite_id'] if selected else None
             row[side+'_handover_phase']=selected[-1]['phase'] if selected else None
         for name,side in [('ping','ue'),('uplink','gnb'),('downlink','ue')]:

@@ -115,11 +115,21 @@ class DriverBoundaryTests(unittest.TestCase):
 
     def test_numeric_and_schedule_observation_gaps_cannot_pass(self):
         from handover_metrics import case_spec
-        numbers=[dict(samples=999+i*1000,valid=1) for i in range(620)]
-        schedule=[dict(samples=999+i*1000,stk_s=8200+.999+i,
+        numbers=[dict(samples=999+i*1000,iq_s=.999+i,stk_s=8200+.999+i,valid=1) for i in range(620)]
+        schedule=[dict(samples=999+i*1000,iq_s=.999+i,stk_s=8200+.999+i,
                        phase='complete' if i in (44,599) else 'steady') for i in range(620)]
         observer=SimpleNamespace(fs=1000,numbers={'gnb':numbers,'ue':numbers},
                                  schedules={'gnb':schedule,'ue':schedule})
+        observer.manifest={'epoch':8200,'rate':1}
+        observer.channel_starts={}
+        observer.anchors={}
+        for side in ('gnb','ue'):
+            direction='UL' if side=='gnb' else 'DL'
+            observer.numbers[side]=[dict(row,direction=direction) for row in numbers]
+            observer.schedules[side]=[dict(row,direction=direction) for row in schedule]
+            start=dict(direction=direction,monotonic_ns=100, samples=999,sampling_rate=1000,iq_s=.999,stk_s=8200.999)
+            observer.channel_starts[side]=[start];observer.anchors[side]=[dict(start)]
+        numbers=observer.numbers['ue'];schedule=observer.schedules['ue']
         d.validate_physical_observations(observer,case_spec('full'))
         observer.numbers['ue']=numbers[:40]+numbers[41:]
         with self.assertRaises(ValueError):d.validate_physical_observations(observer,case_spec('full'))
@@ -174,6 +184,10 @@ class DriverBoundaryTests(unittest.TestCase):
                    anchors={'gnb':anchors,'ue':anchors},pbch_errors=0,rrc_idle=0,reaccess_count=0,
                    qd_loaded={'gnb':1,'ue':1},
                    mapper=lambda side:ClockMap(anchors,8200,1,1000))
+        observer.anchors['gnb']=[dict(row,direction='UL') for row in anchors]
+        observer.channel_starts={side:[dict(observer.anchors[side][0])] for side in ('gnb','ue')}
+        observer.numbers={side:[dict(observer.anchors[side][0],valid=1)] for side in ('gnb','ue')}
+        observer.schedules={side:[dict(observer.anchors[side][0])] for side in ('gnb','ue')}
         stop_ns=625000000000;drain_ns=630000000000
         def events(role,sends,receives,end_ns):
             ready=dict(event='ready',role=role,monotonic_ns=21000000000,offered_wall_bits_per_second=100000,payload_bytes=1000)

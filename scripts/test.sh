@@ -4,6 +4,7 @@ ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 source scripts/env.sh
 python3 scripts/test_handover_metrics.py
+python3 scripts/test_physical_start.py
 python3 scripts/test_handover_driver.py
 python3 local_ntn/test_manifest_provenance.py
 python3 local_ntn/test_numeric_audit.py

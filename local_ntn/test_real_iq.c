@@ -16,7 +16,7 @@ static bool measured_noise;
 log_t *g_log=&log_state;
 void logRecord_mt(const char *f,const char *fn,int l,int c,int level,const char *format,...)
 { (void)f; (void)fn; (void)l; (void)c; (void)level;
-  if(strncmp(format,"STKCLOCK ",9)==0 || strncmp(format,"STKSCHEDULE ",12)==0 || strncmp(format,"STKTRACE2 ",10)==0) {
+  if(strncmp(format,"STKCHANNELSTART ",16)==0 || strncmp(format,"STKCLOCK ",9)==0 || strncmp(format,"STKSCHEDULE ",12)==0 || strncmp(format,"STKTRACE2 ",10)==0) {
     va_list args;va_start(args,format);vprintf(format,args);va_end(args);
   }
 }
@@ -65,9 +65,9 @@ int main(int argc,char **argv)
   for(int i=0;i<N;i++)in[i]=(c16_t){.r=1000,.i=2000};
   if(clock_mode) {
     float ul_phase=0;channel_desc_t ul=ch;ul.is_uplink=true;ul.center_freq=1614900000;ul.Doppler_phase_cur=&ul_phase;
-    for(int i=0;i<=60;i++) {
-      update_channel_model(&ch,537600,(uint64_t)i*537600);
-      update_channel_model(&ul,537600,(uint64_t)i*537600);
+    for(int i=0;i<=38;i++) {
+      update_channel_model(&ch,537600,10083072+(uint64_t)i*537600);
+      update_channel_model(&ul,537600,10129151+(uint64_t)i*537600);
     }
     puts("PASS actual sample clock log fixture");return 0;
   }

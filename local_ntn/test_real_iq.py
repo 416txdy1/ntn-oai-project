@@ -77,9 +77,20 @@ with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
         if words[1] in previous:
             old=previous[words[1]]
             assert monotonic>=old[0] and 0<iq-old[1]<=.170001
-        else:assert samples==0
+        else:assert samples==({"DL":10083072,"UL":10129151}[words[1]])
         previous[words[1]]=monotonic,iq
     assert set(previous)=={'DL','UL'}
+    starts=[line.split() for line in output.splitlines() if line.startswith('STKCHANNELSTART ')]
+    assert len(starts)==2,'one actual first-channel observation per direction'
+    for words in starts:
+        direction=words[1];fields=dict(word.split('=',1) for word in words[2:])
+        first=next(line for line in clocks if line[1]==direction)
+        assert fields==dict(word.split('=',1) for word in first[2:]),'start must equal first actual CLOCK'
+        for prefix in ('STKTRACE2 '+direction+' IQ=', 'STKSCHEDULE '+direction+' IQ='):
+            line=next(line for line in output.splitlines() if line.startswith(prefix))
+            assert int(re.search(r'samples=(\d+)',line)[1])==int(fields['samples'])
+            assert abs(float(re.search(r'IQ=([\d.]+)',line)[1])-float(fields['iq_s']))<=.0000005001
+            assert abs(float(re.search(r'STK=([\d.]+)',line)[1])-float(fields['stk_s']))<=.0000005001
     schedules=[line for line in output.splitlines() if line.startswith('STKSCHEDULE ')]
     assert any('satellite_id=SAT_A ' in line and 'phase=steady ' in line for line in schedules)
     assert any('satellite_id=SAT_B ' in line and 'phase=complete ' in line and 'previous=SAT_A ' in line for line in schedules)

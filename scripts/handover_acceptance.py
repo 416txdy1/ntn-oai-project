@@ -22,7 +22,7 @@ from runtime_config import resolve_runtime
 from run_state import process_identity,read_state,matches
 from experiment import observed_sample_rate,write_manifest
 from audit_runtime_numbers import audit_manifest
-from handover_metrics import IncrementalTail,parse_clock,ClockMap,NUMERIC,SCHEDULE,case_spec,cohort_summary,evaluate_handover
+from handover_metrics import IncrementalTail,parse_clock,parse_channel_start,validate_channel_start,ClockMap,NUMERIC,SCHEDULE,case_spec,cohort_summary,evaluate_handover
 from continuous_udp import match_events
 from core_lab import CoreLab
 from handover_plot import write_timeline
@@ -174,6 +174,7 @@ class Observer:
         self.manifest=manifest
         self.tails={side:IncrementalTail(path) for side,path in manifest['logs'].items()}
         self.anchors={side:[] for side in ('gnb','ue')}
+        self.channel_starts={side:[] for side in ('gnb','ue')}
         self.numbers={side:[] for side in ('gnb','ue')}
         self.schedules={side:[] for side in ('gnb','ue')}
         self.startup={side:[] for side in ('gnb','ue')}
@@ -185,6 +186,10 @@ class Observer:
         for side,tail in self.tails.items():
             direction='UL' if side=='gnb' else 'DL'
             for line in tail.read_lines():
+                start=parse_channel_start(line)
+                if start:
+                    if start['direction']!=direction or self.channel_starts[side]:raise ValueError('wrong or repeated channel start')
+                    self.channel_starts[side].append(start)
                 clock=parse_clock(line)
                 if clock:
                     if clock['direction']!=direction:raise ValueError('clock direction mismatch')
@@ -208,7 +213,7 @@ class Observer:
                 schedule=SCHEDULE.search(line)
                 if schedule:
                     values=schedule.groups()
-                    self.schedules[side].append(dict(iq_s=float(values[1]),stk_s=float(values[2]),
+                    self.schedules[side].append(dict(direction=values[0],iq_s=float(values[1]),stk_s=float(values[2]),
                         satellite_id=values[3],phase=values[7],switched=int(values[6]),samples=int(values[10])))
                 self.qd_loaded[side]+=int('QDCHANNEL1 loaded' in line)
                 self.pbch_errors+=int('Error decoding PBCH' in line)
@@ -236,13 +241,21 @@ class Observer:
 def validate_physical_observations(observer,spec):
     duration=spec['duration_iq_s']
     for side in ('gnb','ue'):
+        start=validate_channel_start(observer.channel_starts[side],observer.anchors[side],observer.numbers[side],observer.schedules[side],
+            direction='UL' if side=='gnb' else 'DL',fs=observer.fs,epoch=observer.manifest['epoch'],
+            rate=observer.manifest['rate'],duration=duration)
+        start_iq=start['samples']/observer.fs
         for label,rows in [('numeric',observer.numbers[side]),('schedule',observer.schedules[side])]:
             if not rows:raise ValueError('missing '+side+' '+label+' physical observations')
             times=[row['samples']/observer.fs for row in rows]
-            if times[0]>1.15 or times[-1]<duration-1.15:
+            if times[0]!=start_iq or times[-1]<duration-1.15:
                 raise ValueError('incomplete '+side+' '+label+' physical coverage')
             if any(b<=a or b-a>1.15 for a,b in zip(times,times[1:])):
                 raise ValueError(side+' '+label+' physical observation gap')
+            for row in rows:
+                expected='UL' if side=='gnb' else 'DL'
+                if row['direction']!=expected or abs(row['iq_s']-row['samples']/observer.fs)>.0000005001 or abs(row['stk_s']-(observer.manifest['epoch']+observer.manifest['rate']*row['samples']/observer.fs))>.0000005001:
+                    raise ValueError('physical direction/epoch/rate mismatch')
         if any(row['valid']!=1 for row in observer.numbers[side]):
             raise ValueError('invalid physical channel in required interval')
         for completion in spec['completions']:
@@ -345,9 +358,20 @@ def mapped_packets(sender,receiver,mapper,drain_ns):
 def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,workers):
     fs=observer.fs
     if fs is None:raise ValueError('missing both actual startup sample rates')
+    spec=case_spec(report['case'])
+    starts={side:validate_channel_start(observer.channel_starts[side],observer.anchors[side],observer.numbers[side],observer.schedules[side],
+        direction='UL' if side=='gnb' else 'DL',fs=fs,epoch=observer.manifest['epoch'],rate=observer.manifest['rate'],duration=spec['duration_iq_s']) for side in ('gnb','ue')}
     maps={side:observer.mapper(side) for side in ('gnb','ue')}
     events={name:private_events(output/(name+'.jsonl')) for name in ('ping','uplink-sender','uplink-receiver','downlink-sender','downlink-receiver')}
-    for name,rows in events.items():worker_observation(rows,'ping' if name=='ping' else name.split('-')[1])
+    for name,rows in events.items():
+        worker_observation(rows,'ping' if name=='ping' else name.split('-')[1])
+        # Every real ready/send/receipt is supported by BOTH actual channels.
+        # Validate all events, including duplicates/early sends, without truncation.
+        for event in rows:
+            if event['event'] in ('ready','send','receive'):
+                for mapper in maps.values():
+                    mapper.map(event['monotonic_ns'])
+                    if event['event']=='send':mapper.map(event['send_ns'])
     ping=mapped_packets(events['ping'],events['ping'],maps['ue'],drain_ns)
     probes={'ping':ping}
     for direction,side in [('uplink','gnb'),('downlink','ue')]:
@@ -370,7 +394,9 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
     start=max(max(p['iq_bounds_s']) for p in measurement)
     stop=[maps[side].map(traffic_stop_ns) for side in maps]
     end=min(min(p['iq_bounds_s']) for p in stop)
-    report.update(sample_rate_hz=fs,clock_sample_rates={side:rows[-1]['sampling_rate'] for side,rows in observer.anchors.items()},
+    report.update(rf_case_iq_interval_s=[0,spec['duration_iq_s']],physical_start_verified=True,
+                  physical_channel_start=starts, startup_unobserved_iq_interval_s={side:entry['startup_unobserved_iq_interval_s'] for side,entry in starts.items()},
+                  sample_rate_hz=fs,clock_sample_rates={side:rows[-1]['sampling_rate'] for side,rows in observer.anchors.items()},
                   iq_interval_s={side:[rows[0]['samples']/fs,rows[-1]['samples']/fs] for side,rows in observer.anchors.items()},
                   iq_end_stk_s={side:rows[-1]['stk_s'] for side,rows in observer.anchors.items()},
                   pdu_ready_stk_s=max(max(p['stk_bounds_s']) for p in pdu),
