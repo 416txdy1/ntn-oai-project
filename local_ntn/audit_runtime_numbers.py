@@ -130,8 +130,21 @@ def main(argv=None):
             if fs is None:raise ValueError('both startup sampling rates required')
             if result.get('sample_rate_hz',fs)!=fs:raise ValueError('result Fs mismatch')
             all_rates.add(fs)
-            report['runs'][label]={side:audit_log(rows,logs[side],direction,fs,rows[0][0],result['rate'],result.get('interpolation','hermite'))
-                                   for side,direction in [('gnb','UL'),('ue','DL')]}
+            # Result-aware run evidence belongs in the CLI, not the reusable
+            # one-point arithmetic audit used by independent numerical fixtures.
+            run={}
+            for side,direction in [('gnb','UL'),('ue','DL')]:
+                mode=result.get('interpolation','hermite')
+                if 'interpolation' in result:
+                    declared=re.findall(r'\bSTKTRACE2 interpolation=([a-z-]+)\b',logs[side])
+                    if not declared or any(value!=mode for value in declared):
+                        raise ValueError('recorded interpolation mode mismatch')
+                value=audit_log(rows,logs[side],direction,fs,rows[0][0],result['rate'],mode)
+                begin,end=value['stk_interval_s']
+                if result['rate']!=0 and end-begin<=1:
+                    raise ValueError('dynamic trace did not advance')
+                run[side]=value
+            report['runs'][label]=run
         if len(all_rates)!=1:raise ValueError('runs have inconsistent sampling rates')
         report['sampling_rate_hz']=all_rates.pop()
         report['initial_config']=audit_initial(rows,a.run_dir/'local_ntn/gnb.local.conf',a.run_dir/'local_ntn/initial_delay_ms.txt')
