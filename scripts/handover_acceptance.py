@@ -40,6 +40,9 @@ def snat_peer(rules,pdu_subnet,pdu_address,upf_address):
     for line in rules.splitlines():
         row=shlex.split(line)
         if not row or row[0]!='-A':continue
+        # Docker's exact loopback DNS delegation cannot match ext-DN traffic.
+        # Unknown/broader jumps remain subject to the PDU translation guard.
+        if row==['-A','POSTROUTING','-d','127.0.0.11/32','-j','DOCKER_POSTROUTING']:continue
         source=row[row.index('-s')+1] if '-s' in row else '0.0.0.0/0'
         overlaps=pool.overlaps(ipaddress.ip_network(source,strict=False))
         action=row[row.index('-j')+1] if '-j' in row else None

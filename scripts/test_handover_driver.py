@@ -22,6 +22,27 @@ class DriverBoundaryTests(unittest.TestCase):
                         '-A POSTROUTING -s 0.0.0.0/0 -j MASQUERADE',rule.replace('SNAT','ACCEPT')):
             with self.assertRaises(ValueError):d.snat_peer(changed,'12.2.1.0/24','12.2.1.2','192.168.71.134')
 
+    def test_stock_docker_dns_jump_and_only_exact_loopback_exception(self):
+        rules="""-P PREROUTING ACCEPT
+-P INPUT ACCEPT
+-P OUTPUT ACCEPT
+-P POSTROUTING ACCEPT
+-N DOCKER_OUTPUT
+-N DOCKER_POSTROUTING
+-A OUTPUT -d 127.0.0.11/32 -j DOCKER_OUTPUT
+-A POSTROUTING -d 127.0.0.11/32 -j DOCKER_POSTROUTING
+-A POSTROUTING -s 12.2.1.0/24 -o eth0 -j SNAT --to-source 192.168.71.134
+-A DOCKER_OUTPUT -d 127.0.0.11/32 -p tcp -m tcp --dport 53 -j DNAT --to-destination 127.0.0.11:43995
+-A DOCKER_OUTPUT -d 127.0.0.11/32 -p udp -m udp --dport 53 -j DNAT --to-destination 127.0.0.11:37342
+-A DOCKER_POSTROUTING -s 127.0.0.11/32 -p tcp -m tcp --sport 43995 -j SNAT --to-source :53
+-A DOCKER_POSTROUTING -s 127.0.0.11/32 -p udp -m udp --sport 37342 -j SNAT --to-source :53
+"""
+        self.assertEqual(d.snat_peer(rules,'12.2.1.0/24','12.2.1.2','192.168.71.134'),'192.168.71.134')
+        self.assertEqual(d.snat_peer('\n'.join(reversed(rules.splitlines())),'12.2.1.0/24','12.2.1.2','192.168.71.134'),'192.168.71.134')
+        jump='-A POSTROUTING -d 127.0.0.11/32 -j DOCKER_POSTROUTING'
+        for unsafe in ('-A POSTROUTING -j DOCKER_POSTROUTING',jump.replace('127.0.0.11/32','192.168.71.135/32'),jump.replace('127.0.0.11/32','127.0.0.0/8'),jump.replace('DOCKER_POSTROUTING','FOREIGN'),jump+' -o eth0'):
+            with self.assertRaises(ValueError):d.snat_peer(rules.replace(jump,unsafe),'12.2.1.0/24','12.2.1.2','192.168.71.134')
+
     def test_snat_proof_requires_owned_ids_routes_and_stable_namespace(self):
         from unittest.mock import Mock
         config=SimpleNamespace(core_project='ntn-qd-integrated',ext_dn_container='ntn-qd-integrated-oai-ext-dn',
