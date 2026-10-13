@@ -124,6 +124,9 @@ class DriverBoundaryTests(unittest.TestCase):
         with self.assertRaises(ValueError):d.validate_udp_workload(rows)
         rows=fixture();rows[50]['send_ns']=rows[49]['send_ns']
         with self.assertRaises(ValueError):d.validate_udp_workload(rows)
+        rows=fixture()
+        for i,row in enumerate(rows[1:-1]):row['send_ns']=10_000_000_000+(i*40_000_000 if i<50 else i*40_000_000+4_000_000_000)
+        with self.assertRaises(ValueError):d.validate_udp_workload(rows)
 
     def test_final_report_keeps_loss_before_confirmed_business_and_two_full_windows(self):
         from handover_metrics import ClockMap,evaluate_handover

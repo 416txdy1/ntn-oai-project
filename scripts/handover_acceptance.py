@@ -233,6 +233,8 @@ def validate_udp_workload(events):
     times=[event['send_ns'] for event in sends]
     if any(b<=a for a,b in zip(times,times[1:])):
         raise ValueError('UDP emission clock regression')
+    if any(b-a>2_000_000_000 for a,b in zip(times,times[1:])):
+        raise ValueError('UDP emission observation gap')
     span=(times[-1]-times[0])/1e9
     # First packet defines the left endpoint: N-1 packet intervals carry N-1
     # payloads. This removes the one-packet endpoint bias without shared ready time.
