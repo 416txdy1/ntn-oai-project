@@ -293,7 +293,7 @@ class OriginalShortRun:
               '--rfsimulator.[0].options','chanmod','--time-sync-I','0.1',
               '--autonomous-ta','--cont-fo-comp','2','--num-ul-actors','1']
             actual=process_argv(pid)
-            if not actual or Path(actual[0]).name!='ip' or actual[1:]!=argv[1:] or process_cwd(pid)!=BUILD.resolve():
+            if not actual or Path(actual[0]).name!='ip' or actual[1:]!=argv[1:] or Path(process_cwd(pid)).resolve()!=BUILD.resolve():
                 raise ValueError('Unknown namespace launch arguments')
             record={'pid':pid,'start':identity[0],'executable':identity[1],'phase':'launching',
               'expected_executable':expected['ue'],'intermediate':'original-ue-ip'}
