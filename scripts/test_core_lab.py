@@ -43,6 +43,16 @@ class CoreTests(unittest.TestCase):
         before=(self.c.private_dir/'ue.conf').read_bytes()
         with self.assertRaises(SystemExit):self.render()
         self.assertEqual(before,(self.c.private_dir/'ue.conf').read_bytes())
+    def test_builtin_network_null_ipam_does_not_block_core_preflight(self):
+        self.render();lab=CoreLab(self.c)
+        builtin=[{'Id':'host','Name':'host','IPAM':{'Config':None},'Options':{}},
+                 {'Id':'none','Name':'none','IPAM':{'Config':None},'Options':{}}]
+        with patch.object(lab,'inventory',return_value=([],builtin)):
+            self.assertEqual(lab.preflight(),([],builtin))
+        conflict={'Id':'foreign','Name':'foreign','IPAM':{'Config':[{'Subnet':'192.168.71.128/26'}]},'Options':{}}
+        with patch.object(lab,'inventory',return_value=([],builtin+[conflict])):
+            with self.assertRaises(ValueError):lab.preflight()
+
     def test_default_zky_rendering_keeps_existing_pool_and_names(self):
         with patch('init_lab.ROOT',self.root),contextlib.redirect_stdout(io.StringIO()):
             init([])
