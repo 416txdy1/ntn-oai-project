@@ -169,4 +169,38 @@ class OwnerTests(unittest.TestCase):
                     self.assertIn(['ip','netns','delete',c.namespace],commands)
             if c.owner_file.is_symlink():c.owner_file.unlink()
 
+
+    def test_partial_claim_rollback_only_created_marker_inode(self):
+        real_lstat=os.lstat;real_fstat=os.fstat
+        def rooted(info):
+            fields=list(info);fields[4]=0;return os.stat_result(fields)
+        for replaced in (False,True):
+            c=self.c;commands=[]
+            manager=NetworkManager(c,runner=lambda cmd:commands.append(cmd) or '[]')
+            verify=manager.verify
+            def fail_after_claim(claim=False):
+                verify(claim)
+                if replaced:
+                    replacement=self.root/'new-marker';replacement.write_bytes(c.owner_file.read_bytes())
+                    os.replace(replacement,c.owner_file)
+                raise RuntimeError('failure after marker creation')
+            with patch('network_owner.os.lstat',side_effect=lambda *a,**kw:rooted(real_lstat(*a,**kw))),patch('network_owner.os.fstat',side_effect=lambda fd:rooted(real_fstat(fd))),patch.object(manager,'preflight'),patch.object(manager,'inode',return_value=99),patch.object(manager,'link',return_value=self.t['host']),patch.object(manager,'topology',return_value=self.t),patch.object(manager,'verify',side_effect=fail_after_claim):
+                with self.assertRaises(RuntimeError):manager.up()
+            self.assertEqual(c.owner_file.exists(),replaced)
+            if replaced:c.owner_file.unlink()
+    def test_path_replacement_between_lstat_and_open_is_refused(self):
+        real_lstat=os.lstat;real_fstat=os.fstat;real_open=os.open
+        def rooted(info):
+            fields=list(info);fields[4]=0;return os.stat_result(fields)
+        self.c.owner_file.write_text(json.dumps(create_owner(self.c,self.t)))
+        replacement=self.root/'new-marker';replacement.write_bytes(self.c.owner_file.read_bytes())
+        def replaced_open(path,*args,**kwargs):
+            fd=real_open(path,*args,**kwargs)
+            if Path(path)==self.c.owner_file:os.replace(replacement,self.c.owner_file)
+            return fd
+        commands=[];manager=NetworkManager(self.c,runner=lambda cmd:commands.append(cmd))
+        with patch('network_owner.os.lstat',side_effect=lambda *a,**kw:rooted(real_lstat(*a,**kw))),patch('network_owner.os.fstat',side_effect=lambda fd:rooted(real_fstat(fd))),patch('network_owner.os.open',side_effect=replaced_open),patch.object(manager,'topology',return_value=self.t):
+            with self.assertRaises(ValueError):manager.verify()
+        self.assertEqual(commands,[]);self.assertTrue(self.c.owner_file.exists())
+
 if __name__=='__main__': unittest.main()

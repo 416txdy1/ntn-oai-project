@@ -261,7 +261,7 @@ class ConcreteBoundaryTests(unittest.TestCase):
             ops.log_paths=[root/'gnb-fresh.log'];ops.logs_claimed=True;ops.old_state=b'original'
             raw=json.dumps({'gnb':dict(pid=777,start='99',log=str(ops.log_paths[0]),rate=1)}).encode()
             ops.state.write_bytes(raw);ops.owner={'owned':True}
-            with patch.object(protection,'process_identity',return_value=('99','/foreign/unknown')),patch.object(ops,'has_token',return_value=True),patch.object(Path,'iterdir',return_value=iter([])),patch.object(protection,'release_network') as release:
+            with patch.object(protection,'process_identity',return_value=('99','/foreign/unknown')),patch.object(ops,'has_token',return_value=True),patch.object(protection.os,'getpgid',return_value=777),patch.object(protection.os,'getsid',return_value=777),patch.object(Path,'iterdir',return_value=iter([])),patch.object(protection,'release_network') as release:
                 with self.assertRaises(RuntimeError):ops.cleanup()
                 release.assert_not_called()
             self.assertEqual(ops.state.read_bytes(),raw)
