@@ -231,4 +231,27 @@ class ConcreteBoundaryTests(unittest.TestCase):
                 except RuntimeError:pass
             self.assertFalse(any(argv[:2]==['docker','stop'] for argv in calls))
 
+
+    def test_confirmed_start_and_external_restart_cleanup_boundary(self):
+        for scenario in ('owned','outside-operation','restarted'):
+            with self.subTest(scenario=scenario),tempfile.TemporaryDirectory() as d:
+                ops=self.make_ops(Path(d))
+                raw={'Id':'a','Name':'/oai-amf','State':{'Running':False,'StartedAt':'old'},'Config':{'Labels':{}}}
+                ops.before={'containers':{'oai-amf':protection.container_info(raw)}};calls=[]
+                def capture(name,argv,timeout=120):
+                    calls.append(argv)
+                    if argv[:2]==['docker','start']:
+                        raw['State'].update(Running=True,StartedAt='1970-01-01T00:00:01.500000000Z' if scenario!='outside-operation' else '1970-01-01T00:00:00.500000000Z')
+                    else:raw['State']['Running']=False
+                    return 'a\n'
+                with patch.object(protection,'CORE_ORDER',('oai-amf',)),patch.object(protection.time,'time_ns',side_effect=[1000000000,2000000000]),patch.object(protection,'command',side_effect=lambda _:json.dumps([raw])),patch.object(ops,'capture',side_effect=capture),patch.object(ops,'collect'):
+                    if scenario=='outside-operation':
+                        with self.assertRaises(ValueError):ops.core_up()
+                    else:ops.core_up()
+                    if scenario=='restarted':raw['State']['StartedAt']='1970-01-01T00:00:02.500000000Z'
+                    if scenario=='restarted':
+                        with self.assertRaises(RuntimeError):ops.cleanup()
+                    else:ops.cleanup()
+                self.assertEqual(sum(argv[:2]==['docker','stop'] for argv in calls),1 if scenario=='owned' else 0)
+
 if __name__=='__main__':unittest.main()
