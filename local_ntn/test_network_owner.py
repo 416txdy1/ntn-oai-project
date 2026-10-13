@@ -131,4 +131,42 @@ class OwnerTests(unittest.TestCase):
                 with self.subTest(profile=profile),self.assertRaises(ValueError):
                     resolve_runtime(self.root,profile,'run',{})
 
+
+    def test_retained_marker_inode_rejects_identical_replacement_both_profiles(self):
+        real_lstat=os.lstat;real_fstat=os.fstat
+        def rooted(info):
+            fields=list(info);fields[4]=0;return os.stat_result(fields)
+        for profile in ('zky','integrated-handover'):
+            c=replace(self.c,profile=profile)
+            c.owner_file.write_text(json.dumps(create_owner(c,self.t)))
+            commands=[];manager=NetworkManager(c,runner=lambda cmd:commands.append(cmd))
+            with patch('network_owner.os.lstat',side_effect=lambda *a,**kw:rooted(real_lstat(*a,**kw))),patch('network_owner.os.fstat',side_effect=lambda fd:rooted(real_fstat(fd))),patch.object(manager,'topology',return_value=self.t):
+                manager.verify()
+                replacement=self.root/'replacement.json';replacement.write_bytes(c.owner_file.read_bytes())
+                os.replace(replacement,c.owner_file)
+                saved=c.owner_file.read_bytes()
+                with self.assertRaises(ValueError):manager.down()
+                self.assertEqual(commands,[])
+                self.assertEqual(c.owner_file.read_bytes(),saved)
+            c.owner_file.unlink()
+    def test_created_original_marker_success_and_symlink_replace(self):
+        real_lstat=os.lstat;real_fstat=os.fstat
+        def rooted(info):
+            fields=list(info);fields[4]=0;return os.stat_result(fields)
+        for replacement in (False,True):
+            c=replace(self.c,profile='zky');commands=[]
+            manager=NetworkManager(c,runner=lambda cmd:commands.append(cmd))
+            with patch('network_owner.os.lstat',side_effect=lambda *a,**kw:rooted(real_lstat(*a,**kw))),patch('network_owner.os.fstat',side_effect=lambda fd:rooted(real_fstat(fd))),patch.object(manager,'topology',return_value=self.t),patch.object(manager,'inode',return_value=99):
+                manager.verify(claim=True)
+                if replacement:
+                    target=self.root/'target.json';target.write_bytes(c.owner_file.read_bytes())
+                    c.owner_file.unlink();c.owner_file.symlink_to(target)
+                    with self.assertRaises(ValueError):manager.down()
+                    self.assertTrue(c.owner_file.is_symlink());self.assertTrue(target.exists())
+                else:
+                    manager.down();self.assertFalse(c.owner_file.exists())
+                    self.assertIn(['ip','link','delete',c.host_veth],commands)
+                    self.assertIn(['ip','netns','delete',c.namespace],commands)
+            if c.owner_file.is_symlink():c.owner_file.unlink()
+
 if __name__=='__main__': unittest.main()

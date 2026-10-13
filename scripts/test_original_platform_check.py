@@ -254,4 +254,43 @@ class ConcreteBoundaryTests(unittest.TestCase):
                     else:ops.cleanup()
                 self.assertEqual(sum(argv[:2]==['docker','stop'] for argv in calls),1 if scenario=='owned' else 0)
 
+
+    def test_unknown_first_executable_retains_network_and_state(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);ops=self.make_ops(root);ops.state=root/'state.json'
+            ops.log_paths=[root/'gnb-fresh.log'];ops.logs_claimed=True;ops.old_state=b'original'
+            raw=json.dumps({'gnb':dict(pid=777,start='99',log=str(ops.log_paths[0]),rate=1)}).encode()
+            ops.state.write_bytes(raw);ops.owner={'owned':True}
+            with patch.object(protection,'process_identity',return_value=('99','/foreign/unknown')),patch.object(ops,'has_token',return_value=True),patch.object(Path,'iterdir',return_value=iter([])),patch.object(protection,'release_network') as release:
+                with self.assertRaises(RuntimeError):ops.cleanup()
+                release.assert_not_called()
+            self.assertEqual(ops.state.read_bytes(),raw)
+    def test_missing_state_approved_shell_and_foreign_token_shell(self):
+        for argv,approved in [(['bash',str(protection.ORIGINAL/'local_ntn/run_local.sh'),'gnb'],True),
+                               (['bash','/foreign/run.sh','gnb'],False)]:
+            with self.subTest(argv=argv),tempfile.TemporaryDirectory() as d:
+                root=Path(d);ops=self.make_ops(root);ops.state=root/'missing'
+                with patch.object(Path,'iterdir',return_value=iter([Path('/proc/777')])),patch.object(protection,'process_identity',return_value=('99','/usr/bin/bash')),patch.object(ops,'has_token',return_value=True),patch.object(protection.os,'getpgid',return_value=777),patch.object(protection.os,'getsid',return_value=777),patch.object(protection,'process_argv',return_value=argv,create=True):
+                    if approved:
+                        ops.collect()
+                        record=ops.records['777']
+                        self.assertEqual(record['phase'],'launching')
+                        self.assertEqual(record['expected_executable'],str(protection.BUILD/'nr-softmodem'))
+                    else:
+                        with self.assertRaises(ValueError):ops.collect()
+                        self.assertEqual(ops.records,{})
+    def test_launch_shell_transition_race_and_reuse_refusal(self):
+        with tempfile.TemporaryDirectory() as d:
+            ops=self.make_ops(Path(d))
+            record={'pid':777,'start':'99','executable':'/usr/bin/bash','phase':'launching',
+                    'expected_executable':str(protection.BUILD/'nr-softmodem')}
+            ops.records={'777':record.copy()}
+            import run_state
+            with patch.object(run_state,'process_identity',return_value=('99',record['expected_executable'])):
+                self.assertTrue(run_state.matches(record))
+            ops.remember(777,('99',record['expected_executable']))
+            self.assertNotIn('phase',ops.records['777'])
+            with self.assertRaises(ValueError):ops.remember(777,('99','/unknown'))
+            with self.assertRaises(ValueError):ops.remember(777,('100',record['expected_executable']))
+
 if __name__=='__main__':unittest.main()
