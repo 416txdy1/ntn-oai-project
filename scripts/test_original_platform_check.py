@@ -162,4 +162,20 @@ class ConcreteBoundaryTests(unittest.TestCase):
                     self.assertIsNone(protection.process_identity(record['pid']))
         finally:unrelated.terminate();unrelated.wait(timeout=5)
 
+
+    def test_real_git_staged_only_changed_content_same_status(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            def git(*argv):
+                return subprocess.run(['git','-C',d,'-c','user.name=Offline test','-c','user.email=offline@example.invalid',*argv],
+                    check=True,capture_output=True,text=True).stdout
+            git('init');(root/'a.c').write_text('base');git('add','a.c');git('commit','-m','fixture')
+            (root/'a.c').write_text('staged-one');git('add','a.c')
+            one=protection.source_snapshot(root)
+            (root/'a.c').write_text('staged-two');git('add','a.c')
+            two=protection.source_snapshot(root)
+            self.assertEqual(one['status'],two['status'])
+            self.assertNotEqual(one['dirty_files'],two['dirty_files'])
+            self.assertNotEqual(one['index_sha256'],two['index_sha256'])
+
 if __name__=='__main__':unittest.main()
