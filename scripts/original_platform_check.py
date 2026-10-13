@@ -230,9 +230,23 @@ class OriginalShortRun:
         if previous and identity[1] not in self.expected and identity[1]!=previous['executable']:
             raise ValueError('Unknown executable transition')
         self.records[str(pid)]={'pid':pid,'start':identity[0],'executable':identity[1]}
+    def claim_state(self,raw,state):
+        if not state or not set(state).issubset({'gnb','ue'}):
+            return False
+        for value in state.values():
+            if value.get('log') not in {str(p) for p in self.log_paths} or value.get('rate')!=1:
+                return False
+            identity=process_identity(value['pid'])
+            if identity and (identity[0]!=value.get('start') or not self.has_token(value['pid'])):
+                raise ValueError('Foreign live state refused')
+        self.state_owned=True
+        self.claimed_state=raw
+        return True
+
     def collect(self):
         if self.logs_claimed and self.state.exists():
-            state=json.loads(self.state.read_text())
+            raw=self.state.read_bytes();state=json.loads(raw)
+            self.claim_state(raw,state)
             for value in state.values():
                 pid=value['pid'];identity=process_identity(pid)
                 if identity and self.has_token(pid) and identity[0]==value.get('start'):
@@ -265,13 +279,29 @@ class OriginalShortRun:
           'uplink':parse_udp(self.capture('udp-uplink',argv+['iperf','--iperf-seconds','15'],35)),
           'downlink':parse_udp(self.capture('udp-downlink',argv+['iperf','--iperf-seconds','15','--reverse'],35))}
     def restore_state(self):
-        if self.state.is_symlink():raise ValueError('State replaced by symlink')
-        state=json.loads(self.state.read_text())
-        for record in state.values():
-            expected=self.records.get(str(record['pid']))
-            if not expected or record.get('start')!=expected['start']:raise ValueError('Foreign state refused')
-        if self.old_state is None:self.state.unlink()
-        else:self.state.write_bytes(self.old_state)
+        if not self.state_owned or not hasattr(self,'claimed_state'):
+            raise ValueError('State was not associated with this invocation')
+        fd=os.open(self.state,os.O_RDWR|os.O_NOFOLLOW)
+        try:
+            opened=os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode):raise ValueError('Nonregular state')
+            current=os.read(fd,max(opened.st_size+1,1))
+            if current!=self.claimed_state:raise ValueError('Foreign state replacement refused')
+            named=self.state.lstat()
+            if (named.st_dev,named.st_ino)!=(opened.st_dev,opened.st_ino):
+                raise ValueError('State pathname replaced')
+            if os.fstat(fd).st_mtime_ns!=opened.st_mtime_ns:raise ValueError('State mutated during check')
+            if self.old_state is None:
+                self.state.unlink()
+            else:
+                os.lseek(fd,0,os.SEEK_SET)
+                with os.fdopen(os.dup(fd),'wb') as stream:
+                    stream.write(self.old_state);stream.truncate();stream.flush();os.fsync(stream.fileno())
+                named=self.state.lstat()
+                if (named.st_dev,named.st_ino)!=(opened.st_dev,opened.st_ino):
+                    raise ValueError('State pathname changed during restore')
+        finally:os.close(fd)
+
     def cleanup(self):
         errors=[]
         if self.controller:
