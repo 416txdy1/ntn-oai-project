@@ -14,6 +14,43 @@ import handover_plot as plot
 
 
 class DriverBoundaryTests(unittest.TestCase):
+    def test_actual_stock_snat_selects_exact_peer_and_rejects_unexpected_rules(self):
+        rule='-P POSTROUTING ACCEPT\n-A POSTROUTING -s 12.2.1.0/24 -o eth0 -j SNAT --to-source 192.168.71.134\n'
+        self.assertEqual(d.snat_peer(rule,'12.2.1.0/24','12.2.1.2','192.168.71.134'),'192.168.71.134')
+        self.assertEqual(d.snat_peer('-P POSTROUTING ACCEPT\n','12.2.1.0/24','12.2.1.2','192.168.71.134'),'12.2.1.2')
+        for changed in (rule.replace('192.168.71.134','192.168.71.99'),rule.replace('eth0','foreign'),rule+rule,
+                        '-A POSTROUTING -s 0.0.0.0/0 -j MASQUERADE',rule.replace('SNAT','ACCEPT')):
+            with self.assertRaises(ValueError):d.snat_peer(changed,'12.2.1.0/24','12.2.1.2','192.168.71.134')
+
+    def test_snat_proof_requires_owned_ids_routes_and_stable_namespace(self):
+        from unittest.mock import Mock
+        config=SimpleNamespace(core_project='ntn-qd-integrated',ext_dn_container='ntn-qd-integrated-oai-ext-dn',
+          gnb_ip_cidr='192.168.71.129/26',ext_dn_ip='192.168.71.135',ue_pdu_subnet='12.2.1.0/24')
+        upf={'Name':'/ntn-qd-integrated-oai-upf','Id':'upf-owned','owned':True,'State':{'Pid':11,'Running':True,'Health':{'Status':'healthy'}}}
+        dn={'Name':'/ntn-qd-integrated-oai-ext-dn','Id':'dn-owned','owned':True,'State':{'Pid':22,'Running':True,'Health':{'Status':'healthy'}}}
+        rule='-A POSTROUTING -s 12.2.1.0/24 -o eth0 -j SNAT --to-source 192.168.71.134'
+        forward=[{'dev':'eth0','prefsrc':'192.168.71.134'}]
+        reverse=[{'dev':'eth0','gateway':'192.168.71.134','prefsrc':'192.168.71.135'}]
+        lab=Mock();lab.preflight.return_value=([upf,dn],[]);lab.read_owner.return_value={'config_hash':'verified'}
+        lab.own_container.side_effect=lambda item:item['owned']
+        def output(argv):
+            if 'iptables' in argv:return rule
+            if 'addr' in argv:return json.dumps([{'addr_info':[{'local':'192.168.71.134'}]}])
+            return json.dumps(forward if argv[2]=='11' else reverse)
+        with patch.object(d,'CoreLab',return_value=lab),patch.object(d,'process_identity',side_effect=lambda pid:('start',str(pid))),patch.object(d,'network_inode',side_effect=lambda pid:pid+100),patch.object(d,'path_output',side_effect=output):
+            proof=d.verified_uplink_path(config,'12.2.1.2',22,('start','22'))
+            self.assertTrue(proof['snat_verified']);self.assertEqual(proof['uplink_expected_peer'],'192.168.71.134')
+            self.assertEqual(proof['original_pdu_address'],'12.2.1.2')
+            upf['owned']=False
+            with self.assertRaises(ValueError):d.verified_uplink_path(config,'12.2.1.2',22,('start','22'))
+            upf['owned']=True;reverse[0]['gateway']='192.168.71.99'
+            with self.assertRaises(ValueError):d.verified_uplink_path(config,'12.2.1.2',22,('start','22'))
+            reverse[0]['gateway']='192.168.71.134'
+            with patch.object(d,'network_inode',side_effect=[111,122,999,122]):
+                with self.assertRaises(ValueError):d.verified_uplink_path(config,'12.2.1.2',22,('start','22'))
+            lab.preflight.side_effect=ValueError('owner ID/config mismatch')
+            with self.assertRaises(ValueError):d.verified_uplink_path(config,'12.2.1.2',22,('start','22'))
+
     def test_environment_contamination_still_refused(self):
         with self.assertRaises(ValueError):
             d.selected_runtime('full','integrated-handover','case-test',{'OAI_NTN_RUN_DIR':'/tmp/original-run'})

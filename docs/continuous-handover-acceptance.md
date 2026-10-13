@@ -150,3 +150,6 @@ This validates that the requested workload ran; it does not alter the existing
 ping success or UDP loss thresholds. Heartbeat observation gaps still fail.
 The report records packet/byte totals, exact first/last times, endpoint rule,
 tolerance, actual wall rate, and actual IQ time reserved for bounded draining.
+
+
+The continuous driver verifies the owned UPF and ext-DN container IDs, core workspace/configuration ownership, live process and network namespace identities, UPF address and both routes before starting business workers. For the inherited exact UE-pool SNAT rule, the uplink receiver expects the verified UPF address while preserving the original PDU address in `business_path` in the manifest and report. Without source translation it expects the PDU address. Unexpected source translation, changed identities or routes fail verification. UDP token, direction, sequence and exact source checks remain active.

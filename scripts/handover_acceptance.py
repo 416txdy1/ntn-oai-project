@@ -6,6 +6,8 @@ Only Task8 explicitly activates real runs; all four cases report their own scope
 import argparse
 import csv
 import json
+import ipaddress
+import shlex
 import math
 import os
 from pathlib import Path
@@ -22,11 +24,69 @@ from experiment import observed_sample_rate,write_manifest
 from audit_runtime_numbers import audit_manifest
 from handover_metrics import IncrementalTail,parse_clock,ClockMap,NUMERIC,SCHEDULE,case_spec,cohort_summary,evaluate_handover
 from continuous_udp import match_events
+from core_lab import CoreLab
 from handover_plot import write_timeline
 
 
 def command(args,**kwargs):
     return subprocess.run(args,check=True,**kwargs)
+
+
+def snat_peer(rules,pdu_subnet,pdu_address,upf_address):
+    pool=ipaddress.ip_network(pdu_subnet)
+    if ipaddress.ip_address(pdu_address) not in pool:raise ValueError('PDU outside selected pool')
+    expected=['-A','POSTROUTING','-s',str(pool),'-o','eth0','-j','SNAT','--to-source',upf_address]
+    matched=0
+    for line in rules.splitlines():
+        row=shlex.split(line)
+        if not row or row[0]!='-A':continue
+        source=row[row.index('-s')+1] if '-s' in row else '0.0.0.0/0'
+        overlaps=pool.overlaps(ipaddress.ip_network(source,strict=False))
+        action=row[row.index('-j')+1] if '-j' in row else None
+        if overlaps and (row[1]=='POSTROUTING' or action in ('SNAT','MASQUERADE')):
+            if row!=expected:raise ValueError('Unexpected PDU source translation rule')
+            matched+=1
+    if matched>1:raise ValueError('Duplicate PDU translation rule')
+    return upf_address if matched else pdu_address
+
+def network_inode(pid):return Path(f'/proc/{pid}/ns/net').stat().st_ino
+
+def path_output(argv):return subprocess.check_output(argv,text=True,timeout=10)
+
+def verified_uplink_path(config,address,ext_dn_pid,ext_dn_identity):
+    lab=CoreLab(config);inventory=lab.preflight();owner=lab.read_owner()
+    upfs=[i for i in inventory[0] if lab.own_container(i) and i['Name'].lstrip('/')==config.core_project+'-oai-upf']
+    dns=[i for i in inventory[0] if lab.own_container(i) and i['Name'].lstrip('/')==config.ext_dn_container]
+    if len(upfs)!=1 or len(dns)!=1:raise ValueError('Selected owned business containers missing')
+    upf,dn=upfs[0],dns[0]
+    if any(not i['State']['Running'] or i['State'].get('Health',{}).get('Status')!='healthy' for i in (upf,dn)):
+        raise ValueError('Business path containers not healthy')
+    if dn['State']['Pid']!=ext_dn_pid or process_identity(ext_dn_pid)!=ext_dn_identity:raise ValueError('ext-DN identity changed')
+    pid=upf['State']['Pid'];identity=process_identity(pid)
+    if not identity:raise ValueError('UPF process identity unavailable')
+    inodes={str(pid):network_inode(pid),str(ext_dn_pid):network_inode(ext_dn_pid)}
+    subnet=ipaddress.ip_network(config.gnb_ip_cidr,strict=False)
+    upf_address=str(subnet.network_address+6)
+    prefix=['nsenter','-t',str(pid),'-n']
+    ips=json.loads(path_output(prefix+['ip','-j','-4','addr','show','dev','eth0']))
+    if not any(a.get('local')==upf_address for row in ips for a in row.get('addr_info',[])):
+        raise ValueError('Owned UPF address differs')
+    forward=json.loads(path_output(prefix+['ip','-j','route','get',config.ext_dn_ip]))
+    reverse=json.loads(path_output(['nsenter','-t',str(ext_dn_pid),'-n','ip','-j','route','get',address]))
+    if len(forward)!=1 or forward[0].get('dev')!='eth0' or forward[0].get('prefsrc')!=upf_address or forward[0].get('gateway'):
+        raise ValueError('Unexpected UPF ext-DN route')
+    if len(reverse)!=1 or reverse[0].get('dev')!='eth0' or reverse[0].get('gateway')!=upf_address or reverse[0].get('prefsrc')!=config.ext_dn_ip:
+        raise ValueError('Unexpected ext-DN PDU route')
+    rules=path_output(prefix+['iptables','-t','nat','-S'])
+    peer=snat_peer(rules,config.ue_pdu_subnet,address,upf_address)
+    if process_identity(pid)!=identity or process_identity(ext_dn_pid)!=ext_dn_identity or inodes!={str(pid):network_inode(pid),str(ext_dn_pid):network_inode(ext_dn_pid)}:
+        raise ValueError('Business path process/namespace changed')
+    lab.preflight()
+    if lab.read_owner()!=owner:raise ValueError('Core owner changed during path verification')
+    return {'original_pdu_address':address,'uplink_expected_peer':peer,'snat_verified':peer!=address,
+      'pdu_subnet':config.ue_pdu_subnet,'upf_address':upf_address,'ext_dn_address':config.ext_dn_ip,
+      'upf_container_id':upf['Id'],'ext_dn_container_id':dn['Id'],'config_hash':owner['config_hash'],
+      'network_inodes':inodes,'upf_process':{'pid':pid,'identity':identity}}
 
 
 def selected_runtime(case,profile,run_id,environment):
@@ -413,6 +473,10 @@ def run_acceptance(argv=None):
                     container_pid=container['State']['Pid'];container_identity=process_identity(container_pid)
                     if not container_identity:raise RuntimeError('ext-DN identity unavailable')
                     report['ext_dn_identity']={'pid':container_pid,'identity':container_identity}
+                    path_proof=verified_uplink_path(config,address,container_pid,container_identity)
+                    report['business_path']=path_proof
+                    observer.manifest['business_path']=path_proof
+                    write_manifest(manifest_path,observer.manifest)
                     command(['ip','-n',config.namespace,'route','replace',config.ext_dn_ip+'/32','dev','oaitun_ue1','src',address])
                     route=json.loads(subprocess.check_output(['ip','-n',config.namespace,'-j','route','get',config.ext_dn_ip]))
                     if not route or route[0].get('dev')!='oaitun_ue1':raise RuntimeError('UDP would bypass PDU tunnel')
@@ -423,6 +487,7 @@ def run_acceptance(argv=None):
                         ('uplink',5203,'ue','dn',address,config.ext_dn_ip),
                         ('downlink',5204,'dn','ue',config.ext_dn_ip,address)]:
                         for role,side,bind,peer in [('receiver',receiver_side,dest,source),('sender',sender_side,source,dest)]:
+                            if direction=='uplink' and role=='receiver':peer=path_proof['uplink_expected_peer']
                             name=direction+'-'+role
                             if role=='sender':
                                 receiver_events=output/(direction+'-receiver.jsonl')
