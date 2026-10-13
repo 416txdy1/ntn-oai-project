@@ -46,3 +46,11 @@ OAI 来源版本、排除项见 `vendor/source-manifest.json`。修改 OAI 请�
 QuaDRiGa 随附源码许可证要求非商业使用，完整条款见 `vendor/QuaDRiGa-LICENSE.txt`。OAI 许可证见 `vendor/OAI-LICENSE` 和归档中的 LICENSES/NOTICE；ASN1C、SIMDe 保留各自源码版权声明。不要把整个仓库误认为采用单一许可证。
 
 已知研究限制：1 秒 QD 快照不足以保证快速残余 Doppler 的采样精度；复系数线性插值中点功率不严格为 1；低速 UDP 验证不代表最大容量或完整过境稳定性。
+## 隔离伪卫星切换整合分支
+
+新增 integrated-handover / legacy-handover profile 与独立构建、core和RF资源。
+操作与持续IQ/STK时间轴验收见 [整合指南](docs/INTEGRATED_HANDOVER.md)，
+来源文件保留清单见 [来源说明](docs/INTEGRATION_SOURCES.md)，
+实际状态见 [测试记录](docs/INTEGRATION_TEST_RESULTS.md)。
+当前处于pre-live检查阶段；完整620 IQ秒与原平台最终复验尚未完成。
+原zky入口、归档、示例与既有研究限制继续保留；新分支验收通过前不宣称已可发布。

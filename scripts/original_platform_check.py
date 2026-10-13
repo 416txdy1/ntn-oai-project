@@ -72,6 +72,20 @@ def snapshot(runner=command):
       'sources':{str(p):source_snapshot(p,runner) for p in (ORIGINAL,OAI,CORE)},
       'files':{str(p):fingerprint(p) for p in PROTECTED},'containers':containers(runner),'network':network_snapshot(runner)}
 
+def validate_snapshot(data):
+    if data.get('schema')!=1 or set(data.get('sources',{}))!={str(p) for p in (ORIGINAL,OAI,CORE)}:
+        raise ValueError('Incomplete original source snapshot')
+    if set(data.get('files',{}))!={str(p) for p in PROTECTED}:raise ValueError('Incomplete protected files')
+    for item in data['files'].values():
+        if item.get('type')!='file' or not re.fullmatch('[0-9a-f]{64}',item.get('sha256','')):
+            raise ValueError('Protected regular file missing')
+    expected={str(ORIGINAL):'f30bc90a626214d227a7991d7429cf7723233f96',
+       str(OAI):'c4125d1c740181ab1f7da0e7dd1d04ed07c37670',str(CORE):'212f92fc6a2fb82b5df1e8f4ef20075e75acefb3'}
+    if any(data['sources'][p]['head']!=head for p,head in expected.items()):
+        raise ValueError('Original source revision changed')
+    return data
+
+
 def compare_snapshots(before,after):
     if before.get('schema')!=1 or after.get('schema')!=1:raise ValueError('Snapshot schema differs')
     differences=[k for k in ('sources','files','network') if before[k]!=after[k]]
@@ -217,7 +231,10 @@ class OriginalShortRun:
             while True:
                 current=container_info(json.loads(command(['docker','inspect',expected['id']]))[0])
                 require_container_identity(expected,current)
-                if current['running'] and current['health'] in (None,'healthy'):break
+                if current['running'] and current['health'] in (None,'healthy'):
+                    if started_container_ids({expected['id']:expected['running']},{expected['id']:current['running']},{expected['id']})!=[expected['id']]:
+                        raise ValueError('No verified stopped-to-running transition')
+                    break
                 if time.monotonic()>deadline or current['health']=='unhealthy':raise RuntimeError('Core health failed')
                 time.sleep(.25)
     def network_up(self):self.owner=self.manager.up()
@@ -356,17 +373,17 @@ def main(argv=None):
     try:
         target=private_destination(args.snapshot)
         if args.action=='snapshot':
-            data=snapshot();save_new(target,data)
+            data=validate_snapshot(snapshot());save_new(target,data)
             result={'passed':True,'captured_at_utc':data['captured_at_utc'],'purpose':data['purpose']}
         elif args.action=='compare':
-            before=json.loads(target.read_text());current=snapshot()
+            before=validate_snapshot(json.loads(target.read_text()));current=validate_snapshot(snapshot())
             differences=compare_snapshots(before,current)
             result={'passed':not differences,'differences':differences}
             if args.early_snapshot:
                 result['early']=compare_early(json.loads(args.early_snapshot.read_text()),current)
                 result['passed']=result['passed'] and result['early']['protected_files_match']
         else:
-            before=json.loads(target.read_text());output=target.parent/('original-short-'+args.tag)
+            before=validate_snapshot(json.loads(target.read_text()));output=target.parent/('original-short-'+args.tag)
             with SignalGuard():result=run_short(OriginalShortRun(args.tag,before,output))
             result['differences']=compare_snapshots(before,snapshot())
             if result['differences']:result['passed']=False

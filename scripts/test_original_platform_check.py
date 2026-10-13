@@ -200,4 +200,17 @@ class ConcreteBoundaryTests(unittest.TestCase):
             with self.assertRaises(ValueError):ops.restore_state()
             self.assertEqual(ops.state.read_bytes(),foreign)
 
+
+    def test_incomplete_snapshot_or_wrong_revision_refused(self):
+        files={str(p):{'type':'file','sha256':'a'*64,'mtime_ns':1} for p in protection.PROTECTED}
+        sources={str(protection.ORIGINAL):{'head':'f30bc90a626214d227a7991d7429cf7723233f96'},
+          str(protection.OAI):{'head':'c4125d1c740181ab1f7da0e7dd1d04ed07c37670'},
+          str(protection.CORE):{'head':'212f92fc6a2fb82b5df1e8f4ef20075e75acefb3'}}
+        valid={'schema':1,'files':files,'sources':sources}
+        self.assertEqual(protection.validate_snapshot(valid),valid)
+        valid['sources'][str(protection.OAI)]['head']='b'*40
+        with self.assertRaises(ValueError):protection.validate_snapshot(valid)
+        valid['files'].pop(str(protection.PROTECTED[0]))
+        with self.assertRaises(ValueError):protection.validate_snapshot(valid)
+
 if __name__=='__main__':unittest.main()

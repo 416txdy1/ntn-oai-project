@@ -15,3 +15,10 @@ core.nf_images=v2.2.1
 core.mysql_image=mysql:9.6
 example.trace_sha256=3d63d47a050f68bf670e4d298cc579c7f0f09b0550b58c849fdc0a12b2dbda18
 # No additional Git checkout is required for the supported RFsim mode; E2_AGENT is OFF.
+# Isolated handover integration source references; no original checkout is a new build target.
+integration.zky_base=70a38b5492b615498cea2332bd077c0d4f958d25
+integration.original_handover_source=f30bc90a626214d227a7991d7429cf7723233f96
+integration.long_provenance=examples/handover/provenance.json
+integration.short_provenance=examples/handover/firsthandover/provenance.json
+integration.original_oai_reference=c4125d1c740181ab1f7da0e7dd1d04ed07c37670
+integration.original_5gc_reference=212f92fc6a2fb82b5df1e8f4ef20075e75acefb3
