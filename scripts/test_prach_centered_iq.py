@@ -53,7 +53,7 @@ def main():
     driver = driver.replace('txdata[aa][prach_start + i]', 'fixture_shifted[prach_start + i]')
     driver = driver.replace('  free_channel_desc_scm(UE2gNB);', '  free(fixture_shifted);\n  free_channel_desc_scm(UE2gNB);')
     driver = driver.replace('1+(64/(N_ZC/prach_pdu.num_cs))', '(prach_pdu.num_cs == 0 ? 64 : 1+(64/(N_ZC/prach_pdu.num_cs)))')
-    driver = driver.replace('  generate_nr_prach(UE, 0, frame, slot, tx);', '  tx_lev = generate_nr_prach(UE, 0, frame, slot, tx);')
+    driver = driver.replace('  generate_nr_prach(UE, 0, frame, slot, tx);', '  printf("FIXTURE_RESTRICTED TX=%d RX=%d TXNCS=%d RXNCS=%d TXROOTS=%d RXROOTS=%d\\n", ue_prach_pdu->restricted_set,prach_config->restricted_set_config.value,ue_prach_pdu->num_cs,prach_pdu.num_cs,ue_prach_config->num_prach_fd_occasions_list[0].num_root_sequences,prach_config->num_prach_fd_occasions_list[0].num_root_sequences.value);\n  tx_lev = generate_nr_prach(UE, 0, frame, slot, tx);')
     driver = driver.replace('        //        printf(" preamble_energy', '        printf("FIXTURE_RESULT expected=%d actual=%d delay=%d energy=%d shift=%d\\n", preamble_tx,out.max_preamble,out.max_preamble_delay,out.max_preamble_energy,delay);\n        //        printf(" preamble_energy')
     (output / 'driver.c').write_text(driver)
     commands = subprocess.check_output(['ninja', '-t', 'commands', 'nr_prachsim'], cwd=build, text=True).splitlines()
@@ -103,10 +103,19 @@ def main():
             argv += ['-H']
         label = f'{len(rows):04d}-{binary}'
         text = run(argv, build, output/(label+'.log'), env)
+        geometry = next(x for x in text.splitlines() if x.startswith('FIXTURE_CONFIG'))
+        geometry = {k:int(v) for k,v in re.findall(r'(\w+)=(-?\d+)', geometry)}
+        assert geometry['Fs'] == 7680000 and geometry['FFT'] == 512 and geometry['FDD'] == 1, geometry
+        if config == 98:
+            assert geometry['format'] == 4 and geometry['NCS'] == (34 if zcz == 13 else 0), geometry
+        configured = next(x for x in text.splitlines() if x.startswith('FIXTURE_RESTRICTED'))
+        configured = {k:int(v) for k,v in re.findall(r'(\w+)=(-?\d+)', configured)}
+        assert configured['TX'] == configured['RX'] == int(restricted), configured
+        assert configured['TXNCS'] == configured['RXNCS'] and configured['TXROOTS'] == configured['RXROOTS'], configured
         records = [x for x in text.splitlines() if x.startswith('FIXTURE_RESULT')]
         assert len(records) == 1, label
         result = {k:int(v) for k,v in re.findall(r'(\w+)=(-?\d+)', records[0])}
-        result.update(binary=binary, profile=profile, config=config, zcz=zcz, restricted=restricted, argv=argv)
+        result.update(geometry=geometry, configured=configured, binary=binary, profile=profile, config=config, zcz=zcz, restricted=restricted, argv=argv)
         rows.append(result)
         (output/'results.json').write_text(json.dumps(rows, indent=2))
         return result
