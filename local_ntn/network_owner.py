@@ -34,21 +34,42 @@ def validate_owner(config, topology, marker):
         raise ValueError('Network owner marker mismatch')
 
 
-def read_marker(path):
-    info = os.lstat(path)
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0:
-        raise ValueError('Owner marker must be a root-owned regular file')
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+def marker_identity(path):
+    info=os.lstat(path)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid!=0:raise ValueError('Owner marker must be a root-owned regular file')
+    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+    try:
+        opened=os.fstat(fd);named=os.lstat(path)
+        identity=(opened.st_dev,opened.st_ino)
+        if not stat.S_ISREG(opened.st_mode) or opened.st_uid!=0 or identity!=(info.st_dev,info.st_ino) or identity!=(named.st_dev,named.st_ino):
+            raise ValueError('Marker pathname/opened identity differs')
+        return identity
+    finally:os.close(fd)
+
+def read_marker_capture(path,expected=None):
+    info=os.lstat(path)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid!=0:raise ValueError('Owner marker must be a root-owned regular file')
+    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
     with os.fdopen(fd) as stream:
-        opened=os.fstat(stream.fileno())
-        if opened.st_uid != 0 or not stat.S_ISREG(opened.st_mode):
-            raise ValueError('Invalid opened owner marker')
-        return json.load(stream)
+        opened=os.fstat(stream.fileno());identity=(opened.st_dev,opened.st_ino)
+        if not stat.S_ISREG(opened.st_mode) or opened.st_uid!=0 or identity!=(info.st_dev,info.st_ino) or (expected is not None and identity!=expected):
+            raise ValueError('Marker opened identity differs')
+        value=json.load(stream);named=os.lstat(path)
+        if not stat.S_ISREG(named.st_mode) or named.st_uid!=0 or (named.st_dev,named.st_ino)!=identity:
+            raise ValueError('Marker pathname replaced during read')
+        return value,identity
 
+def read_marker(path):
+    return read_marker_capture(path)[0]
 
-def write_marker(path, marker):
+def write_marker(path,marker,on_created=None):
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
-    with os.fdopen(fd,'w') as stream:json.dump(marker,stream)
+    with os.fdopen(fd,'w') as stream:
+        opened=os.fstat(stream.fileno());identity=(opened.st_dev,opened.st_ino)
+        if on_created:on_created(identity)
+        json.dump(marker,stream);stream.flush()
+        if marker_identity(path)!=identity:raise ValueError('Created marker was replaced')
+        return identity
 
 
 def command(argv):
@@ -58,7 +79,7 @@ def command(argv):
 
 class NetworkManager:
     def __init__(self, config, runner=command):
-        self.config=config; self.run=runner
+        self.config=config; self.run=runner; self.marker_identity=None; self.created_marker_identity=None
     def ip(self,*args):
         return json.loads(self.run(['ip',*args]))
     def inode(self):
@@ -76,14 +97,23 @@ class NetworkManager:
                 'host_addresses':self.ip('-j','-4','addr','show','dev',c.host_veth)[0]['addr_info'],
                 'peer_addresses':self.ip('-n',c.namespace,'-j','-4','addr','show','dev',c.ue_veth)[0]['addr_info'],
                 'interfaces':[d['ifname'] for d in self.ip('-n',c.namespace,'-j','link','show')]}
+    def marker_created(self,identity):
+        self.created_marker_identity=identity
+        self.marker_identity=identity
+    def checked_marker(self):
+        value,identity=read_marker_capture(self.config.owner_file,self.marker_identity)
+        if self.marker_identity is None:self.marker_identity=identity
+        return value
     def verify(self,claim=False):
         c=self.config;t=self.topology();owner=create_owner(c,t)
         if c.owner_file.exists() or c.owner_file.is_symlink():
-            validate_owner(c,t,read_marker(c.owner_file))
+            validate_owner(c,t,self.checked_marker())
         elif claim:
-            write_marker(c.owner_file,owner)
+            write_marker(c.owner_file,owner,self.marker_created)
+            validate_owner(c,t,self.checked_marker())
         else:raise ValueError('Namespace has no owner marker')
         return owner
+
     def preflight(self):
         c=self.config
         if c.owner_file.exists() or c.owner_file.is_symlink():raise ValueError('Existing owner marker refused')
@@ -125,13 +155,19 @@ class NetworkManager:
                 try:
                     if self.inode()==created_inode:self.run(['ip','netns','delete',c.namespace])
                 except (OSError,ValueError,subprocess.CalledProcessError):pass
+            if self.created_marker_identity is not None:
+                try:
+                    if marker_identity(c.owner_file)==self.created_marker_identity:c.owner_file.unlink()
+                except (OSError,ValueError):pass
             raise
     def down(self):
         c=self.config;owner=self.verify()
         # Recheck at the command boundary before deleting either object.
         validate_owner(c,self.topology(),owner)
+        if self.checked_marker()!=owner:raise ValueError('Marker changed before link deletion')
         self.run(['ip','link','delete',c.host_veth])
         if self.inode()!=owner['netns_inode']:raise ValueError('Namespace changed during down')
+        if self.checked_marker()!=owner:raise ValueError('Marker changed before namespace deletion')
         self.run(['ip','netns','delete',c.namespace])
-        if read_marker(c.owner_file)!=owner:raise ValueError('Owner marker changed during down')
+        if self.checked_marker()!=owner:raise ValueError('Owner marker changed during down')
         c.owner_file.unlink()

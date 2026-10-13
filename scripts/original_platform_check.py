@@ -162,6 +162,9 @@ def save_new(path,data):
     with os.fdopen(fd,'w') as stream:json.dump(data,stream,indent=2);stream.write('\n')
 
 
+def process_argv(pid):
+    return [v.decode() for v in Path(f'/proc/{pid}/cmdline').read_bytes().split(b'\0') if v]
+
 def launch_identity(process,executable):
     identity=process_identity(process.pid)
     if identity is None:
@@ -252,38 +255,62 @@ class OriginalShortRun:
     def has_token(self,pid):
         try:return ('OAI_ORIGINAL_CHECK_TOKEN='+self.token).encode() in Path(f'/proc/{pid}/environ').read_bytes().split(b'\0')
         except (FileNotFoundError,PermissionError,ProcessLookupError):return False
-    def remember(self,pid,identity):
+    def approved_process(self,pid,identity,kind=None):
+        if os.getpgid(pid)!=pid or os.getsid(pid)!=pid:
+            raise ValueError('Unapproved launch session/group')
+        expected={k:str((BUILD/('nr-softmodem' if k=='gnb' else 'nr-uesoftmodem')).resolve()) for k in ('gnb','ue')}
+        if identity[1] in expected.values():
+            if kind and identity[1]!=expected[kind]:raise ValueError('Wrong modem kind')
+            record={'pid':pid,'start':identity[0],'executable':identity[1]}
+        elif identity[1] in ('/usr/bin/bash','/bin/bash'):
+            argv=process_argv(pid)
+            if len(argv)!=3 or Path(argv[0]).name!='bash' or argv[1]!=str(ORIGINAL/'local_ntn/run_local.sh') or argv[2] not in expected:
+                raise ValueError('Unknown token launch shell')
+            if kind and argv[2]!=kind:raise ValueError('Wrong launch kind')
+            record={'pid':pid,'start':identity[0],'executable':identity[1],'phase':'launching','expected_executable':expected[argv[2]]}
+        else:raise ValueError('Unknown token executable')
+        current=process_identity(pid)
+        if current is None:return None
+        allowed={record['executable'],record.get('expected_executable')}
+        if current[0]!=identity[0] or current[1] not in allowed:raise ValueError('Launch identity changed while checking')
+        return record
+    def remember(self,pid,identity,launch_record=None):
         previous=self.records.get(str(pid))
-        if previous and previous['start']!=identity[0]:raise ValueError('PID reused')
-        if previous and identity[1] not in self.expected and identity[1]!=previous['executable']:
-            raise ValueError('Unknown executable transition')
-        self.records[str(pid)]={'pid':pid,'start':identity[0],'executable':identity[1]}
+        if previous:
+            if previous['start']!=identity[0]:raise ValueError('PID reused')
+            allowed={previous['executable']}
+            if previous.get('phase')=='launching':allowed.add(previous['expected_executable'])
+            if identity[1] not in allowed:raise ValueError('Unknown executable transition')
+        elif identity[1] not in self.expected and launch_record is None:
+            raise ValueError('Unknown first executable')
+        self.records[str(pid)]=launch_record or {'pid':pid,'start':identity[0],'executable':identity[1]}
     def claim_state(self,raw,state):
-        if not state or not set(state).issubset({'gnb','ue'}):
-            return False
-        for value in state.values():
-            if value.get('log') not in {str(p) for p in self.log_paths} or value.get('rate')!=1:
-                return False
+        if not state or not set(state).issubset({'gnb','ue'}):return False
+        for kind,value in state.items():
+            if value.get('log') not in {str(p) for p in self.log_paths} or value.get('rate')!=1:return False
             identity=process_identity(value['pid'])
-            if identity and (identity[0]!=value.get('start') or not self.has_token(value['pid'])):
-                raise ValueError('Foreign live state refused')
-        self.state_owned=True
-        self.claimed_state=raw
+            if identity:
+                if identity[0]!=value.get('start') or not self.has_token(value['pid']):raise ValueError('Foreign live state refused')
+                record=self.approved_process(value['pid'],identity,kind)
+                if record:self.remember(value['pid'],identity,record)
+        self.state_owned=True;self.claimed_state=raw
         return True
-
     def collect(self):
         if self.logs_claimed and self.state.exists():
-            raw=self.state.read_bytes();state=json.loads(raw)
-            self.claim_state(raw,state)
-            for value in state.values():
-                pid=value['pid'];identity=process_identity(pid)
-                if identity and self.has_token(pid) and identity[0]==value.get('start'):
-                    if identity[1] in self.expected or identity[1] in ('/usr/bin/bash','/bin/bash'):
-                        self.remember(pid,identity);self.state_owned=True
+            raw=self.state.read_bytes();self.claim_state(raw,json.loads(raw))
         for path in Path('/proc').iterdir():
-            if path.name.isdigit():
-                pid=int(path.name);identity=process_identity(pid)
-                if identity and identity[1] in self.expected and self.has_token(pid):self.remember(pid,identity)
+            if not path.name.isdigit():continue
+            pid=int(path.name);identity=process_identity(pid)
+            if not identity or not self.has_token(pid):continue
+            # The live, exact controller session owns transient prepare/network children.
+            if self.controller and self.controller_record:
+                parent=process_identity(self.controller.pid)
+                allowed={self.controller_record['executable'],self.controller_record.get('expected_executable')}
+                if parent and parent[0]==self.controller_record['start'] and parent[1] in allowed:
+                    if os.getpgid(pid)==self.controller.pid and os.getsid(pid)==self.controller.pid:continue
+            record=self.approved_process(pid,identity)
+            if record:self.remember(pid,identity,record)
+
     def start(self):
         with (self.output/'start.log').open('xb') as log:
             argv=[sys.executable,str(ORIGINAL/'local_ntn/experiment.py'),'start','--rate','1','--label',self.tag]
