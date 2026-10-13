@@ -83,6 +83,15 @@
  *
  */
 
+/* Opt-in numeric diagnostics only; never enabled for the retained zky profile. */
+static bool stk_ue_timing_diag_enabled(void)
+{
+  const char *profile = getenv("OAI_NTN_PROFILE");
+  const char *flag = getenv("OAI_NTN_TIMING_DIAG");
+  return profile && (!strcmp(profile, "integrated-handover") || !strcmp(profile, "legacy-handover"))
+         && flag && !strcmp(flag, "1");
+}
+
 static void start_process_slot_tx(void* arg) {
   notifiedFIFO_elt_t *newTx = arg;
   nr_rxtx_thread_data_t *curMsgTx = NotifiedFifoData(newTx);
@@ -221,6 +230,16 @@ static void UE_synch(void *arg) {
     } else {
       // rerun with new cell parameters and frequency-offset
       nrue_ru_set_freq(UE, ul_carrier, dl_carrier, freq_offset);
+    }
+
+    static unsigned stk_diag_sync_count = 0;
+    if (stk_ue_timing_diag_enabled() && stk_diag_sync_count < 20) {
+      ++stk_diag_sync_count;
+      LOG_I(PHY,
+            "STKUE_DIAG_SYNC sync %u initialFo %.9f measuredFo %.9f dlDoppler %.9f residualFo %.9f totalFo %.9f maxPosAcc %d\n",
+            stk_diag_sync_count, (double)UE->initial_fo, (double)freq_offset,
+            (double)UE->dl_Doppler_shift, (double)UE->freq_offset,
+            (double)(UE->dl_Doppler_shift + UE->freq_offset), UE->max_pos_acc);
     }
 
     if (get_nrUE_params()->agc) {
@@ -769,6 +788,14 @@ void *UE_thread(void *arg)
               "OAI_STK_BLEND_TIMING_ASSIST must be 0 or 1\n");
   const bool use_blend_timing=blend_assist && !strcmp(blend_assist,"1");
   double last_blend_timing_log=-1;
+  const bool stk_timing_diag = stk_ue_timing_diag_enabled();
+  unsigned stk_diag_sync = 0, stk_diag_frames = 0, stk_diag_feedback = 0;
+  if (stk_timing_diag)
+    LOG_I(PHY,
+          "STKUE_DIAG_CTRL enabled 1 maxSync 20 maxFramesPerSync 200 maxFeedbackPerSync 200 Fs %.9f contFo %d timeP %.9f timeI %.9f blendAssist %d\n",
+          (double)fp->samples_per_subframe * 1000.0, get_nrUE_params()->cont_fo_comp,
+          (double)get_nrUE_params()->time_sync_P, (double)get_nrUE_params()->time_sync_I, use_blend_timing);
+
 
   if (get_softmodem_params()->sync_ref && UE->sl_mode == 2) {
     UE->is_synchronized = 1;
@@ -934,6 +961,17 @@ void *UE_thread(void *arg)
         apply_ntn_timing_advance_and_doppler(UE, fp, abs_subframe_tx);
         ntn_targetcell = false;
       }
+      if (stk_timing_diag) {
+        ++stk_diag_sync;
+        stk_diag_frames = 0;
+        stk_diag_feedback = 0;
+        if (stk_diag_sync <= 20)
+          LOG_I(PHY,
+              "STKUE_DIAG_SYNCAPPLY sync %u syncReadTimestamp %lld Fs %.9f dlDoppler %.9f residualFo %.9f totalFo %.9f maxPosAcc %d initialShift %d\n",
+              stk_diag_sync, (long long)sync_timestamp, (double)fp->samples_per_subframe * 1000.0,
+              (double)UE->dl_Doppler_shift, (double)UE->freq_offset,
+              (double)(UE->dl_Doppler_shift + UE->freq_offset), UE->max_pos_acc, shiftForNextFrame);
+      }
       UE->timing_advance = 0;
       // We have resynchronized, maybe after RF loss so we need to purge any existing context
       memset(tx_wait_for_dlsch, 0, sizeof(tx_wait_for_dlsch));
@@ -1027,6 +1065,22 @@ void *UE_thread(void *arg)
     metadata meta = {.slot =  curMsg.proc.nr_slot_rx, .frame =  curMsg.proc.frame_rx};
     UEscopeCopyWithMetadata(UE, ueTimeDomainSamples, rxp[0] - firstSymSamp, sizeof(c16_t), 1, readBlockSize, 0, &meta);
     AssertFatal(readBlockSize == tmp, "");
+    if (stk_timing_diag && stk_diag_sync > 0 && stk_diag_sync <= 20 && stk_diag_frames < 200
+        && slot_nr == nb_slot_frame - 1) {
+      ++stk_diag_frames;
+      openair0_ntn_sync_state_t diag_state = {0};
+      const openair0_ntn_sync_status_t diag_status = nrue_ru_get_ntn_sync_state(UE, &diag_state);
+      const bool diag_ready = diag_status == OPENAIR0_NTN_SYNC_READY;
+      LOG_I(PHY,
+            "STKUE_DIAG_READ sync %u seq %u frame %d slot %d rxTimestamp %lld Fs %.9f appliedShift %d maxPosAcc %d readBlock %d status %d traceSTK %.9f delayMs %.12f driftUsS %.9f dlDoppler %.9f residualFo %.9f totalFo %.9f\n",
+            stk_diag_sync, stk_diag_frames, curMsg.proc.frame_rx, slot_nr, (long long)rx_timestamp,
+            (double)fp->samples_per_subframe * 1000.0, iq_shift_to_apply, UE->max_pos_acc, readBlockSize,
+            (int)diag_status, diag_ready ? (double)diag_state.stk_time_s : NAN,
+            diag_ready ? (double)diag_state.propagation_delay_ms : NAN,
+            diag_ready ? (double)diag_state.dl_time_drift_us_s : NAN,
+            (double)UE->dl_Doppler_shift, (double)UE->freq_offset,
+            (double)(UE->dl_Doppler_shift + UE->freq_offset));
+    }
     struct timespec current_time;
     if (clock_gettime(CLOCK_REALTIME, &current_time)) {
       LOG_E(PHY, "clock_gettime failed\n");
@@ -1081,6 +1135,14 @@ void *UE_thread(void *arg)
     nr_rxtx_thread_data_t *curMsgRx = (nr_rxtx_thread_data_t *)NotifiedFifoData(newRx);
     *curMsgRx = (nr_rxtx_thread_data_t){.proc = curMsg.proc, .UE = UE};
     int ret = UE_dl_preprocessing(UE, &curMsgRx->proc, tx_wait_for_dlsch, &curMsgRx->phy_data, &stats_printed);
+    if (stk_timing_diag && stk_diag_sync > 0 && stk_diag_sync <= 20 && stk_diag_frames < 200
+        && ret != INT_MAX && stk_diag_feedback < 200) {
+      ++stk_diag_feedback;
+      LOG_I(PHY,
+            "STKUE_DIAG_FEEDBACK sync %u seq %u feedback %u frame %d slot %d rxTimestamp %lld ret %d beforeNextShift %d maxPosAcc %d\n",
+            stk_diag_sync, stk_diag_frames, stk_diag_feedback, curMsg.proc.frame_rx, slot_nr,
+            (long long)rx_timestamp, ret, shiftForNextFrame, UE->max_pos_acc);
+    }
     if (ret != INT_MAX)
       shiftForNextFrame = ret;
     if (get_nrUE_params()->num_dl_actors > 0) {
