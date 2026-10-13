@@ -23,6 +23,7 @@ static bool enabled;
 static double rate=1., epoch, dl_reference, ul_reference, bandwidth=2000000.;
 static double extra_loss, cn_offset;
 static bool noise_enabled=true, dynamic_delay=true, dynamic_doppler=true;
+static bool timing_diag;
 static openair0_ntn_sync_state_t last_sync;
 static bool have_sync;
 static bool observed_dl;
@@ -54,6 +55,9 @@ static void init(void)
   noise_enabled=number("OAI_STK_TRACE_NOISE",1,0,1)!=0;
   dynamic_delay=number("OAI_STK_DYNAMIC_DELAY",1,0,1)!=0;
   dynamic_doppler=number("OAI_STK_DYNAMIC_DOPPLER",1,0,1)!=0;
+  const char *diag_profile=getenv("OAI_NTN_PROFILE"), *diag_flag=getenv("OAI_NTN_TIMING_DIAG");
+  timing_diag=diag_profile && (!strcmp(diag_profile,"integrated-handover") || !strcmp(diag_profile,"legacy-handover"))
+      && diag_flag && !strcmp(diag_flag,"1");
   LOG_I(HW,"STKTRACE2 interpolation=%s\n",trace.legacy_linear?"legacy-linear":trace.blend_aware?"blend-aware":"hermite");
   bool dl=false,ul=false;
   for(size_t i=0;i<trace.count;i++) {
@@ -144,6 +148,13 @@ bool update_channel_model_from_stk_trace(channel_desc_t *ch,int n,uint64_t ts)
               "STK delay does not fit sample offset\n");
   if(ch->enable_dynamic_delay && dynamic_delay)ch->channel_offset=llround(delay_samples);
   if(ch->enable_dynamic_Doppler && dynamic_doppler)ch->Doppler_phase_inc=2*M_PI*doppler/ch->sampling_rate;
+  if(timing_diag && first_actual_callback)
+    LOG_I(HW,"STKCHANNEL_EFFECTIVE %s samples=%" PRIu64 " Fs=%.9f carrierHz=%.9f model=%d descriptorDelay=%d descriptorDoppler=%d traceDelay=%d traceDoppler=%d offsetSamples=%" PRIu64 " phaseInc=%.12g effectiveDopplerHz=%.9f computedDopplerHz=%.9f computedDelaySamples=%.9f\n",
+          ch->is_uplink?"UL":"DL",ts,(double)ch->sampling_rate,(double)ch->center_freq,(int)ch->modelid,
+          ch->enable_dynamic_delay,ch->enable_dynamic_Doppler,dynamic_delay,dynamic_doppler,
+          (uint64_t)ch->channel_offset,(double)ch->Doppler_phase_inc,
+          (double)ch->Doppler_phase_inc*ch->sampling_rate/(2*M_PI),(double)doppler,(double)delay_samples);
+
   if(!ch->is_uplink) {
     pthread_mutex_lock(&lock);
     last_sync=(openair0_ntn_sync_state_t){.stk_time_s=s.time,.propagation_delay_ms=delay*1000,.synthetic_blend=s.synthetic_blend,

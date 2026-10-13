@@ -5,6 +5,7 @@
 #include "PHY/defs_nr_common.h"
 #define _GNU_SOURCE // For pthread_setname_np
 #include <pthread.h>
+#include <stdatomic.h>
 #include "executables/nr-ue-ru.h"
 #include "executables/stk_timing_assist.h"
 #include "executables/nr-uesoftmodem.h"
@@ -368,6 +369,13 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
     writeBlockSize -= dummyBlockSize;
   }
 
+  // Numeric-only diagnostics: count bounded actual write calls, never sample payloads.
+  static atomic_uint stk_diag_ul_calls;
+  unsigned stk_diag_ul_call = 0;
+  if (stk_ue_timing_diag_enabled() && atomic_load_explicit(&stk_diag_ul_calls, memory_order_relaxed) < 6000)
+    stk_diag_ul_call = atomic_fetch_add_explicit(&stk_diag_ul_calls, 1, memory_order_relaxed) + 1;
+  double stk_diag_ul_residual = NAN, stk_diag_ul_total = NAN;
+  bool stk_diag_ul_applied = false;
   // pre-compensate UL frequency offset
   if (flags != TX_BURST_INVALID && get_nrUE_params()->cont_fo_comp) {
     double ul_freq_offset = -UE->freq_offset * ((double)fp->ul_CarrierFreq / (double)fp->dl_CarrierFreq);
@@ -375,15 +383,30 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
       ul_freq_offset = -ul_freq_offset;
     else if (get_nrUE_params()->cont_fo_comp == 3) // do not consider residual DL FO for UL pre-compensation at all
       ul_freq_offset = 0;
-    for (int i = 0; i < fp->nb_antennas_tx; i++)
-      nr_fo_compensation(UE->ul_Doppler_shift + ul_freq_offset,
+    for (int i = 0; i < fp->nb_antennas_tx; i++) {
+      const double total_ul_fo = UE->ul_Doppler_shift + ul_freq_offset;
+      if (i == 0 && stk_diag_ul_call > 0 && stk_diag_ul_call <= 6000) {
+        stk_diag_ul_residual = ul_freq_offset;
+        stk_diag_ul_total = total_ul_fo;
+        stk_diag_ul_applied = true;
+      }
+      nr_fo_compensation(total_ul_fo,
                          fp->samples_per_subframe,
                          writeTimestamp,
                          txp[i],
                          txp[i],
                          writeBlockSize);
+    }
   }
 
+  if (stk_diag_ul_call > 0 && stk_diag_ul_call <= 6000 && (stk_diag_ul_call - 1) % 10 == 0)
+    LOG_I(PHY,
+          "STKUE_DIAG_ULWRITE call %u frame %d slot %d writeTimestamp %lld Fs %.9f flags %d contFo %d foApplied %d ulDoppler %.9f dlResidualFo %.9f residualULFo %.9f actualTotalULFo %.9f timingAdvance %d timingAdvanceNTN %d NTAoffset %d writeBlock %d\n",
+          stk_diag_ul_call, proc->frame_tx, proc->nr_slot_tx, (long long)writeTimestamp,
+          (double)fp->samples_per_subframe * 1000.0, flags, get_nrUE_params()->cont_fo_comp,
+          stk_diag_ul_applied, (double)UE->ul_Doppler_shift, (double)UE->freq_offset,
+          (double)stk_diag_ul_residual, (double)stk_diag_ul_total,
+          UE->timing_advance, UE->timing_advance_ntn, UE->N_TA_offset, writeBlockSize);
   int tmp = nrue_ru_write_reorder(UE, writeTimestamp, (void **)txp, writeBlockSize, fp->nb_antennas_tx, flags);
   AssertFatal(tmp == writeBlockSize, "");
 }
