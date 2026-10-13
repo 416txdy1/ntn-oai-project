@@ -107,7 +107,7 @@ def draw(rows,output,report,epoch,rate,start,end):
     rtt=value('ping_wall_rtt_ms');finite=[i for i,v in enumerate(rtt) if math.isfinite(v)]
     axes[3].errorbar([x[i] for i in finite],[rtt[i] for i in finite],
                      xerr=max(report['clock_max_iq_gap_s'].values())*(rate if rate else 1)/2,
-                     linewidth=.7,elinewidth=.4,label='ICMP wall RTT / horizontal anchor precision')
+                     fmt='.',linestyle='none',markersize=3,elinewidth=.4,label='Received ICMP mean wall RTT / horizontal anchor precision')
     axes[3].set_ylabel('Wall RTT (ms)')
     prior_id=None
     for row in rows:
