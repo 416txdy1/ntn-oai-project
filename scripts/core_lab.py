@@ -82,11 +82,16 @@ class CoreLab:
                     raise ValueError('Container name/project belongs to another workspace or deployment')
         pool=ipaddress.ip_network(self.config.gnb_ip_cidr,strict=False)
         for item in networks:
+            ipam=item.get('IPAM',{}).get('Config',[])
+            if ipam is None:ipam=[]
+            options=item.get('Options',{})
+            if options is None:options={}
+            if not isinstance(ipam,list) or not isinstance(options,dict):raise ValueError('Invalid network metadata')
             overlaps=any(pool.overlaps(ipaddress.ip_network(e['Subnet'],strict=False))
-                         for e in item.get('IPAM',{}).get('Config',[]) if e.get('Subnet') and ':' not in e['Subnet'])
+                         for e in ipam if e.get('Subnet') and ':' not in e['Subnet'])
             labels=item.get('Labels') or {}
             relevant=(item.get('Name')==project+'-net' or labels.get('com.docker.compose.project')==project
-                      or item.get('Options',{}).get('com.docker.network.bridge.name')=='ntn71' or overlaps)
+                      or options.get('com.docker.network.bridge.name')=='ntn71' or overlaps)
             if relevant and (not owner or not self.own_network(item) or item['Id'] not in owner.get('networks',[])):
                 raise ValueError('Dedicated core network/subnet conflict')
         if owner and self.resources(inventory)!={k:owner.get(k,[]) for k in ('containers','networks')}:

@@ -45,10 +45,13 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(before,(self.c.private_dir/'ue.conf').read_bytes())
     def test_builtin_network_null_ipam_does_not_block_core_preflight(self):
         self.render();lab=CoreLab(self.c)
-        builtin=[{'Id':'host','Name':'host','IPAM':{'Config':None},'Options':{}},
+        builtin=[{'Id':'host','Name':'host','IPAM':{'Config':None},'Options':None},
                  {'Id':'none','Name':'none','IPAM':{'Config':None},'Options':{}}]
         with patch.object(lab,'inventory',return_value=([],builtin)):
             self.assertEqual(lab.preflight(),([],builtin))
+        for ipam,options in (({},{}),('bad',{}),([],'bad')):
+            with patch.object(lab,'inventory',return_value=([],[dict(builtin[0],IPAM={'Config':ipam},Options=options)])):
+                with self.assertRaises(ValueError):lab.preflight()
         conflict={'Id':'foreign','Name':'foreign','IPAM':{'Config':[{'Subnet':'192.168.71.128/26'}]},'Options':{}}
         with patch.object(lab,'inventory',return_value=([],builtin+[conflict])):
             with self.assertRaises(ValueError):lab.preflight()
