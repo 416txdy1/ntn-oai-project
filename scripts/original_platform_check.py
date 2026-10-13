@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'local_ntn'))
-from network_owner import NetworkManager
+from network_owner import NetworkManager,namespace_inventory
 from run_state import process_identity,stop_owned
 ORIGINAL=Path('/mnt/d/实验室学习工作/杂活/雄安/OAI调研')
 OAI=Path('/home/kayoko/OAI/openairinterface5g')
@@ -75,7 +75,7 @@ def containers(runner=command):
       for i in [container_info(json.loads(runner(['docker','inspect',identifier]))[0])]}
 
 def network_snapshot(runner=command):
-    return {'namespaces':sorted(n['name'] for n in json.loads(runner(['ip','-j','netns','list']))),
+    return {'namespaces':sorted(n['name'] for n in namespace_inventory(runner(['ip','-j','netns','list']))),
       'rf_links':{n['ifname']:n['ifindex'] for n in json.loads(runner(['ip','-d','-j','link','show']))
       if n['ifname'] in ('oai-stk-host','oai-stk-peer','ntn-qd-host','ntn-qd-peer')},
       'markers':{str(p):fingerprint(p) for p in (Path('/run/oai-stk-ue.owner.json'),Path('/run/ntn-qd-ue.owner.json'))}}
