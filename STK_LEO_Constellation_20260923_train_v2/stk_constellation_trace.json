@@ -1,0 +1,36 @@
+{
+  "scenario": "C:\\Users\\WSZ\\.codex\\visualizations\\2026\\07\\24\\019f9209-937f-7c50-8691-be0521d4eebc\\STK_LEO_Constellation_20260923_train_v2\\OAI_LEO_Constellation.sc",
+  "manifest": "C:\\Users\\WSZ\\.codex\\visualizations\\2026\\07\\24\\019f9209-937f-7c50-8691-be0521d4eebc\\STK_LEO_Constellation_20260923_train_v2\\constellation_manifest.json",
+  "start": 7400.0,
+  "stop": 12000.0,
+  "step": 1.0,
+  "rows": 4601,
+  "satellites": [
+    "OAI_LEO_P01_S01",
+    "OAI_LEO_P01_S02",
+    "OAI_LEO_P01_S03",
+    "OAI_LEO_P01_S04",
+    "OAI_LEO_P01_S05",
+    "OAI_LEO_P01_S06"
+  ],
+  "switch_count": 7,
+  "valid_dl_ul": [
+    0,
+    0
+  ],
+  "schedule": "C:\\Users\\WSZ\\.codex\\visualizations\\2026\\07\\24\\019f9209-937f-7c50-8691-be0521d4eebc\\STK_LEO_Constellation_20260923_train_v2\\satellite_schedule.csv",
+  "acquire_elevation_deg": 10.0,
+  "release_elevation_deg": 5.0,
+  "min_dwell_s": 30.0,
+  "gnb_ecef_m": [
+    -2176831.540396419,
+    4387441.71613672,
+    4071933.940179984
+  ],
+  "ue_ecef_m": [
+    -2176831.540396419,
+    4387441.71613672,
+    4071933.940179984
+  ],
+  "model": "selected in-view satellite; STK link budgets; RFsim IQ-clock replay"
+}

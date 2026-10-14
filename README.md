@@ -13,6 +13,7 @@
 | `quadriga/oai/` | QD C reader/adapter 的唯一维护入口 |
 | `quadriga/matlab/` | STK→QD 转换、归一化及 FDD 导出脚本 |
 | `examples/fdd-pass/` | 已验算的 362 快照 trace 与 DL/UL bundle |
+| `STK_LEO_Constellation_20260923_train_v2/` | 保存的 STK 场景、通信对象及轨迹来源；见 [场景说明](docs/STK_SCENE.md) |
 | `configs/core/` | 无凭据的 5GC、UE 和数据库表结构模板 |
 | `scripts/` | 解包、构建、初始化、核心网管理和回归入口 |
 | `.runtime/` | 本地解包源码、构建目录、工具；自动生成，不提交 |
@@ -24,11 +25,15 @@
 
 ## 快速开始
 
+Windows 用户先按下面步骤初始化 WSL 项目；之后可从 PowerShell 调用已配置的运行副本，见 [Windows/WSL 运行入口](docs/WINDOWS_WSL_RUN.md)。
+
 将工作目录放在 WSL 的 Linux 文件系统中（例如 `~/ntn-oai-project`），避免在 `/mnt/c`、`/mnt/e` 编译大量 ASN.1 源码。
 
 ```bash
 bash scripts/install_deps.sh
 bash scripts/build.sh
+python3 scripts/check_delivery.py
+bash scripts/test.sh
 python3 scripts/init_lab.py
 source scripts/env.sh
 bash scripts/core.sh up

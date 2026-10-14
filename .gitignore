@@ -41,3 +41,11 @@ Desktop.ini
 # Generated single-repository runtime and private lab state
 .runtime/
 .private/
+
+# Local planning evidence and STK-generated UI/log files (tracked history stays tracked)
+.planning/
+local_ntn/LogFiles/
+local_ntn/Units/
+STK_LEO_Constellation_20260923_train_v2/LogFiles/
+STK_LEO_Constellation_20260923_train_v2/*.wsp
+STK_LEO_Constellation_20260923_train_v2/*.wsptb

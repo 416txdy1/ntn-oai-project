@@ -6,5 +6,5 @@ sudo apt-get install -y build-essential cmake ninja-build autoconf automake libt
   flex bison python3 python3-yaml libssl-dev libsctp-dev libconfig-dev libfftw3-dev \
   libblas-dev liblapack-dev liblapacke-dev libgnutls28-dev libgcrypt20-dev zlib1g-dev \
   libelf-dev libdw-dev libunwind-dev libyaml-cpp-dev libboost-all-dev libreadline-dev \
-  iproute2 iputils-ping
+  iproute2 iputils-ping rsync
 # Docker Engine 和 Compose v2 由管理员预先安装；本脚本不修改 Docker 配置。
