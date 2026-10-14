@@ -22,7 +22,9 @@ def good_report(case='full'):
     qd=case != 'legacy'
     counters=dict(sent=1000, received=1000, packets=1000, lost_packets=0,
                   definite_sent=1000, loss_upper_bound=0.0,
-                  observation_ok=True)
+                  observation_ok=True,timely_deadline_wall_ns=m.DEADLINE_NS,
+                  timely_observation_ok=True,timely_unresolved_deadlines=0,timely_definite_failed=0,
+                  timely_boundary_ambiguous_failed=0,timely_failure_upper_bound=0.0)
     workload=dict(configured_wall_bits_per_second=100000,actual_offered_wall_bits_per_second=100000,
                   offered_wall_interval_s=79.92,sender_packets=1000,sender_bytes=1000000,payload_bytes=1000,
                   interval_payload_bytes=999000,first_send_monotonic_ns=1000000000,last_send_monotonic_ns=80920000000,
@@ -39,7 +41,7 @@ def good_report(case='full'):
                 business_iq_interval_s=[11,spec['duration_iq_s']-5],
                 iq_end_stk_s={'gnb':spec['trace_interval_s'][0]+spec['rate']*spec['duration_iq_s'],
                               'ue':spec['trace_interval_s'][0]+spec['rate']*spec['duration_iq_s']},
-                pdu_address_changes=0, pbch_errors=0, rrc_idle=0, reaccess_count=0,
+                pdu_address_changes=0, pbch_errors=0, pbch_attribution=dict(total=0,in_case=0,terminal_outside=0,boundary_ambiguous=0,unattributed=0,case_errors=0), rrc_idle=0, reaccess_count=0,
                 numeric_audit_ok=True, clock_observation_ok=True, worker_observation_ok=True, stop_exit=0,
                 ping=copy.deepcopy(counters), udp={'uplink':copy.deepcopy(udp_counters),'downlink':copy.deepcopy(udp_counters)},
                 windows=[dict(complete_stk_s=x, start_stk_s=x-5, end_stk_s=x+5,
@@ -206,6 +208,99 @@ class TailTests(unittest.TestCase):
             self.assertEqual(tail.read_lines(),[])
             path.rename(path.with_suffix('.old'));path.write_text('replacement\n')
             with self.assertRaises(ValueError):tail.read_lines()
+
+
+class ServiceBoundaryTests(unittest.TestCase):
+    def packet(self,seq,latency_ns,lo=.2,hi=.3):
+        ns=seq*1_000_000_000
+        return dict(sequence=seq,send_ns=ns,receive_ns=None if latency_ns is None else ns+latency_ns,
+                    received=latency_ns is not None,bytes=100,
+                    send=dict(iq_bounds_s=[lo,hi],stk_bounds_s=[8200+lo,8200+hi]))
+
+    def test_wall_deadline_exact_boundary_late_preserves_eventual_loss(self):
+        packets=[self.packet(1,m.DEADLINE_NS),self.packet(2,m.DEADLINE_NS+1)]
+        result=m.timely_summary(packets,0,1,20_000_000_000)
+        self.assertEqual(result['timely_definite_failed'],1)
+        self.assertEqual(result['timely_failure_upper_bound'],.5)
+        self.assertEqual(m.cohort_summary(packets,0,1)['lost_packets'],0)
+        self.assertTrue(result['service_degraded'])
+
+    def test_ambiguity_missing_and_unresolved_deadline(self):
+        packets=[self.packet(1,1),self.packet(2,m.DEADLINE_NS+1,-.1,.1),self.packet(3,None)]
+        result=m.timely_summary(packets,0,1,20_000_000_000)
+        self.assertEqual(result['timely_failure_upper_bound'],2/3)
+        self.assertEqual(result['timely_failure_lower_bound'],1/3)
+        unresolved=m.timely_summary([self.packet(5,None)],0,1,6_000_000_000)
+        self.assertFalse(unresolved['timely_observation_ok'])
+        self.assertEqual(unresolved['timely_unresolved_deadlines'],1)
+
+    def test_quantiles_censoring_and_queue_gate_red_green(self):
+        packets=[self.packet(i,v*1_000_000) for i,v in enumerate([10,20,30,40],1)]
+        packets.append(self.packet(5,None))
+        result=m.timely_summary(packets,0,1,20_000_000_000)
+        self.assertEqual([result[k] for k in ('wall_latency_ms_p50','wall_latency_ms_p95','wall_latency_ms_max')],[20,40,40])
+        self.assertEqual(result['latency_received_population'],4)
+        self.assertIn('censored',result['latency_population'])
+        report=good_report();value=report['windows'][0]['udp']['uplink']
+        value.update(timely_definite_failed=1000,timely_failure_upper_bound=1.0)
+        self.assertEqual(value['lost_packets'],0)
+        self.assertTrue(any('timely delivery' in reason for reason in m.evaluate_handover(report)))
+        value.update(timely_definite_failed=0,timely_failure_upper_bound=0.0)
+        self.assertEqual(m.evaluate_handover(report),[])
+
+    def test_unique_blackout_endpoints_no_intentional_drain_and_uncertainty(self):
+        mapper=m.ClockMap([anchor(i*1_000_000_000,i*1000) for i in range(11)],8200,1,1000,max_iq_gap=1)
+        packets=[self.packet(1,0),self.packet(2,0)]
+        packets[0]['receive_ns']=2_000_000_000;packets[1]['receive_ns']=8_000_000_000
+        packets.append({**packets[0],'receive_ns':5_000_000_000})
+        result=m.arrival_blackout(packets,mapper,1_000_000_000,9_000_000_000)
+        self.assertEqual(result['max_arrival_blackout_wall_s_upper'],6)
+        empty=m.arrival_blackout([],mapper,1_000_000_000,9_000_000_000)
+        self.assertEqual(empty['max_arrival_blackout_wall_s_lower'],8)
+        window=m.arrival_blackout(packets,mapper,1_000_000_000,9_000_000_000,2.5,7.5)
+        self.assertEqual(window['max_arrival_blackout_wall_s_lower'],4)
+        self.assertEqual(window['max_arrival_blackout_wall_s_upper'],6)
+
+    def test_duplicate_out_of_order_arrivals_do_not_repair_lateness(self):
+        sends=[dict(event='send',sequence=i,send_ns=i*1_000_000_000,bytes=100) for i in (1,2)]
+        receives=[dict(event='receive',sequence=i,send_ns=i*1_000_000_000,monotonic_ns=ns,receive_ns=ns,bytes=100)
+                  for i,ns in [(2,9_000_000_000),(1,10_000_000_000),(1,11_000_000_000)]]
+        matched=u.match_events(sends,receives,m.DEADLINE_NS,20_000_000_000)
+        self.assertEqual(matched['duplicates'],1)
+        for row in matched['packets']:row['send']={'iq_bounds_s':[.2,.3]}
+        self.assertEqual(m.timely_summary(matched['packets'],0,1,20_000_000_000)['timely_definite_failed'],2)
+
+
+class PbchNativeTests(unittest.TestCase):
+    def line(self,job,begin,end,fs=1000,valid=1):
+        return ('Error decoding PBCH! '
+                f'STKUE_PBCH_FAILURE job={job*14+5} Fs={fs} native_begin={begin} native_end={end} '
+                f'nominal=1 delta=-4 span_valid={valid} mono_ns=100 tracker=1 total_fo=-37350 first_ts=0 slot_job={job} symbol=5 symbols_per_slot=14')
+
+    def test_native_classification(self):
+        events=[m.parse_pbch_failure(self.line(*args)) for args in [(1,10,20),(2,70001,70010),(3,69990,70000),(4,69999,70001),(5,70000,70010)]]
+        result=m.classify_pbch(events,1000,70)
+        self.assertEqual([result[k] for k in ('total','in_case','terminal_outside','boundary_ambiguous','case_errors')],[5,2,1,2,4])
+
+    def test_unattributed_failures(self):
+        lines=['Error decoding PBCH!',self.line(1,10,20,valid=0),self.line(2,70001,70010,fs=2000),self.line(3,70001,70010),self.line(3,70001,70010),self.line(4,70001,70010)+' Fs=1000']
+        events=[m.parse_pbch_failure(line) for line in lines]
+        events.append(m.parse_pbch_failure(self.line(5,70001,70010),partial=True))
+        result=m.classify_pbch(events,1000,70)
+        self.assertEqual(result['unattributed'],len(events));self.assertEqual(result['terminal_outside'],0)
+
+
+    def test_actual_identity_cp_and_first_sample_domain(self):
+        line=self.line(1,100010,100020).replace('first_ts=0','first_ts=100000')
+        self.assertTrue(m.parse_pbch_failure(line)['attributed'])
+        ext=line.replace('job=19 ','job=17 ').replace('symbols_per_slot=14','symbols_per_slot=12')
+        self.assertTrue(m.parse_pbch_failure(ext)['attributed'])
+        for wrong in (line.replace('slot_job=1','slot_job=2'),line.replace('symbol=5','symbol=14'),
+                      line.replace('first_ts=100000','first_ts=100030'),line+' extra=1',
+                      line.replace('job=19 ','job=18446744073709551616 ')):
+            self.assertFalse(m.parse_pbch_failure(wrong)['attributed'])
+        report=good_report();report['pbch_attribution']['terminal_outside']=-1
+        self.assertTrue(m.evaluate_handover(report))
 
 
 if __name__=='__main__':unittest.main()

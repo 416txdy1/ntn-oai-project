@@ -297,4 +297,42 @@ class ScientificTimelineTests(unittest.TestCase):
             self.assertTrue((Path(directory)/'timeline.png').stat().st_size>1000)
             self.assertTrue((Path(directory)/'timeline.svg').is_file())
 
+class FinalPbchDrainTests(unittest.TestCase):
+    def test_final_tail_and_partial_failure(self):
+        from handover_metrics import classify_pbch
+        from test_handover_metrics import PbchNativeTests
+        fixture=PbchNativeTests()
+        with tempfile.TemporaryDirectory() as directory:
+            gnb=Path(directory)/'gnb';ue=Path(directory)/'ue';gnb.write_text('');ue.write_text('')
+            observer=d.Observer(dict(logs={'gnb':gnb,'ue':ue},sample_rate_hz=1000,epoch=8200,rate=1))
+            observer.update()
+            with ue.open('a') as stream:stream.write(fixture.line(1,10,20)+'\n')
+            observer.update()
+            with ue.open('a') as stream:
+                stream.write(fixture.line(2,70001,70010)+'\n')
+                stream.write('Error decoding PBCH! STKUE_PBCH_FAILURE job=3')
+            observer.finish();result=classify_pbch(observer.pbch_events,1000,70)
+            self.assertEqual([result[k] for k in ('total','in_case','terminal_outside','unattributed')],[3,1,1,1])
+            observer.finish();self.assertEqual(len(observer.pbch_events),3)
+
+
+    def test_failure_attribution_is_batch_independent_and_truncated_prefix_fails(self):
+        from handover_metrics import classify_pbch
+        from test_handover_metrics import PbchNativeTests
+        lines=[PbchNativeTests().line(1,10,20),PbchNativeTests().line(2,70001,70010),
+               PbchNativeTests().line(3,69999,70001)]
+        results=[]
+        for incremental in (False,True):
+            with tempfile.TemporaryDirectory() as directory:
+                gnb=Path(directory)/'gnb';ue=Path(directory)/'ue';gnb.write_text('');ue.write_text('')
+                observer=d.Observer(dict(logs={'gnb':gnb,'ue':ue},sample_rate_hz=1000,epoch=8200,rate=1))
+                for line in lines:
+                    with ue.open('a') as stream:stream.write(line+'\n')
+                    if incremental:observer.update()
+                observer.finish();results.append(classify_pbch(observer.pbch_events,1000,70))
+                with ue.open('a') as stream:stream.write('Error decod')
+                with self.assertRaises(ValueError):observer.finish()
+        self.assertEqual(results[0],results[1])
+
+
 if __name__=='__main__':unittest.main()

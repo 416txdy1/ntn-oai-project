@@ -10,6 +10,113 @@ NUMERIC = re.compile(r'STKTRACE2 (UL|DL) IQ=([\d.]+) STK=([\d.]+) delay=([\d.]+)
 SCHEDULE = re.compile(r'STKSCHEDULE (UL|DL) IQ=([\d.]+) STK=([\d.]+) satellite_id=(\S+) elevation_deg=([-\d.]+) visible=(\d+) switched=(\d+) phase=(\S+) previous=(.*?) next=(.*?) samples=(\d+)')
 
 
+DEADLINE_NS = 5_000_000_000
+PBCH_FAILURE = re.compile(
+    r'STKUE_PBCH_FAILURE job=(\d+) Fs=([-+\d.eE]+) native_begin=(\d+) native_end=(\d+) '
+    r'nominal=(\d+) delta=(-?\d+) span_valid=([01]) mono_ns=(\d+) tracker=([01]) '
+    r'total_fo=([-+\d.eE]+) first_ts=(\d+) slot_job=(\d+) symbol=(\d+) symbols_per_slot=(\d+)(?:\s|$)')
+
+
+def parse_pbch_failure(line, partial=False):
+    legacy=line.count('Error decoding PBCH'); markers=line.count('STKUE_PBCH_FAILURE')
+    if not legacy and not markers:return None
+    event=dict(count=max(legacy,markers,1),legacy_count=legacy,attributed=False)
+    match=PBCH_FAILURE.search(line)
+    if partial or legacy!=1 or markers!=1 or not match or line[match.end():].strip():return event
+    names=('job','fs','native_begin','native_end','nominal','delta','span_valid','mono_ns','tracker','total_fo','first_ts','slot_job','symbol','symbols_per_slot')
+    values=match.groups()
+    try:
+        event.update({key:float(value) if key in ('fs','total_fo') else int(value) for key,value in zip(names,values)})
+        wide=('job','native_begin','native_end','nominal','mono_ns','first_ts','slot_job')
+        event['attributed']=(all(0<=event[k]<=2**64-1 for k in wide)
+            and event['mono_ns']>0 and math.isfinite(event['fs']) and event['fs']>0
+            and math.isfinite(event['total_fo']) and event['span_valid']==1
+            and event['first_ts']<=event['native_begin']<event['native_end']
+            and event['slot_job']>0 and event['symbols_per_slot'] in (12,14)
+            and 0<=event['symbol']<event['symbols_per_slot']
+            and event['job']==event['slot_job']*event['symbols_per_slot']+event['symbol'])
+    except (ValueError,OverflowError):pass
+    return event
+
+
+def classify_pbch(events,fs,duration):
+    endpoint=fs*duration
+    if not math.isfinite(endpoint) or endpoint!=int(endpoint):raise ValueError('noninteger RF endpoint')
+    jobs={}
+    for event in events:
+        if event.get('attributed'):jobs[event['job']]=jobs.get(event['job'],0)+1
+    result=dict(total=0,legacy_total=0,in_case=0,terminal_outside=0,boundary_ambiguous=0,unattributed=0,
+                endpoint_samples=int(endpoint),interval_rule='closed RF case; half-open input spans',events=[])
+    for original in events:
+        event=dict(original);count=event['count']
+        if not event.get('attributed') or event['fs']!=fs or jobs.get(event.get('job'),0)!=1:
+            kind='unattributed'
+        elif event['native_end']<=endpoint:kind='in_case'
+        elif event['native_begin']>endpoint:kind='terminal_outside'
+        else:kind='boundary_ambiguous'
+        event['classification']=kind;result['events'].append(event)
+        result[kind]+=count;result['total']+=count;result['legacy_total']+=event['legacy_count']
+    result['case_errors']=result['in_case']+result['boundary_ambiguous']+result['unattributed']
+    return result
+
+
+def timely_summary(packets,start,end,drain_ns,axis='iq'):
+    if end<=start:raise ValueError('empty timely cohort')
+    definite=[];ambiguous=[]
+    for packet in packets:
+        lo,hi=packet['send'][axis+'_bounds_s']
+        if lo>=start and hi<=end:definite.append(packet)
+        elif hi>=start and lo<=end:ambiguous.append(packet)
+    def bad(p):return not p['received'] or p['receive_ns']>p['send_ns']+DEADLINE_NS
+    unresolved=sum(drain_ns<p['send_ns']+DEADLINE_NS for p in definite+ambiguous)
+    bd=sum(bad(p) for p in definite);ba=sum(bad(p) for p in ambiguous)
+    denominator=len(definite)+ba
+    received=[p for p in definite if p['received']]
+    latency=sorted((p['receive_ns']-p['send_ns'])/1e6 for p in received)
+    if any(v<0 or not math.isfinite(v) for v in latency):raise ValueError('invalid service latency')
+    quant=lambda fraction:latency[max(0,math.ceil(fraction*len(latency))-1)] if latency else None
+    return dict(timely_deadline_wall_ns=DEADLINE_NS,timely_definite_failed=bd,
+        timely_boundary_ambiguous_failed=ba,timely_unresolved_deadlines=unresolved,
+        timely_failure_upper_bound=(bd+ba)/denominator if denominator else None,
+        timely_failure_lower_bound=bd/(len(definite)+len(ambiguous)) if definite or ambiguous else None,
+        timely_observation_ok=bool(definite) and unresolved==0,
+        service_degraded=bool(bd or ba or unresolved),latency_received_population=len(received),
+        latency_population='definite senders with eventual receipt; missing are right-censored',
+        latency_quantile_method='empirical nearest rank ceil(p*n)-1',
+        wall_latency_ms_p50=quant(.5),wall_latency_ms_p95=quant(.95),
+        wall_latency_ms_max=latency[-1] if latency else None)
+
+
+def arrival_blackout(packets,mapper,active_begin_ns,active_end_ns,start=None,end=None,axis='iq'):
+    if active_end_ns<=active_begin_ns:raise ValueError('empty active service interval')
+    def edge(value):
+        iq=(value-mapper.epoch)/mapper.rate if axis=='stk' and mapper.rate else value
+        if axis=='stk' and not mapper.rate:raise ValueError('static STK blackout has no advancing axis')
+        sample=iq*mapper.fs
+        for a,b in zip(mapper.anchors,mapper.anchors[1:]):
+            if a['samples']<=sample<=b['samples']:return a['monotonic_ns'],b['monotonic_ns']
+        raise ValueError('blackout boundary lacks physical brackets')
+    if start is None:possible=guaranteed=(active_begin_ns,active_end_ns)
+    else:
+        left,right=edge(start),edge(end)
+        possible=(max(active_begin_ns,left[0]),min(active_end_ns,right[1]))
+        guaranteed=(max(active_begin_ns,left[1]),min(active_end_ns,right[0]))
+    first={}
+    for p in packets:
+        if p['received'] and p['send_ns']<=active_end_ns:
+            first[p['sequence']]=min(first.get(p['sequence'],p['receive_ns']),p['receive_ns'])
+    arrivals=sorted(set(first.values()))
+    def maximum(interval):
+        lo,hi=interval
+        if hi<=lo:return None
+        values=[lo]+[ns for ns in arrivals if lo<ns<hi]+[hi]
+        return max(b-a for a,b in zip(values,values[1:]))/1e9
+    return dict(max_arrival_blackout_wall_s_lower=maximum(guaranteed),
+        max_arrival_blackout_wall_s_upper=maximum(possible),
+        arrival_blackout_guaranteed_wall_ns=list(guaranteed),arrival_blackout_possible_wall_ns=list(possible),
+        arrival_blackout_unique_receipts=True,arrival_blackout_excludes_intentional_drain=True)
+
+
 def case_spec(case):
     if case not in ('full','firsthandover','static','legacy'):
         raise ValueError('unknown acceptance case')
@@ -176,6 +283,10 @@ def evaluate_handover(report):
         else:
             require(report['pdu_ready_stk_s']<8239,'PDU not ready before first window')
             require(report['traffic_ready_stk_s']<8239,'business not ready before first window')
+        attribution=report['pbch_attribution']
+        require(all(type(attribution[k]) is int and attribution[k]>=0 for k in ('total','in_case','terminal_outside','boundary_ambiguous','unattributed','case_errors')),'invalid PBCH attribution counts')
+        require(attribution['total']==sum(attribution[k] for k in ('in_case','terminal_outside','boundary_ambiguous','unattributed')),'PBCH counts do not reconcile')
+        require(report['pbch_errors']==attribution['case_errors']==sum(attribution[k] for k in ('in_case','boundary_ambiguous','unattributed')),'PBCH case count mismatch')
         for field in ('pdu_address_changes','pbch_errors','rrc_idle','reaccess_count'):
             require(report[field]==0,field+' is nonzero')
         for field in ('numeric_audit_ok','clock_observation_ok','worker_observation_ok'):
@@ -209,6 +320,15 @@ def evaluate_handover(report):
             loss=value['loss_upper_bound']
             require(isinstance(loss,(int,float)) and math.isfinite(loss) and 0<=loss<=.01,label+' conservative loss exceeds1%')
             require(value['lost_packets']==value['sent']-value['received'],label+' inconsistent final loss')
+            require(value['timely_deadline_wall_ns']==DEADLINE_NS,label+' wrong wall deadline')
+            require(value['timely_observation_ok'] is True and value['timely_unresolved_deadlines']==0,label+' unresolved timely evidence')
+            bad=value['timely_definite_failed'];ambiguous_bad=value['timely_boundary_ambiguous_failed']
+            require(isinstance(bad,int) and 0<=bad<=value['sent'] and isinstance(ambiguous_bad,int)
+                    and 0<=ambiguous_bad<=value.get('boundary_ambiguous_sent',0),label+' invalid timely counts')
+            timely=(bad+ambiguous_bad)/(value['sent']+ambiguous_bad) if value['sent']+ambiguous_bad else None
+            require(timely is not None and abs(value['timely_failure_upper_bound']-timely)<1e-12,label+' unsubstantiated timely bound')
+            require(timely is not None and 0<=timely<=.01,label+' timely delivery exceeds1%')
+
             ambiguous_missing=value.get('boundary_ambiguous_missing',0)
             require(isinstance(ambiguous_missing,int) and ambiguous_missing>=0,label+' invalid ambiguous missing count')
             certain=value['definite_sent']

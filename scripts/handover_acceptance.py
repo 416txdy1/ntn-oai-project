@@ -22,7 +22,7 @@ from runtime_config import resolve_runtime
 from run_state import process_identity,read_state,matches
 from experiment import observed_sample_rate,write_manifest
 from audit_runtime_numbers import audit_manifest
-from handover_metrics import IncrementalTail,parse_clock,parse_channel_start,validate_channel_start,ClockMap,NUMERIC,SCHEDULE,case_spec,cohort_summary,evaluate_handover
+from handover_metrics import IncrementalTail,parse_clock,parse_channel_start,validate_channel_start,ClockMap,NUMERIC,SCHEDULE,case_spec,cohort_summary,evaluate_handover,parse_pbch_failure,classify_pbch,timely_summary,arrival_blackout
 from continuous_udp import match_events
 from core_lab import CoreLab
 from handover_plot import write_timeline
@@ -181,7 +181,7 @@ class Observer:
         self.numbers={side:[] for side in ('gnb','ue')}
         self.schedules={side:[] for side in ('gnb','ue')}
         self.startup={side:[] for side in ('gnb','ue')}
-        self.pbch_errors=0;self.rrc_idle=0;self.reaccess_count=0;self.initial_access=False
+        self.pbch_errors=0;self.pbch_events=[];self.rrc_idle=0;self.reaccess_count=0;self.initial_access=False
         self.qd_loaded={side:0 for side in ('gnb','ue')}
         self.fs=manifest['sample_rate_hz']
 
@@ -219,7 +219,10 @@ class Observer:
                     self.schedules[side].append(dict(direction=values[0],iq_s=float(values[1]),stk_s=float(values[2]),
                         satellite_id=values[3],phase=values[7],switched=int(values[6]),samples=int(values[10])))
                 self.qd_loaded[side]+=int('QDCHANNEL1 loaded' in line)
-                self.pbch_errors+=int('Error decoding PBCH' in line)
+                failure=parse_pbch_failure(line)
+                if failure:
+                    self.pbch_events.append(failure)
+                    self.pbch_errors+=failure['count']
                 self.rrc_idle+=int(self.initial_access and any(marker in line for marker in ('RRC_IDLE','RRC IDLE','RRC moved into IDLE state','going to IDLE','Go to IDLE.')))
                 if side=='ue':
                     if 'PDU Session Establishment Accept' in line:self.initial_access=True
@@ -233,6 +236,18 @@ class Observer:
             self.fs=seen
             for rows in self.anchors.values():
                 if any(a['sampling_rate']!=seen for a in rows):raise ValueError('anchor/startup Fs mismatch')
+
+    def finish(self):
+        # Owned modem stop has completed: consume all final complete lines once.
+        self.update()
+        unknown_partial=False
+        for tail in self.tails.values():
+            partial=tail.partial.decode('utf-8',errors='replace')
+            event=parse_pbch_failure(partial,partial=True)
+            if event:self.pbch_events.append(event);self.pbch_errors+=event['count']
+            elif partial.strip():unknown_partial=True
+            tail.partial=b''
+        if unknown_partial:raise ValueError('unfinished modem log line after owned stop')
 
     def progress(self):
         return {side:rows[-1]['samples']/self.fs if rows and self.fs else 0 for side,rows in self.anchors.items()}
@@ -362,6 +377,10 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
     fs=observer.fs
     if fs is None:raise ValueError('missing both actual startup sample rates')
     spec=case_spec(report['case'])
+    failures=getattr(observer,'pbch_events',None)
+    if failures is None:
+        failures=[dict(count=observer.pbch_errors,legacy_count=observer.pbch_errors,attributed=False)] if observer.pbch_errors else []
+    attribution=classify_pbch(failures,fs,spec['duration_iq_s'])
     starts={side:validate_channel_start(observer.channel_starts[side],observer.anchors[side],observer.numbers[side],observer.schedules[side],
         direction='UL' if side=='gnb' else 'DL',fs=fs,epoch=observer.manifest['epoch'],rate=observer.manifest['rate'],duration=spec['duration_iq_s']) for side in ('gnb','ue')}
     maps={side:observer.mapper(side) for side in ('gnb','ue')}
@@ -406,7 +425,7 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
                   traffic_ready_stk_s=max(max(p['stk_bounds_s']) for p in traffic),
                   pdu_ready_iq_s=max(max(p['iq_bounds_s']) for p in pdu),
                   traffic_ready_iq_s=max(max(p['iq_bounds_s']) for p in traffic),business_iq_interval_s=[start,end],
-                  pbch_errors=observer.pbch_errors,rrc_idle=observer.rrc_idle,reaccess_count=observer.reaccess_count,
+                  pbch_errors=attribution['case_errors'],pbch_attribution=attribution,rrc_idle=observer.rrc_idle,reaccess_count=observer.reaccess_count,
                   clock_observation_ok=True,worker_observation_ok=True,
                   offered_wall_bits_per_second=100000,
                   measurement_clock='CLOCK_MONOTONIC',clock_max_iq_gap_s={side:mapper.max_iq_gap for side,mapper in maps.items()},
@@ -415,10 +434,15 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
                   readiness=readiness,qd_loaded=observer.qd_loaded)
     elapsed_wall=(traffic_stop_ns-readiness['traffic_ns'])/1e9
     report['ping']=cohort_summary(probes['ping']['packets'],0,case_spec(report['case'])['duration_iq_s'],wall_interval_s=elapsed_wall)
+    report['ping'].update(timely_summary(probes['ping']['packets'],0,spec['duration_iq_s'],drain_ns))
+    report['ping'].update(arrival_blackout(probes['ping']['packets'],maps['ue'],min(p['send_ns'] for p in probes['ping']['packets']),traffic_stop_ns))
     report['ping']['wall_rtt_ms_mean']=report['ping'].pop('wall_latency_ms_mean')
     report['udp']={}
     for direction in ('uplink','downlink'):
         report['udp'][direction]=cohort_summary(probes[direction]['packets'],0,case_spec(report['case'])['duration_iq_s'],wall_interval_s=elapsed_wall)
+        report['udp'][direction].update(timely_summary(probes[direction]['packets'],0,spec['duration_iq_s'],drain_ns))
+        side='gnb' if direction=='uplink' else 'ue'
+        report['udp'][direction].update(arrival_blackout(probes[direction]['packets'],maps[side],min(p['send_ns'] for p in probes[direction]['packets']),traffic_stop_ns))
         workload=validate_udp_workload(events[direction+'-sender'])
         report['udp'][direction]['workload']=workload
         report['udp'][direction]['actual_offered_wall_bits_per_second']=workload['actual_offered_wall_bits_per_second']
@@ -431,8 +455,17 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
         window=dict(complete_stk_s=complete,start_stk_s=lo,end_stk_s=hi,coverage_ok=covered,
                     ping=cohort_summary(probes['ping']['packets'],lo,hi,'stk'),
                     udp={direction:cohort_summary(probes[direction]['packets'],lo,hi,'stk') for direction in ('uplink','downlink')})
+        for name in ('ping','uplink','downlink'):
+            value=window['ping'] if name=='ping' else window['udp'][name]
+            side='gnb' if name=='uplink' else 'ue'
+            value.update(timely_summary(probes[name]['packets'],lo,hi,drain_ns,'stk'))
+            value.update(arrival_blackout(probes[name]['packets'],maps[side],min(p['send_ns'] for p in probes[name]['packets']),traffic_stop_ns,lo,hi,'stk'))
         window['ping']['wall_rtt_ms_mean']=window['ping'].pop('wall_latency_ms_mean')
         report['windows'].append(window)
+    summaries=[report['ping']]+list(report['udp'].values())
+    for window in report['windows']:summaries+=[window['ping']]+list(window['udp'].values())
+    report['service_degraded']=any(value['service_degraded'] for value in summaries)
+    report['service_specification']=dict(deadline_wall_ns=5_000_000_000,timely_failure_upper_limit=.01,eventual_loss_upper_limit=.01)
     # Private packet events retain raw anchors and every exact timestamp.
     for name,probe in probes.items():
         (output/(name+'-matched.json')).write_text(json.dumps(probe,indent=2))
@@ -591,12 +624,15 @@ def run_acceptance(argv=None):
                 (output/'stop.log').write_text(result.stdout+result.stderr)
             except Exception as error:report['cleanup_error']=str(error)
         else:report['stop_exit']=1
+        if observer:
+            try:observer.finish()
+            except Exception as error:report['final_observation_error']=str(error)
         report['wall_seconds']=time.monotonic()-started
         if observer and traffic_stop_ns is not None and drain_ns is not None:
             try:build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,children.evidence())
             except Exception as error:report['summary_error']=str(error)
         report['failure_reasons']=evaluate_handover(report)
-        if report.get('error') or report.get('summary_error') or report.get('cleanup_error'):
+        if report.get('error') or report.get('summary_error') or report.get('cleanup_error') or report.get('final_observation_error'):
             report['failure_reasons'].append('driver or evidence collection failed')
         if observer and args.case!='legacy' and any(count!=1 for count in observer.qd_loaded.values()):
             report['failure_reasons'].append('expected one QD load per modem')
