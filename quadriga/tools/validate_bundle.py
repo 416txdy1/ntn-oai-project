@@ -105,6 +105,24 @@ def validate_bundle(root: Path) -> dict[str, Any]:
     trace_hash = provenance.get("stk_trace_sha256", "")
     _require(isinstance(trace_hash, str) and len(trace_hash) == 64 and all(c in "0123456789abcdef" for c in trace_hash), "STK trace SHA256 非法")
 
+    # 天线信息使用可选 sidecar，保持严格的 QDCHANNEL1 v1 manifest 不变。
+    antenna_path = root / "antenna.json"
+    if antenna_path.exists():
+        antenna = json.loads(antenna_path.read_text(encoding="utf-8"))
+        _require(antenna.get("format") == "NTN_ANTENNA1", "antenna.format 非法")
+        _require(antenna.get("manifest_sha256") == _sha256(manifest_path), "antenna manifest SHA256 不匹配")
+        _require(antenna.get("stk_trace_sha256") == trace_hash, "antenna STK trace SHA256 不匹配")
+        _require(antenna.get("link_direction") == radio["link_direction"], "antenna 方向不匹配")
+        _require(antenna.get("center_frequency_hz") == center_frequency, "antenna 频率不匹配")
+        _require(antenna.get("profile") in {"omni", "satellite_16x16_ground_omni"}, "antenna profile 非法")
+        _require(_positive_int(antenna.get("satellite_rf_ports"), "antenna satellite_rf_ports") == 1
+                 and _positive_int(antenna.get("ground_rf_ports"), "antenna ground_rf_ports") == 1
+                 and rx_antennas == tx_antennas == 1, "antenna 必须与单波束 RF 端口维度一致")
+        if antenna["profile"] == "satellite_16x16_ground_omni":
+            _require(antenna.get("satellite_rows") == 16 and antenna.get("satellite_columns") == 16
+                     and antenna.get("spacing_wavelengths") == 0.5, "antenna 必须是 16x16、0.5λ 阵列")
+            _require(antenna.get("absolute_array_gain_source") == "STKTRACE2", "antenna 绝对增益来源错误")
+
     expected_counts = {
         "times": snapshots,
         "delays": taps,

@@ -67,11 +67,21 @@ simulation.use_absolute_delays = 1;
 layout = qd_layout(simulation);
 layout.no_tx = 1;
 layout.no_rx = 1;
-layout.tx_array = qd_arrayant('omni');
 layout.rx_array = qd_arrayant('omni');
+layout.rx_array.center_frequency = options.center_frequency_hz;
 relative_times_s = trace.times_s - trace.times_s(1);
 layout.tx_track = make_track(tx_positions_m, relative_times_s, tx_name);
 layout.rx_track = make_track(rx_positions_m, relative_times_s, rx_name);
+if strcmp(options.antenna_profile, 'satellite_16x16_ground_omni')
+    layout.tx_array = create_satellite_array(options.center_frequency_hz);
+    [orientation, beam_weights, antenna_metadata] = satellite_beam_geometry( ...
+        layout.tx_array, trace, visibility);
+    layout.tx_track.orientation = orientation;
+else
+    layout.tx_array = qd_arrayant('omni');
+    layout.tx_array.center_frequency = options.center_frequency_hz;
+    antenna_metadata = struct('profile', 'omni', 'satellite_rf_ports', 1, 'ground_rf_ports', 1);
+end
 layout.update_rate = update_rate_s;
 layout.set_scenario(options.scenario);
 
@@ -89,6 +99,11 @@ if ~isequal(size(coefficients), size(delays_s))
     error('QDCHANNEL1:IndividualDelay', '当前导出器要求 QuaDRiGa 提供逐天线路径时延');
 end
 
+if strcmp(options.antenna_profile, 'satellite_16x16_ground_omni')
+    delay_span_s = max(delays_s, [], 2) - min(delays_s, [], 2);
+    antenna_metadata.max_element_delay_span_s = max(delay_span_s(:));
+    [coefficients, delays_s] = combine_satellite_beam(coefficients, delays_s, beam_weights);
+end
 [coefficients, delays_s, residual_gain_db] = normalize_qd_channel(coefficients, delays_s);
 metadata.center_frequency_hz = options.center_frequency_hz;
 metadata.link_direction = options.link_direction;
@@ -96,6 +111,7 @@ metadata.quadriga_version = get_quadriga_version(simulation, options.quadriga_ve
 metadata.scenario = options.scenario;
 metadata.random_seed = options.random_seed;
 metadata.stk_trace_sha256 = sha256_file(trace_path);
+metadata.antenna = antenna_metadata;
 manifest_path = write_qdchannel1( ...
     output_dir, trace.times_s, coefficients, delays_s, residual_gain_db, metadata);
 end
@@ -127,6 +143,7 @@ defaults = struct( ...
     'scenario', 'QuaDRiGa_NTN_Rural_LOS', ...
     'random_seed', 20260925, ...
     'sample_density', 2.1, ...
+    'antenna_profile', 'satellite_16x16_ground_omni', ...
     'quadriga_version', '');
 allowed = fieldnames(defaults);
 provided = fieldnames(options);
@@ -143,6 +160,9 @@ for index = 1:numel(allowed)
 end
 if isempty(options.quadriga_path)
     error('QDCHANNEL1:QuaDRiGaPath', '必须显式提供 options.quadriga_path');
+end
+if ~any(strcmp(options.antenna_profile, {'satellite_16x16_ground_omni', 'omni'}))
+    error('QDCHANNEL1:AntennaProfile', 'antenna_profile 必须为 satellite_16x16_ground_omni 或 omni');
 end
 if ~isscalar(options.center_frequency_hz) || options.center_frequency_hz <= 0
     error('QDCHANNEL1:Frequency', 'center_frequency_hz 必须大于 0');

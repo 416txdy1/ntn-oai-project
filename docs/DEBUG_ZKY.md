@@ -6,6 +6,8 @@
 
 > 2026-10-14 更新：本次补齐保存的 STK 场景、Windows/WSL 运行入口和迁移验证报告。当前基线完整 361 秒业务仍未通过；最新结果见 [迁移验证](MIGRATION_VALIDATION_20261014.md)。天线对齐前的配置见 [STK 场景](STK_SCENE.md)，Windows 入口见 [Windows/WSL 运行](WINDOWS_WSL_RUN.md)。本次交付审计与验证边界见 [本地交付检查](ZKY_DELIVERY_20261014.md)。
 
+> 当前默认信道为卫星 16×16 阵列、地面全向；上文完整业务数据是旧全向基线。复现旧配置须在 source env.sh 后显式选择旧 bundle，见 [天线对齐说明](ANTENNA_ALIGNMENT_20261014.md)。新阵列尚未进行完整业务验收。
+
 ## 1. 获取源码
 
 在 Ubuntu 22.04 或 WSL2 的 Linux 文件系统执行：

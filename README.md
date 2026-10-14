@@ -12,7 +12,8 @@
 | `oai_patch/current/` | 当前 OAI 修改文件，按 OAI 原始相对路径保存 |
 | `quadriga/oai/` | QD C reader/adapter 的唯一维护入口 |
 | `quadriga/matlab/` | STK→QD 转换、归一化及 FDD 导出脚本 |
-| `examples/fdd-pass/` | 已验算的 362 快照 trace 与 DL/UL bundle |
+| `examples/fdd-pass/` | 共用的 362 快照 trace 与历史全向 DL/UL 对照 |
+| `examples/fdd-pass-array/` | 当前默认：卫星 16×16 阵列、地面全向的单波束 DL/UL bundle |
 | `STK_LEO_Constellation_20260923_train_v2/` | 保存的 STK 场景、通信对象及轨迹来源；见 [场景说明](docs/STK_SCENE.md) |
 | `configs/core/` | 无凭据的 5GC、UE 和数据库表结构模板 |
 | `scripts/` | 解包、构建、初始化、核心网管理和回归入口 |
@@ -22,6 +23,8 @@
 旧 `oai_patch/` 根目录、`local_ntn/original/`、`local_ntn/staged/` 作为历史材料保留，不是当前部署源。不要手动用它们覆盖新 OAI。
 
 > **调试版本状态：** 完整 361 秒业务验收仍未通过，末段有失步。其他成员请先阅读 [zky 协作调试指南](docs/DEBUG_ZKY.md)，按其中步骤配置和复现；实验修正默认关闭。
+
+2026-10-14 默认 QuaDRiGa 天线已切换为卫星 16×16 / 地面全向，原全向数据保留。此为实验模型变更；实现、复现及与 STK MVDR 的差异见 [天线对齐说明](docs/ANTENNA_ALIGNMENT_20261014.md)。历史完整业务结果属于旧全向基线。
 
 ## 快速开始
 

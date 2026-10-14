@@ -79,6 +79,24 @@ if fid < 0
 end
 cleanup = onCleanup(@() fclose(fid));
 fprintf(fid, '%s\n', jsonencode(manifest));
+clear cleanup; % 先关闭 manifest，再计算哈希；避免尚未落盘的缓冲区。
+if isfield(metadata, 'antenna')
+    % C reader 严格限制 v1 manifest 字段，因此用绑定 manifest 哈希的
+    % 可选 sidecar 记录天线信息，保持原二进制及 C 接口不变。
+    antenna = metadata.antenna;
+    antenna.format = 'NTN_ANTENNA1';
+    antenna.manifest_sha256 = sha256_file(manifest_path);
+    antenna.stk_trace_sha256 = metadata.stk_trace_sha256;
+    antenna.center_frequency_hz = metadata.center_frequency_hz;
+    antenna.link_direction = metadata.link_direction;
+    antenna_path = fullfile(output_dir, 'antenna.json');
+    fid = fopen(antenna_path, 'wt');
+    if fid < 0
+        error('QDCHANNEL1:AntennaOpen', '无法写入天线元数据: %s', antenna_path);
+    end
+    cleanup = onCleanup(@() fclose(fid));
+    fprintf(fid, '%s\n', jsonencode(antenna));
+end
 end
 
 

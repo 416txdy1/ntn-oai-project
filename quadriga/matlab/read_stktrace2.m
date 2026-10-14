@@ -54,6 +54,7 @@ end
 
 trace.times_s = rows(:, 1);
 trace.satellite_ecef_m = rows(:, 2:4).';
+trace.satellite_velocity_ecef_m = rows(:, 5:7).';
 trace.gnb_ecef_m = rows(:, 11:13).';
 trace.ue_ecef_m = rows(:, 14:16).';
 trace.dl_valid = logical(rows(:, 21));

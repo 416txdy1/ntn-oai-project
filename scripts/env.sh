@@ -5,8 +5,8 @@ export OAI_REPO="$NTN_ROOT/.runtime/oai"
 export OAI_BUILD_DIR="$OAI_REPO/cmake_targets/ran_build/build"
 export OAI_BUILD_REPO="$OAI_REPO"
 export OAI_STK_TRACE="$NTN_ROOT/examples/fdd-pass/trace.csv"
-export OAI_QD_DL_CHANNEL="$NTN_ROOT/examples/fdd-pass/downlink"
-export OAI_QD_UL_CHANNEL="$NTN_ROOT/examples/fdd-pass/uplink"
+export OAI_QD_DL_CHANNEL="$NTN_ROOT/examples/fdd-pass-array/downlink"
+export OAI_QD_UL_CHANNEL="$NTN_ROOT/examples/fdd-pass-array/uplink"
 export OAI_UE_CONFIG="$NTN_ROOT/.private/ue.conf"
 export OAI_AMF_IP=192.168.70.132 OAI_GNB_IP_CIDR=192.168.70.129/26
 unset OAI_QD_CHANNEL OAI_STK_TRACE_EPOCH OAI_STK_PORT

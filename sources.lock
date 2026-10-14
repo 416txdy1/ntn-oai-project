@@ -14,4 +14,6 @@ core.templates=configs/core
 core.nf_images=v2.2.1
 core.mysql_image=mysql:9.6
 example.trace_sha256=3d63d47a050f68bf670e4d298cc579c7f0f09b0550b58c849fdc0a12b2dbda18
+example.channel_directory=examples/fdd-pass-array
+example.antenna_profile=satellite_16x16_ground_omni
 # No additional Git checkout is required for the supported RFsim mode; E2_AGENT is OFF.

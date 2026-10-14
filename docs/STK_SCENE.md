@@ -23,8 +23,8 @@
 
 ## 与当前回放数据的关系
 
-QuaDRiGa 导出器 `quadriga/matlab/export_stk_to_qdchannel.m` 当前两端为 `qd_arrayant('omni')`，仅生成卫星—UE 的 1×1 SISO 多径；STK 负责绝对链路项。天线一致性调整尚未实施，本提交只保存调整前基线。
+2026-10-14 后续更新：QuaDRiGa 默认改为卫星 16×16 阵列、地面全向，按快照跟踪 UE 并相干合成为 1×1 单波束端口；STK 仍负责绝对链路项。新数据在 examples/fdd-pass-array，原 examples/fdd-pass 保留全向对照。阵列模型与 STK MVDR/极化的差异、验证及复现说明见 [天线对齐](ANTENNA_ALIGNMENT_20261014.md)。保存的 STK 场景未修改。
 
-Linux 默认调试入口使用 `examples/fdd-pass/trace.csv` 及其 downlink/uplink bundle，不会自动加载本目录的其他 trace。原始、run、test、blend 轨迹及调度文件保留用于追溯，不能任意替换已绑定的 FDD 输入。改变 STK 天线并重导出 trace 后，必须同时生成匹配的双向 QuaDRiGa bundle，并重新验证哈希、频率和方向。
+Linux 默认调试入口使用 `examples/fdd-pass/trace.csv` 及 `examples/fdd-pass-array/` 的 downlink/uplink bundle，不会自动加载本目录的其他 trace。原始、run、test、blend 轨迹及调度文件保留用于追溯，不能任意替换已绑定的 FDD 输入。改变 STK 天线并重导出 trace 后，必须同时生成匹配的双向 QuaDRiGa bundle，并重新验证哈希、频率和方向。
 
 示例回放无需 STK/MATLAB；生成新轨迹和新信道需要相应软件与许可。完整 361 秒示例末段仍有失步，见 `DEBUG_ZKY.md` 和 `MIGRATION_VALIDATION_20261014.md`。
