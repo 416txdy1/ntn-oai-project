@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 #include "executables/nr-ue-ru.h"
 #include "executables/stk_timing_assist.h"
+#include "PHY/NR_UE_ESTIMATION/nr_ntn_rx_tracker.h"
 #include "executables/nr-uesoftmodem.h"
 #include "PHY/INIT/nr_phy_init.h"
 #include "NR_MAC_UE/mac_proto.h"
@@ -84,6 +85,74 @@
  *
  */
 
+/* Serving-cell scheduling is the existing PBCH scheduling, never an STK oracle. */
+int get_ssb_index_in_symbol(const PHY_VARS_NR_UE *, int, int, int);
+static uint64_t nr_ntn_hold_samples(const PHY_VARS_NR_UE *ue)
+{
+  int period = ue->received_config_request ? ue->nrUE_config.ssb_table.ssb_period : 2;
+  if (period < 0 || period > 6) return 0;
+  return (uint64_t)ue->frame_parms.samples_per_subframe * (5ULL << period);
+}
+static bool nr_ntn_job_spans(const NR_DL_FRAME_PARMS *fp, unsigned slot,
+                            const nr_ntn_rx_snapshot *s)
+{
+  if (!fp->ofdm_offset_divisor) return false;
+  for (int symbol = 0; symbol < fp->symbols_per_slot; ++symbol) {
+    int index;
+    if (!nr_ntn_span_index(s, nr_ntn_fft_begin(fp, slot, symbol, true) + s->fft_delta,
+                           fp->ofdm_symbol_size, &index)) return false;
+  }
+  return true;
+}
+static void nr_ntn_prepare_job(PHY_VARS_NR_UE *ue, UE_nr_rxtx_proc_t *proc,
+                               nr_ntn_rx_snapshot *s, nr_ntn_rx_tracker *tracker,
+                               double consumed)
+{
+  if (!s) return;
+  const NR_DL_FRAME_PARMS *fp = &ue->frame_parms;
+  const double fs = fp->samples_per_subframe * 1000.0;
+  const int pci = fp->Nid_cell, slot = proc->nr_slot_rx;
+  const uint64_t hold = nr_ntn_hold_samples(ue);
+  double error, fo;
+  if (nr_ntn_tracker_predict(tracker, pci, s->nominal_slot, hold, fs, &error, &fo)
+      && fabs(error - consumed) <= NR_NTN_PSS_WINDOW) {
+    s->active = true; s->fft_delta = llround(error - consumed); s->total_fo = fo;
+  }
+  for (int symbol = 0; symbol < fp->symbols_per_slot; ++symbol) {
+    const int physical = slot * fp->symbols_per_slot + symbol;
+    /* Existing scheduling marks PBCH1..3; PSS is exactly one symbol earlier. */
+    const int index = get_ssb_index_in_symbol(ue, physical + 1, slot, proc->frame_rx);
+    if (index < 0) continue;
+    int scheduled_pss = nr_get_ssb_start_symbol(fp, index);
+    if (ue->nrUE_config.ssb_table.ssb_period == 0
+        && physical >= fp->slots_per_frame * fp->symbols_per_slot / 2)
+      scheduled_pss += fp->slots_per_frame * fp->symbols_per_slot / 2;
+    if (physical != scheduled_pss) continue;
+    double current = s->active ? s->total_fo : ue->dl_Doppler_shift + ue->freq_offset;
+    nr_ntn_pilot pilot = nr_ntn_measure_pilot(fp, s, physical, pci, current);
+    if (!pilot.accepted) break;
+    const int64_t pss_logical = nr_ntn_fft_begin(fp, slot, symbol, true)
+                               + fp->nb_prefix_samples / fp->ofdm_offset_divisor;
+    const uint64_t q = s->nominal_slot + pss_logical - get_samples_slot_timestamp(fp, slot);
+    nr_ntn_rx_snapshot tested = *s;
+    tested.fft_delta = pilot.delta;
+    if (!nr_ntn_job_spans(fp, slot, &tested)) break;
+    if (nr_ntn_tracker_observe(tracker, pci, pilot.observed_sample, q, consumed,
+                               pilot.delta, pilot.total_fo, fs)) {
+      s->active = true; s->fft_delta = pilot.delta; s->total_fo = pilot.total_fo;
+      s->observed_sample = pilot.observed_sample;
+    }
+    break;
+  }
+  if (s->active && !nr_ntn_job_spans(fp, slot, s)) s->active = false;
+  if (s->active) {
+    /* Main is the sole feedback writer; job FEP never reads this mutable value. */
+    ue->freq_offset = s->total_fo - ue->dl_Doppler_shift;
+    proc->ntn_rx_snapshot = s;
+  } else {
+    nr_ntn_snapshot_free(s);
+  }
+}
 /* Opt-in numeric diagnostics only; never enabled for the retained zky profile. */
 static bool stk_ue_timing_diag_enabled(void)
 {
@@ -653,6 +722,9 @@ void UE_dl_processing(void *arg) {
   if (!UE->sl_mode)
     pdsch_processing(UE, proc, phy_data);
 
+  nr_ntn_snapshot_free((nr_ntn_rx_snapshot *)proc->ntn_rx_snapshot);
+  proc->ntn_rx_snapshot = NULL;
+
   TracyCZoneEnd(ctx);
 }
 
@@ -700,7 +772,6 @@ void readFrame(PHY_VARS_NR_UE *UE, openair0_timestamp_t *timestamp, int duration
       int tmp = nrue_ru_read(UE, timestamp, (void **)rxp, readBlockSize, fp->nb_antennas_rx);
       UEscopeCopy(UE, ueTimeDomainSamplesBeforeSync, rxp[0], sizeof(c16_t), 1, readBlockSize, 0);
       AssertFatal(readBlockSize == tmp, "");
-
       if (IS_SOFTMODEM_RFSIM) {
         int slot_tx = (slot_rx + duration_rx_to_tx) % fp->slots_per_frame;
         int writeBlockSize = get_samples_per_slot(slot_tx, fp);
@@ -800,6 +871,12 @@ void *UE_thread(void *arg)
     dynamic_barrier_init(&UE->process_slot_tx_barriers[i]);
   }
   int shiftForNextFrame = 0;
+  const bool use_rx_tracker = nr_ntn_rx_enabled() && !UE->sl_mode;
+  nr_ntn_rx_history rx_history = {0};
+  nr_ntn_rx_tracker rx_tracker = {0};
+  uint64_t rx_native_ref = 0, rx_nominal_ref = 0;
+  double rx_consumed = 0;
+  const int rx_history_capacity = 2 * fp->samples_per_slot_wCP + 2 * NR_NTN_PSS_WINDOW;
   int intialSyncOffset = 0;
   openair0_timestamp_t sync_timestamp;
   bool stats_printed = false;
@@ -967,6 +1044,16 @@ void *UE_thread(void *arg)
         // Set to the slot where the SL-SSB was decoded
         absolute_slot += UE->SL_UE_PHY_PARAMS.sync_params.slot_offset;
       }
+      if (use_rx_tracker) {
+        rx_tracker = (nr_ntn_rx_tracker){0};
+        nr_ntn_history_clear(&rx_history);
+        rx_native_ref = sync_timestamp;
+        rx_nominal_ref = (uint64_t)(absolute_slot + 1) / nb_slot_frame * fp->samples_per_frame;
+        rx_consumed = 0;
+        nr_ntn_history_append(&rx_history, UE->common_vars.rxdata, fp->nb_antennas_rx,
+                               sync_timestamp, fp->ofdm_symbol_size + fp->nb_prefix_samples0,
+                               rx_history_capacity);
+      }
       // With the correct frame and slot numbers, we can now fix the UL timing
       fix_ntn_epoch_hfn(UE, decoded_hfn_rx, decoded_frame_rx);
       if (UE->nrUE_config.ntn_config.params_changed) {
@@ -1067,6 +1154,16 @@ void *UE_thread(void *arg)
           }
         } else blend_timing.valid=false;
       }
+      if (use_rx_tracker) {
+        const uint64_t next_q = ((uint64_t)absolute_slot / nb_slot_frame + 1) * fp->samples_per_frame;
+        double error, fo;
+        if (nr_ntn_tracker_predict(&rx_tracker, fp->Nid_cell, next_q, nr_ntn_hold_samples(UE),
+                                   fp->samples_per_subframe * 1000.0, &error, &fo)) {
+          const double correction = rx_consumed - error;
+          if (isfinite(correction) && fabs(correction) < get_readBlockSize(slot_nr, fp) / 2)
+            shiftForNextFrame = llround(correction);
+        }
+      }
       // we shift of half of measured drift, at each beginning of frame for both rx and tx
       iq_shift_to_apply = shiftForNextFrame;
       // autonomous timing advance calculation, which does not use SIB19 information
@@ -1088,6 +1185,13 @@ void *UE_thread(void *arg)
     metadata meta = {.slot =  curMsg.proc.nr_slot_rx, .frame =  curMsg.proc.frame_rx};
     UEscopeCopyWithMetadata(UE, ueTimeDomainSamples, rxp[0] - firstSymSamp, sizeof(c16_t), 1, readBlockSize, 0, &meta);
     AssertFatal(readBlockSize == tmp, "");
+    if (use_rx_tracker && !nr_ntn_history_append(&rx_history, rxp, fp->nb_antennas_rx,
+                                                 rx_timestamp, readBlockSize, rx_history_capacity)) {
+      rx_tracker = (nr_ntn_rx_tracker){0};
+      rx_native_ref = rx_timestamp >= (uint64_t)firstSymSamp ? rx_timestamp - firstSymSamp : rx_timestamp;
+      rx_nominal_ref = (uint64_t)absolute_slot / nb_slot_frame * fp->samples_per_frame
+                       + get_samples_slot_timestamp(fp, slot_nr);
+    }
     if (stk_timing_diag && stk_diag_sync > 0 && stk_diag_sync <= 20 && stk_diag_frames < 200
         && slot_nr == nb_slot_frame - 1) {
       ++stk_diag_frames;
@@ -1117,6 +1221,9 @@ void *UE_thread(void *arg)
         openair0_timestamp_t ignore_timestamp;
         int tmp = nrue_ru_read(UE, &ignore_timestamp, (void **)UE->common_vars.rxdata, first_symbols, fp->nb_antennas_rx);
         AssertFatal(first_symbols == tmp, "");
+        if (use_rx_tracker && !nr_ntn_history_append(&rx_history, UE->common_vars.rxdata, fp->nb_antennas_rx,
+                                                      ignore_timestamp, first_symbols, rx_history_capacity))
+          rx_tracker = (nr_ntn_rx_tracker){0};
 
       } else
         LOG_E(PHY,"can't compensate: diff =%d\n", first_symbols);
@@ -1157,6 +1264,19 @@ void *UE_thread(void *arg)
     notifiedFIFO_elt_t *newRx = newNotifiedFIFO_elt(sizeof(nr_rxtx_thread_data_t), curMsg.proc.nr_slot_tx, NULL, UE_dl_processing);
     nr_rxtx_thread_data_t *curMsgRx = (nr_rxtx_thread_data_t *)NotifiedFifoData(newRx);
     *curMsgRx = (nr_rxtx_thread_data_t){.proc = curMsg.proc, .UE = UE};
+    if (use_rx_tracker && rx_timestamp >= (uint64_t)firstSymSamp) {
+      const uint64_t slot_native = rx_timestamp - firstSymSamp;
+      const uint64_t q = (uint64_t)absolute_slot / nb_slot_frame * fp->samples_per_frame
+                         + get_samples_slot_timestamp(fp, slot_nr);
+      int64_t da, dq;
+      if (nr_ntn_sample_diff(slot_native, rx_native_ref, &da)
+          && nr_ntn_sample_diff(q, rx_nominal_ref, &dq)) {
+        rx_consumed = (double)da - (double)dq;
+        nr_ntn_rx_snapshot *snapshot = nr_ntn_snapshot_copy(&rx_history, slot_native,
+            get_samples_slot_timestamp(fp, slot_nr), q, get_samples_per_slot(slot_nr, fp));
+        nr_ntn_prepare_job(UE, &curMsgRx->proc, snapshot, &rx_tracker, rx_consumed);
+      }
+    }
     int ret = UE_dl_preprocessing(UE, &curMsgRx->proc, tx_wait_for_dlsch, &curMsgRx->phy_data, &stats_printed);
     if (stk_timing_diag && stk_diag_sync > 0 && stk_diag_sync <= 20 && stk_diag_frames < 200
         && ret != INT_MAX && stk_diag_feedback < 200) {
@@ -1211,6 +1331,7 @@ void *UE_thread(void *arg)
     tx_wait_for_dlsch[slot] = 0;
   }
   LOG_W(NR_PHY, "UE main thread is ending\n");
+  nr_ntn_history_destroy(&rx_history);
   return NULL;
 }
 
