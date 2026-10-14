@@ -14,6 +14,9 @@
 
 #define NR_NTN_RX_ANTS 8
 #define NR_NTN_PSS_WINDOW 512
+#define NR_NTN_DIAG_PSS_LIMIT 4000U
+#define NR_NTN_DIAG_UL_LIMIT 70000U
+#define NR_NTN_DIAG_UL_STRIDE 10U
 /* Job-owned original IQ. No worker reads mutable receiver tracker state. */
 typedef struct nr_ntn_rx_snapshot_s {
   bool active;
@@ -42,13 +45,31 @@ typedef struct {
   double e_ref, e_last, rate_samples_s, total_fo, fo_rate_hz_s;
 } nr_ntn_rx_tracker;
 
+static inline bool nr_ntn_new_profile(void)
+{
+  const char *profile = getenv("OAI_NTN_PROFILE");
+  return profile && (!strcmp(profile,"integrated-handover") || !strcmp(profile,"legacy-handover"));
+}
 static inline bool nr_ntn_rx_enabled(void)
 {
-  const char *p=getenv("OAI_NTN_PROFILE"), *e=getenv("OAI_NTN_RX_TRACKER");
-  return p && (!strcmp(p,"integrated-handover") || !strcmp(p,"legacy-handover"))
-      && (!e || !strcmp(e,"1"));
+  const char *flag = getenv("OAI_NTN_RX_TRACKER");
+  return nr_ntn_new_profile() && (!flag || !strcmp(flag,"1"));
 }
-
+static inline bool nr_ntn_timing_diag_enabled(void)
+{
+  const char *flag = getenv("OAI_NTN_TIMING_DIAG");
+  return nr_ntn_new_profile() && flag && !strcmp(flag,"1");
+}
+static inline bool nr_ntn_diag_stride(unsigned call, unsigned limit, unsigned stride)
+{
+  return stride && call && call <= limit && (call - 1) % stride == 0;
+}
+static inline bool nr_ntn_diag_reserve(bool enabled, unsigned *sequence, unsigned limit)
+{
+  if (!enabled || !sequence || *sequence >= limit) return false;
+  ++*sequence;
+  return true;
+}
 static inline bool nr_ntn_sample_diff(uint64_t a,uint64_t b,int64_t *out)
 {
   uint64_t magnitude=a>=b?a-b:b-a;
@@ -175,6 +196,7 @@ typedef struct {
   int32_t delta;
   uint64_t observed_sample;
   double total_fo;
+  int reason, pss_pos, pss_peak, pss_avg, pss_fo, sss_metric, sss_pci, sss_fo;
 } nr_ntn_pilot;
 
 /* Known-cell measurements use only original observed IQ and current receiver T. */
@@ -182,7 +204,7 @@ static inline nr_ntn_pilot nr_ntn_measure_pilot(const NR_DL_FRAME_PARMS *fp,
                                                const nr_ntn_rx_snapshot *s,
                                                int ssb_symbol, int pci, double current_t)
 {
-  nr_ntn_pilot r = {0};
+  nr_ntn_pilot r = {.reason=1,.sss_pci=-1};
   if (!fp || !s || !isfinite(current_t) || fp->ofdm_symbol_size <= 0
       || fp->ofdm_symbol_size > 4096 || fp->samples_per_subframe <= 0
       || fp->ofdm_offset_divisor == 0 || fp->nb_antennas_rx < 1
@@ -198,7 +220,7 @@ static inline nr_ntn_pilot nr_ntn_measure_pilot(const NR_DL_FRAME_PARMS *fp,
   const int64_t start = (nominal - NR_NTN_PSS_WINDOW) & ~(int64_t)3;
   const int span = 2 * NR_NTN_PSS_WINDOW + 1, size = span + fft - 1;
   int begin;
-  if (!nr_ntn_span_index(s, start, size, &begin)) return r;
+  if (!nr_ntn_span_index(s, start, size, &begin)) { r.reason=2; return r; }
   c16_t pss_time[NUMBER_PSS_SEQUENCE][fft] __attribute__((aligned(32)));
   for (int n = 0; n < NUMBER_PSS_SEQUENCE; ++n)
     generate_pss_nr_time(fft, fp->first_carrier_offset, n, fp->ssb_start_subcarrier, pss_time[n]);
@@ -217,15 +239,17 @@ static inline nr_ntn_pilot nr_ntn_measure_pilot(const NR_DL_FRAME_PARMS *fp,
     .subcarrier_spacing = fp->subcarrier_spacing, .fo_flag = true,
     .target_Nid_cell = pci, .pssTime = &pss_time[0][0]};
   pss_detection_result_t pss = pss_search_time_nr(&query);
+  r.pss_pos=pss.pos;r.pss_peak=pss.peak;r.pss_avg=pss.avg;r.pss_fo=pss.freq_offset;
   for (int a = 0; a < ants; ++a) free(window[a]);
-  if (!pss.success || pss.pos <= 4 || pss.pos >= span - 5) return r;
+  if (!pss.success) { r.reason=3; return r; }
+  if (pss.pos <= 4 || pss.pos >= span - 5) { r.reason=4; return r; }
   const int64_t delta = start + pss.pos - nominal;
   int offsets[NR_N_SYMBOLS_SSB];
   for (int j = 0; j < NR_N_SYMBOLS_SSB; ++j) {
     int physical = ssb_symbol + j;
     if (!nr_ntn_span_index(s, nr_ntn_fft_begin(fp, physical / fp->symbols_per_slot,
                                               physical % fp->symbols_per_slot, true) + delta,
-                           fft, &offsets[j])) return r;
+                           fft, &offsets[j])) { r.reason=5; return r; }
   }
   c16_t rel[NR_N_SYMBOLS_SSB][ants][fft] __attribute__((aligned(32)));
   c16_t work[ants][fft] __attribute__((aligned(32)));
@@ -245,12 +269,42 @@ static inline nr_ntn_pilot nr_ntn_measure_pilot(const NR_DL_FRAME_PARMS *fp,
     .first_carrier_offset = fp->first_carrier_offset,
     .ssb_start_subcarrier = fp->ssb_start_subcarrier, .subcarrier_spacing = fp->subcarrier_spacing};
   sss_detection_result_t sss = rx_sss_nr(&params, &pss, -1, rel);
+  r.sss_metric=sss.metric;r.sss_pci=sss.nid_cell;r.sss_fo=sss.freq_offset;
   const double measured = current_t + pss.freq_offset + sss.freq_offset;
   const int64_t observed_index = start + pss.pos - s->logical_begin;
-  if (!sss.success || sss.nid_cell != pci || !isfinite(measured) || observed_index < 0
+  if (!sss.success) { r.reason=6; return r; }
+  if (sss.nid_cell != pci) { r.reason=7; return r; }
+  r.reason=8;
+  if (!isfinite(measured) || observed_index < 0
       || UINT64_MAX - s->native_begin < (uint64_t)observed_index) return r;
-  r.accepted = true; r.delta = (int32_t)delta; r.total_fo = measured;
+  r.accepted = true; r.reason=0; r.delta = (int32_t)delta; r.total_fo = measured;
   r.observed_sample = s->native_begin + (uint64_t)observed_index;
   return r;
+}
+/* Half-open union of the four actual SSB FFT input intervals, in RF absolute samples.
+ * nrue_ru_read subtracts device.firstTS. Main records that offset without an STK query.
+ * A missing span is invalid, never a guessed SFN or wall-time conversion. */
+static inline bool nr_ntn_pbch_span(const NR_DL_FRAME_PARMS *fp,int slot,int last_symbol,
+                                    int64_t logical_begin,uint64_t rf_begin,int length,int delta,
+                                    uint64_t *begin,uint64_t *end)
+{
+  if(!fp || !begin || !end || !fp->ofdm_offset_divisor || fp->ofdm_symbol_size<=0
+      || fp->symbols_per_slot<=0 || slot<0 || slot>=fp->slots_per_frame
+      || last_symbol<0 || last_symbol>=fp->symbols_per_slot || length<1)return false;
+  nr_ntn_rx_snapshot span={.logical_begin=logical_begin,.length=length};
+  uint64_t first=UINT64_MAX,finish=0;
+  for(int j=0;j<NR_N_SYMBOLS_SSB;j++){
+    int physical=slot*fp->symbols_per_slot+last_symbol-3+j;
+    if(physical<0)return false;
+    int index;
+    if(!nr_ntn_span_index(&span,nr_ntn_fft_begin(fp,physical/fp->symbols_per_slot,
+                                              physical%fp->symbols_per_slot,true)+delta,
+                         fp->ofdm_symbol_size,&index))return false;
+    if(rf_begin>UINT64_MAX-(uint64_t)index-(uint64_t)fp->ofdm_symbol_size)return false;
+    uint64_t a=rf_begin+(uint64_t)index,b=a+fp->ofdm_symbol_size;
+    if (a < first) first = a;
+    if (b > finish) finish = b;
+  }
+  *begin=first;*end=finish;return true;
 }
 #endif

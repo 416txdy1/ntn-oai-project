@@ -1057,8 +1057,34 @@ static int pbch_process(PHY_VARS_NR_UE *UE,
       const int nid = UE->frame_parms.Nid_cell;
       const int pbchSuccess =
           nr_pbch_decode(UE, &UE->frame_parms, proc, *ssbIndex, nid, pbch_e_rx, &hfb, &ssb_idx, &symb_offset, &pbchResult);
-      if (pbchSuccess != 0)
-        LOG_E(PHY, "Frame %d, slot %d, SSB Index %d. Error decoding PBCH!\n", proc->frame_rx, proc->nr_slot_rx, *ssbIndex);
+      if (pbchSuccess != 0) {
+        if (proc->ntn_rx_failure_metadata) {
+          const NR_DL_FRAME_PARMS *fp = &UE->frame_parms;
+          const bool tracked = proc->ntn_rx_snapshot && proc->ntn_rx_snapshot->active;
+          const int delta = tracked ? proc->ntn_rx_snapshot->fft_delta : 0;
+          const double total = tracked ? proc->ntn_rx_snapshot->total_fo
+                                       : (UE->cont_fo_comp ? UE->dl_Doppler_shift + UE->freq_offset : 0);
+          uint64_t begin=0,end=0;
+          const bool event_id_valid = fp->symbols_per_slot > 0 && symbol >= 0 && symbol < fp->symbols_per_slot
+              && proc->ntn_rx_job_id
+              && proc->ntn_rx_job_id <= (UINT64_MAX - symbol) / fp->symbols_per_slot;
+          const uint64_t event = event_id_valid ? proc->ntn_rx_job_id * fp->symbols_per_slot + symbol : 0;
+          const bool valid = event_id_valid && proc->ntn_rx_domain_valid
+              && nr_ntn_pbch_span(fp, proc->nr_slot_rx, symbol, proc->ntn_rx_logical_begin,
+                                  proc->ntn_rx_rf_span_begin, proc->ntn_rx_span_length, delta, &begin, &end);
+          struct timespec now={0};clock_gettime(CLOCK_MONOTONIC,&now);
+          const uint64_t mono=(uint64_t)now.tv_sec*1000000000ULL+now.tv_nsec;
+          LOG_E(PHY,
+                "Frame %d, slot %d, SSB Index %d. Error decoding PBCH! STKUE_PBCH_FAILURE job=%llu Fs=%.9f native_begin=%llu native_end=%llu nominal=%llu delta=%d span_valid=%d mono_ns=%llu tracker=%d total_fo=%.9f first_ts=%llu slot_job=%llu symbol=%d symbols_per_slot=%d\n",
+                proc->frame_rx,proc->nr_slot_rx,*ssbIndex,(unsigned long long)event,
+                (double)fp->samples_per_subframe*1000.0,(unsigned long long)begin,(unsigned long long)end,
+                (unsigned long long)proc->ntn_rx_nominal_slot,delta,valid,(unsigned long long)mono,
+                tracked,total,(unsigned long long)proc->ntn_rx_first_ts,
+                (unsigned long long)proc->ntn_rx_job_id,symbol,fp->symbols_per_slot);
+        } else {
+          LOG_E(PHY, "Frame %d, slot %d, SSB Index %d. Error decoding PBCH!\n", proc->frame_rx, proc->nr_slot_rx, *ssbIndex);
+        }
+      }
       else
         T(T_NRUE_PHY_MIB, T_INT(proc->frame_rx), T_INT(proc->nr_slot_rx), T_INT(*ssbIndex), T_BUFFER(pbchResult.decoded_output, 3));
       // Measure timing offset if PBCH is present in slot
@@ -1155,6 +1181,9 @@ int pbch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_da
     args->proc = *proc;
     /* Neighbor measurement owns its separate raw data, never this RX job. */
     args->proc.ntn_rx_snapshot = NULL;
+    args->proc.ntn_rx_failure_metadata = false;
+    args->proc.ntn_rx_domain_valid = false;
+    args->proc.ntn_rx_span_length = 0;
     args->ue = ue;
     args->rxdata_size = rxdata_size;
     args->rxdata = malloc_or_fail(fp->nb_antennas_rx * sizeof(*args->rxdata));

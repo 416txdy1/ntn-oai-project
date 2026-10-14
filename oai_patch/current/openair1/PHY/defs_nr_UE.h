@@ -460,6 +460,10 @@ typedef struct {
   /// hyper frame number to act upon for reception
   int hfn_rx;
   const struct nr_ntn_rx_snapshot_s *ntn_rx_snapshot;
+  bool ntn_rx_failure_metadata, ntn_rx_domain_valid;
+  uint64_t ntn_rx_job_id, ntn_rx_first_ts, ntn_rx_rf_span_begin, ntn_rx_nominal_slot;
+  int64_t ntn_rx_logical_begin;
+  int ntn_rx_span_length;
 } UE_nr_rxtx_proc_t;
 
 typedef struct {
