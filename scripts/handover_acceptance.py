@@ -373,6 +373,35 @@ def mapped_packets(sender,receiver,mapper,drain_ns):
     return result
 
 
+def startup_measurement_gaps(probes, maps, pdu_ns):
+    """Report real unavailable coverage; retain both channels' anchor bounds."""
+    result = {}
+    for name, probe in probes.items():
+        packets = probe['packets']
+        delivered = [p for p in packets if p['received']]
+        if not packets or not delivered:
+            raise ValueError('startup coverage requires real sends and receipts')
+        events = {'first_send': min(p['send_ns'] for p in packets),
+                  'first_receive': min(p['receive_ns'] for p in delivered)}
+        result[name] = {}
+        for label, ns in events.items():
+            if ns < pdu_ns:
+                raise ValueError('business event precedes observed PDU readiness')
+            item = {'pdu_to_event_wall_s': (ns - pdu_ns) / 1e9, 'channels': {}}
+            for side, mapper in maps.items():
+                pdu, event = mapper.map(pdu_ns), mapper.map(ns)
+                lo, hi = pdu['iq_bounds_s']
+                elo, ehi = event['iq_bounds_s']
+                item['channels'][side] = {
+                    'pdu_iq_bounds_s': [lo, hi], 'event_iq_bounds_s': [elo, ehi],
+                    'pdu_to_event_iq_bounds_s': [elo - hi, ehi - lo],
+                    'pdu_to_event_iq_s_estimate': event['iq_s'] - pdu['iq_s'],
+                    'pdu_stk_bounds_s': pdu['stk_bounds_s'],
+                    'event_stk_bounds_s': event['stk_bounds_s']}
+            result[name][label] = item
+    return result
+
+
 def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,workers):
     fs=observer.fs
     if fs is None:raise ValueError('missing both actual startup sample rates')
@@ -400,6 +429,7 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
         probes[direction]=mapped_packets(events[direction+'-sender'],events[direction+'-receiver'],maps[side],drain_ns)
     if any(probe['unknown_receives'] for probe in probes.values()):
         raise ValueError('unmatched/foreign receiver evidence')
+    report['business_startup_coverage'] = startup_measurement_gaps(probes, maps, readiness['pdu_ns'])
     # PDU readiness and traffic readiness require bracketing on both physical sides.
     pdu=[maps[side].map(readiness['pdu_ns']) for side in maps]
     first_receives=[]

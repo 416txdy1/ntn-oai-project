@@ -72,6 +72,27 @@ class DriverBoundaryTests(unittest.TestCase):
             lab.preflight.side_effect=ValueError('owner ID/config mismatch')
             with self.assertRaises(ValueError):d.verified_uplink_path(config,'12.2.1.2',22,('start','22'))
 
+    def test_startup_gap_keeps_wall_and_iq_units_and_bounds(self):
+        from handover_metrics import ClockMap
+        anchors=[dict(samples=i*100,monotonic_ns=10_000_000_000+i*200_000_000,
+                      sampling_rate=1000,iq_s=i*.1,stk_s=8200+i*.1) for i in range(20)]
+        mapper=ClockMap(anchors,8200,1,1000)
+        packet=dict(send_ns=10_750_000_000,receive_ns=11_200_000_000,received=True)
+        probes={name:{'packets':[dict(packet)]} for name in ('ping','uplink','downlink')}
+        result=d.startup_measurement_gaps(probes,{'gnb':mapper,'ue':mapper},10_500_000_000)
+        for item in result.values():
+            self.assertAlmostEqual(item['first_send']['pdu_to_event_wall_s'],.25)
+            self.assertAlmostEqual(item['first_receive']['pdu_to_event_wall_s'],.7)
+            for channel in item['first_send']['channels'].values():
+                self.assertAlmostEqual(channel['pdu_to_event_iq_s_estimate'],.125)
+                lo,hi=channel['pdu_to_event_iq_bounds_s']
+                self.assertLessEqual(lo,.125);self.assertGreaterEqual(hi,.125)
+        with self.assertRaises(ValueError):
+            d.startup_measurement_gaps(probes,{'ue':mapper},10_800_000_000)
+        probes['ping']['packets'][0]['received']=False
+        with self.assertRaises(ValueError):
+            d.startup_measurement_gaps(probes,{'ue':mapper},10_500_000_000)
+
     def test_environment_contamination_still_refused(self):
         with self.assertRaises(ValueError):
             d.selected_runtime('full','integrated-handover','case-test',{'OAI_NTN_RUN_DIR':'/tmp/original-run'})

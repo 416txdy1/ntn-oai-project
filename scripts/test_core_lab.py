@@ -56,6 +56,39 @@ class CoreTests(unittest.TestCase):
         with patch.object(lab,'inventory',return_value=([],builtin+[conflict])):
             with self.assertRaises(ValueError):lab.preflight()
 
+    def test_batched_inventory_complete_and_exact(self):
+        ids=[format(i,'064x') for i in range(1,20)]
+        nets=[format(i,'064x') for i in range(100,103)]
+        calls=[]
+        def runner(cmd):
+            calls.append(cmd)
+            if cmd==['docker','ps','-aq','--no-trunc']:return '\n'.join(ids)
+            if cmd==['docker','network','ls','-q','--no-trunc']:return '\n'.join(nets)
+            if cmd==['docker','inspect',*ids]:return json.dumps([{'Id':i} for i in reversed(ids)])
+            if cmd==['docker','network','inspect',*nets]:return json.dumps([{'Id':i} for i in nets])
+            raise AssertionError(cmd)
+        lab=CoreLab(self.c,runner)
+        containers,networks=lab.inventory()
+        self.assertEqual({i['Id'] for i in containers},set(ids))
+        self.assertEqual({i['Id'] for i in networks},set(nets))
+        self.assertEqual(len(calls),4)
+        empty_calls=[]
+        self.assertEqual(CoreLab(self.c,lambda cmd:empty_calls.append(cmd) or '').inventory(),([],[]))
+        self.assertEqual(len(empty_calls),2)
+        for bad in [[],[{'Id':ids[0]}]*19,[{'Id':i} for i in ids[:-1]]+[{'Id':'foreign'}],{},[{'Id':None}],None]:
+            def broken(cmd):
+                if cmd[:2]==['docker','ps']:return '\n'.join(ids)
+                return json.dumps(bad)
+            with self.assertRaises(ValueError):CoreLab(self.c,broken).inventory()
+        def failed(cmd):
+            if cmd[:2]==['docker','ps']:return '\n'.join(ids)
+            raise RuntimeError('partial inspect failed')
+        with self.assertRaises(RuntimeError):CoreLab(self.c,failed).inventory()
+        def invalid_json(cmd):
+            if cmd[:2]==['docker','ps']:return '\n'.join(ids)
+            return '{'
+        with self.assertRaises(ValueError):CoreLab(self.c,invalid_json).inventory()
+
     def test_default_zky_rendering_keeps_existing_pool_and_names(self):
         with patch('init_lab.ROOT',self.root),contextlib.redirect_stdout(io.StringIO()):
             init([])

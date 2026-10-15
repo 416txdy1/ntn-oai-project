@@ -46,12 +46,26 @@ class CoreLab:
         fd=os.open(self.marker,os.O_RDONLY|os.O_NOFOLLOW)
         with os.fdopen(fd) as stream:return json.load(stream)
     def inventory(self):
-        containers=[];networks=[]
-        for identifier in self.run(['docker','ps','-aq']).split():
-            containers.extend(json.loads(self.run(['docker','inspect',identifier])))
-        for identifier in self.run(['docker','network','ls','-q']).split():
-            networks.extend(json.loads(self.run(['docker','network','inspect',identifier])))
-        return containers,networks
+        # Batch CLI calls, retaining a complete, exact inventory for every check.
+        def inspect(ids, prefix):
+            if len(ids) != len(set(ids)):
+                raise ValueError('Duplicate inventory query IDs')
+            if not ids:
+                return []
+            items = json.loads(self.run(prefix + ids))
+            if not isinstance(items, list) or any(
+                    not isinstance(item, dict) or not isinstance(item.get('Id'), str)
+                    for item in items):
+                raise ValueError('Invalid inventory response')
+            returned = [item['Id'] for item in items]
+            if len(returned) != len(ids) or set(returned) != set(ids):
+                raise ValueError('Incomplete or unexpected inventory response')
+            return items
+        container_ids = self.run(['docker','ps','-aq','--no-trunc']).split()
+        containers = inspect(container_ids, ['docker','inspect'])
+        network_ids = self.run(['docker','network','ls','-q','--no-trunc']).split()
+        networks = inspect(network_ids, ['docker','network','inspect'])
+        return containers, networks
     def names(self):
         return set(re.findall(r'^\s*container_name:\s*"?([a-z0-9-]+)',self.compose.read_text(),re.M))
     def own_container(self,item):

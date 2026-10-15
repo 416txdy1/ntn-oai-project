@@ -185,10 +185,10 @@ Before further outcomes were known, OAI_RNGSEED20260925 was chosen from the exis
 | Run | Explicit DTX | Ping received/sent | UL received/sent | DL received/sent | Result |
 | --- | --- | --- | --- | --- | --- |
 | task8-firstdiag-20261015e | 10 | 35/78 | 441/988 | 460/987 | **FAIL** |
+| task8-firstdiag-20261015f | 100 | 87/88 | 1113/1118 | 1110/1117 | **FAIL** |
 
 task8-firstdiag-20261015e: wall124.523117s; businessIQ[19.0499265625, 65.043]; failures: global ping conservative loss exceeds1%, global ping timely delivery exceeds1%, global uplink conservative loss exceeds1%, global uplink timely delivery exceeds1%, global downlink conservative loss exceeds1%, global downlink timely delivery exceeds1%, window ping conservative loss exceeds1%, window ping timely delivery exceeds1%, window uplink conservative loss exceeds1%, window uplink timely delivery exceeds1%, window downlink conservative loss exceeds1%, window downlink timely delivery exceeds1%.
 Window8244: ping0/17, UL0/207, DL21/208. Mean wallRTT global/window 213.5412610285714/Nonems. Stop0, PBCHcase0, idle0, reaccess0; original compare passed/differences=[] and core9healthy.
-| task8-firstdiag-20261015f | 100 | 87/88 | 1113/1118 | 1110/1117 | **FAIL** |
 
 task8-firstdiag-20261015f: wall138.442030s; businessIQ[19.397937630208332, 65.03018671875]; failures: global ping conservative loss exceeds1%, global ping timely delivery exceeds1%, global uplink timely delivery exceeds1%, window ping conservative loss exceeds1%, window ping timely delivery exceeds1%, window uplink conservative loss exceeds1%, window uplink timely delivery exceeds1%.
 Window8244: ping20/21, UL262/267, DL267/268. Mean wallRTT global/window 1113.1902941839082/4018.6781231500004ms. Stop0, PBCHcase0, idle0, reaccess0; original compare passed/differences=[] and core9healthy.
@@ -215,3 +215,57 @@ is at least 8.043407 ms (mathematical minimum K for a 5 ms nominal margin: 45).
 This is an endpoint bound for legacy-linear geometry, not an actual write-lead
 guarantee: ordinary TA, NTA, clipping and prediction errors also affect writes.
 Physical and continuous business acceptance gates remain unchanged.
+
+
+### 2026-10-15 matrix at 80fdbd9 and startup-coverage correction
+
+Same 498f1eb OAI overlays/binaries, explicit PUSCH threshold100, PDCP500ms,
+K80 and OAI seed20260925. Earlier same-configuration failures remain valid;
+one short PASS is not a robustness guarantee.
+
+| Case/run | Result | Ping received/sent | UL received/sent | DL received/sent |
+| --- | --- | --- | --- | --- |
+| first/task8-firstdiag-20261015k | PASS | 86/86 | 1093/1093 | 1089/1092 |
+| static/task8-static-20261015l | PASS | 111/111 | 1415/1415 | 1409/1413 |
+| full/task8-full-20261015m | FAIL | 1093/1093 | 13964/13964 | 13957/13962 |
+| legacy/task8-legacy-20261015n | FAIL | 352/352 | 4485/4485 | 4484/4484 |
+
+
+task8-firstdiag-20261015k: wall 143.748653s; business IQ [21.33199752604167, 65.025]; PDU observed IQ 4.731490, confirmed business IQ 21.632007. Failures: none.
+Window 8244: ping 19/19, late/deadline failures 0 definite + 0 boundary, max observed wall latency 3731.39558ms; uplink 245/245, late/deadline failures 0 definite + 0 boundary, max observed wall latency 3135.364914ms; downlink 244/244, late/deadline failures 0 definite + 0 boundary, max observed wall latency 997.084143ms; 
+Case PBCH0, idle/reaccess0, numeric audit passed, stop0/no cleanup error; core9healthy and original compare0/differences=[].
+
+task8-static-20261015l: wall 159.558253s; business IQ [20.784348307291665, 85.078]; PDU observed IQ 4.578000, confirmed business IQ 20.984348. Failures: none.
+Case PBCH0, idle/reaccess0, numeric audit passed, stop0/no cleanup error; core9healthy and original compare0/differences=[].
+
+task8-full-20261015m: wall 1172.125881s; business IQ [19.0419265625, 615.035]; PDU observed IQ 4.441482, confirmed business IQ 19.241933. Failures: window ping timely delivery exceeds1%; window uplink timely delivery exceeds1%; window ping timely delivery exceeds1%.
+Window 8244: ping 18/18, late/deadline failures 6 definite + 0 boundary, max observed wall latency 5717.276857ms; uplink 222/222, late/deadline failures 5 definite + 0 boundary, max observed wall latency 5091.280193ms; downlink 223/223, late/deadline failures 0 definite + 0 boundary, max observed wall latency 1003.824929ms; 
+Window 8799: ping 19/19, late/deadline failures 2 definite + 0 boundary, max observed wall latency 5190.085797ms; uplink 235/235, late/deadline failures 0 definite + 0 boundary, max observed wall latency 3405.229012ms; downlink 235/235, late/deadline failures 0 definite + 0 boundary, max observed wall latency 2346.709328ms; 
+Case PBCH0, idle/reaccess0, numeric audit passed, stop0/no cleanup error; core9healthy and original compare0/differences=[].
+
+task8-legacy-20261015n: wall 420.839559s; business IQ [62.25624075520833, 607.530021875]; PDU observed IQ 4.547485, confirmed business IQ 62.441000. Failures: business not ready before first window; incomplete switch window; window ping has no certain matched senders; window ping conservative loss exceeds1%; window ping unresolved timely evidence; window ping unsubstantiated timely bound; window ping timely delivery exceeds1%; window ping unsubstantiated loss bound; window uplink has no certain matched senders; window uplink conservative loss exceeds1%; window uplink unresolved timely evidence; window uplink unsubstantiated timely bound; window uplink timely delivery exceeds1%; window uplink unsubstantiated loss bound; window downlink has no certain matched senders; window downlink conservative loss exceeds1%; window downlink unresolved timely evidence; window downlink unsubstantiated timely bound; window downlink timely delivery exceeds1%; window downlink unsubstantiated loss bound.
+Window 8244: ping 0/0, late/deadline failures 0 definite + 0 boundary, max observed wall latency Nonems; uplink 0/0, late/deadline failures 0 definite + 0 boundary, max observed wall latency Nonems; downlink 0/0, late/deadline failures 0 definite + 0 boundary, max observed wall latency Nonems; 
+Window 8799: ping 7/7, late/deadline failures 0 definite + 0 boundary, max observed wall latency 360.746495ms; uplink 83/83, late/deadline failures 0 definite + 0 boundary, max observed wall latency 342.669497ms; downlink 84/84, late/deadline failures 0 definite + 0 boundary, max observed wall latency 215.997861ms; 
+Case PBCH0, idle/reaccess0, numeric audit passed, stop0/no cleanup error; core9healthy and original compare0/differences=[].
+
+K48 diagnostics h/i both failed business readiness at39IQ before any PDU,
+received SIB1 but no SIB2/SIB19/PRACH. Geometry budget passes, actual startup does
+not. Readonly source review found no proven K-before-SIB cycle or UL ring OOB;
+INFO evidence cannot distinguish missing other-SI TX/monitor/DCI. Do not promote48.
+K80 configs g/k are byte-identical; h/i byte-identical and differ only by K.
+
+Important whole-branch review finding: PDU-to-first-business coverage was absent
+for about15-17IQ seconds in integrated cases, and longer in faster legacy replay.
+The old reports expose the true business interval and do not fabricate packets,
+but cannot support a claim of continuous business from earliest PDU availability.
+CoreLab.inventory spawned one Docker inspect per container/network twice after
+PDU. The correction batches each full inventory, requires exact unique query/
+returned ID sets, preserves both complete preflights and all ownership/conflict/
+namespace/route/SNAT checks, and adds per-direction PDU-to-first-send/first-receipt
+wall durations plus both channels' actual IQ/STK bracketing bounds. New actual
+runs must measure the improvement; no coverage or radio PASS is inferred.
+
+The first70 actual shared-axis plot was visually checked. RTT peaked near3.5s
+and UL arrival throughput dipped/recovered during the physical transition.
+Full15m still FAILED the unchanged5s service deadline despite eventual receipt.
+No remote push or completed integration release is established.
