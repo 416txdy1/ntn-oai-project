@@ -77,6 +77,17 @@ if strcmp(options.antenna_profile, 'satellite_16x16_ground_omni')
     [orientation, beam_weights, antenna_metadata] = satellite_beam_geometry( ...
         layout.tx_array, trace, visibility);
     layout.tx_track.orientation = orientation;
+elseif strcmp(options.antenna_profile, 'satellite_2port_ground_omni')
+    % 两个独立、半波长间距的阵元端口，固定 ENU 朝向；不离线合成。
+    layout.tx_array = qd_arrayant('omni');
+    layout.tx_array.center_frequency = options.center_frequency_hz;
+    layout.tx_array.no_elements = 2;
+    spacing = qd_simulation_parameters.speed_of_light / options.center_frequency_hz / 2;
+    layout.tx_array.element_position = [0, 0; -spacing/2, spacing/2; 0, 0];
+    layout.tx_array.coupling = eye(2);
+    antenna_metadata = struct('profile', options.antenna_profile, ...
+        'satellite_rf_ports', 2, 'ground_rf_ports', 1, 'spacing_wavelengths', 0.5, ...
+        'orientation', 'fixed_ENU', 'absolute_array_gain_source', 'not_calibrated_STK_reference');
 else
     layout.tx_array = qd_arrayant('omni');
     layout.tx_array.center_frequency = options.center_frequency_hz;
@@ -104,7 +115,17 @@ if strcmp(options.antenna_profile, 'satellite_16x16_ground_omni')
     antenna_metadata.max_element_delay_span_s = max(delay_span_s(:));
     [coefficients, delays_s] = combine_satellite_beam(coefficients, delays_s, beam_weights);
 end
-[coefficients, delays_s, residual_gain_db] = normalize_qd_channel(coefficients, delays_s);
+if strcmp(options.antenna_profile, 'satellite_2port_ground_omni')
+    % 上行的输入是 UE，输出是卫星阵列；转置空间轴但不取共轭。
+    if strcmp(options.link_direction, 'uplink')
+        coefficients = permute(coefficients, [2, 1, 3, 4]);
+        delays_s = permute(delays_s, [2, 1, 3, 4]);
+    end
+    [coefficients, delays_s, residual_gain_db] = normalize_spatial_channel(coefficients, delays_s);
+    metadata.coefficient_normalization = 'unit_snapshot_mean_link_power';
+else
+    [coefficients, delays_s, residual_gain_db] = normalize_qd_channel(coefficients, delays_s);
+end
 metadata.center_frequency_hz = options.center_frequency_hz;
 metadata.link_direction = options.link_direction;
 metadata.quadriga_version = get_quadriga_version(simulation, options.quadriga_version);
@@ -161,8 +182,8 @@ end
 if isempty(options.quadriga_path)
     error('QDCHANNEL1:QuaDRiGaPath', '必须显式提供 options.quadriga_path');
 end
-if ~any(strcmp(options.antenna_profile, {'satellite_16x16_ground_omni', 'omni'}))
-    error('QDCHANNEL1:AntennaProfile', 'antenna_profile 必须为 satellite_16x16_ground_omni 或 omni');
+if ~any(strcmp(options.antenna_profile, {'satellite_16x16_ground_omni', 'satellite_2port_ground_omni', 'omni'}))
+    error('QDCHANNEL1:AntennaProfile', '不支持的 antenna_profile');
 end
 if ~isscalar(options.center_frequency_hz) || options.center_frequency_hz <= 0
     error('QDCHANNEL1:Frequency', 'center_frequency_hz 必须大于 0');

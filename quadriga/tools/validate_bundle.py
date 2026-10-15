@@ -96,6 +96,9 @@ def validate_bundle(root: Path) -> dict[str, Any]:
         "quadriga_coefficients": "unit_snapshot_link_power",
         "quadriga_large_scale_gain": "zero_mean_residual_db",
     }
+    spatial = composition.get("quadriga_coefficients") == "unit_snapshot_mean_link_power"
+    if spatial:
+        expected_composition["quadriga_coefficients"] = "unit_snapshot_mean_link_power"
     _require(composition == expected_composition, "composition 与 QDCHANNEL1 v1 约定不一致")
 
     provenance = manifest.get("provenance", {})
@@ -114,10 +117,15 @@ def validate_bundle(root: Path) -> dict[str, Any]:
         _require(antenna.get("stk_trace_sha256") == trace_hash, "antenna STK trace SHA256 不匹配")
         _require(antenna.get("link_direction") == radio["link_direction"], "antenna 方向不匹配")
         _require(antenna.get("center_frequency_hz") == center_frequency, "antenna 频率不匹配")
-        _require(antenna.get("profile") in {"omni", "satellite_16x16_ground_omni"}, "antenna profile 非法")
-        _require(_positive_int(antenna.get("satellite_rf_ports"), "antenna satellite_rf_ports") == 1
-                 and _positive_int(antenna.get("ground_rf_ports"), "antenna ground_rf_ports") == 1
-                 and rx_antennas == tx_antennas == 1, "antenna 必须与单波束 RF 端口维度一致")
+        _require(antenna.get("profile") in {"omni", "satellite_16x16_ground_omni", "satellite_2port_ground_omni"}, "antenna profile 非法")
+        satellite = _positive_int(antenna.get("satellite_rf_ports"), "antenna satellite_rf_ports")
+        ground = _positive_int(antenna.get("ground_rf_ports"), "antenna ground_rf_ports")
+        expected = (ground, satellite) if radio["link_direction"] == "downlink" else (satellite, ground)
+        _require((rx_antennas, tx_antennas) == expected, "antenna RF 端口维度不一致")
+        if antenna["profile"] == "satellite_2port_ground_omni":
+            _require(satellite == 2 and ground == 1 and spatial, "双端口需要空间归一化")
+        else:
+            _require(satellite == ground == 1, "原有 profile 仅支持单波束端口")
         if antenna["profile"] == "satellite_16x16_ground_omni":
             _require(antenna.get("satellite_rows") == 16 and antenna.get("satellite_columns") == 16
                      and antenna.get("spacing_wavelengths") == 0.5, "antenna 必须是 16x16、0.5λ 阵列")
@@ -149,10 +157,12 @@ def validate_bundle(root: Path) -> dict[str, Any]:
     _require(all(math.isfinite(value) for value in times), "times 包含非有限值")
     _require(all(left < right for left, right in zip(times, times[1:])), "times 必须严格递增")
 
-    coefficient_format = struct.Struct(f"<{paths * 2}f")
-    delay_format = struct.Struct(f"<{paths}d")
+    group_links = rx_antennas * tx_antennas if spatial else 1
+    group_paths = paths * group_links
+    coefficient_format = struct.Struct(f"<{group_paths * 2}f")
+    delay_format = struct.Struct(f"<{group_paths}d")
     with resolved_files["coefficients"].open("rb") as coefficients, resolved_files["delays"].open("rb") as delays:
-        for link_index in range(links):
+        for link_index in range(0, links, group_links):
             coefficient_values = coefficient_format.unpack(
                 _read_exact(coefficients, coefficient_format.size, f"coefficients link {link_index}")
             )
@@ -163,10 +173,10 @@ def validate_bundle(root: Path) -> dict[str, Any]:
             _require(all(math.isfinite(value) and value >= 0 for value in delay_values), "delays 必须有限且非负")
             powers = [
                 coefficient_values[2 * path] ** 2 + coefficient_values[2 * path + 1] ** 2
-                for path in range(paths)
+                for path in range(group_paths)
             ]
             total_power = sum(powers)
-            _require(math.isclose(total_power, 1.0, rel_tol=1e-5, abs_tol=1e-6), f"link {link_index} 路径功率未归一化")
+            _require(math.isclose(total_power / group_links, 1.0, rel_tol=1e-5, abs_tol=1e-6), f"link {link_index} 路径功率未归一化")
             active_delays = [delay_values[index] for index, power in enumerate(powers) if power > 1e-12]
             _require(active_delays and min(active_delays) <= 1e-12, f"link {link_index} 缺少零参考时延")
 
