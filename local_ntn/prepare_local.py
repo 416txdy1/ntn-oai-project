@@ -5,6 +5,8 @@ import math
 import os
 from pathlib import Path
 import re
+from ntn_timing_budget import cell_koffset_ms, timing_budget
+from preflight import read_trace
 from network_config import configure
 from runtime_config import resolve_runtime
 
@@ -14,6 +16,9 @@ def generate(config, rate, initial_lead_rfsim=0):
         raise ValueError('--rate must be finite and between 0 and 1')
     if not math.isfinite(initial_lead_rfsim) or initial_lead_rfsim < 0:
         raise ValueError('--initial-lead-rfsim must be finite and nonnegative')
+    koffset = cell_koffset_ms(config.profile, os.environ)
+    if koffset is not None:
+        timing_budget(read_trace(config.trace), koffset, config.interpolation)
     repo=config.oai_repo
     trace=config.trace
     if not trace.is_file():
@@ -59,7 +64,7 @@ def generate(config, rate, initial_lead_rfsim=0):
     sd=re.search(r'\bnssai_sd\s*=\s*(0x[0-9a-fA-F]+|\d+)',ue_conf)
     slice_sd=int(sd[1],16 if sd[1].startswith('0x') else 10) if sd else 0xffffff
     conf=re.sub(r'\bsd\s*=\s*(?:0x[0-9a-fA-F]+|\d+)',f'sd = 0x{slice_sd:06x}',conf)
-    values={'cellSpecificKoffset_r17':80,'ta-Common-r17':round(2*rf/c/4.072e-9),
+    values={'cellSpecificKoffset_r17':80 if koffset is None else koffset,'ta-Common-r17':round(2*rf/c/4.072e-9),
             'ta-CommonDrift-r17':round(2*vf/c/.2e-9)}
     values.update({f'position{k}-r17':round(x/1.3) for k,x in zip('XYZ',pos)})
     values.update({f'velocityV{k}-r17':round(x*rate/.06) for k,x in zip('XYZ',vel)})

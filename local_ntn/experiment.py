@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import time
 
+from ntn_timing_budget import cell_koffset_ms, timing_budget
 from network_config import check_network
 from network_owner import NetworkManager
 from preflight import preflight, channel_environments, read_trace
@@ -75,6 +76,8 @@ def source_identity(root,repo):
 
 def build_manifest(config, rate, environment):
     rows=read_trace(config.trace)
+    koffset=cell_koffset_ms(config.profile, environment)
+    budget=timing_budget(rows, koffset, config.interpolation) if koffset is not None else None
     bundles={}
     if config.profile!='legacy-handover':
         for direction,bundle in (('downlink',config.dl_bundle),('uplink',config.ul_bundle)):
@@ -84,6 +87,7 @@ def build_manifest(config, rate, environment):
             'pusch_failure_threshold_override':pusch_failure_threshold(config.profile, environment),
             'pdcp_reordering_ms_override':pdcp_reordering_ms(config.profile, environment),
             'oai_rngseed_requested':environment.get('OAI_RNGSEED'),
+            'cell_koffset_ms_override':koffset, 'nominal_timing_budget':budget,
             'source_commit':commit_at(config.root),'oai_source':source_identity(config.root,config.oai_repo),
             'source_repo':str(config.oai_repo),'build_dir':str(config.build_dir),
             'binaries':{name:sha256(config.build_dir/name) for name in ('nr-softmodem','nr-uesoftmodem','librfsimulator.so','libparams_libconfig.so','libldpc.so','libdfts.so')},

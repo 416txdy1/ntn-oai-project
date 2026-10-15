@@ -196,3 +196,22 @@ Window8244: ping20/21, UL262/267, DL267/268. Mean wallRTT global/window 1113.190
 Neither count100 nor the fixed seed is a complete PHY fix. Source+configuration show DL/UL MCS already limited to9, DRB AM, RLC maxRetx32/poll45ms/reassembly15ms/statusProhibit15ms, PDCP discard infinity and reordering100ms.15d UE showed old-COUNT discards423<427 and442<444 with list0 near observed DL IQ40.120/41.129; these are direct late-count discards, not proven mappings to the two UDP losses. No observed max-retrans/integrity-discard warnings. Default INFO does not expose reorder-expiry or actual timer values.
 
 Native finite PDCP timer comparison was added explicitly, default unchanged. Only gNB receives --pdcp.drb.t_reordering ms500; source mapping config_pdcp -> DRB.pdcp_config -> ASN encode -> UE decode/new entity establishes both-end configuration. It must not be added to UE CLI, where support was not established. The pending trial is not a claim that500ms improves business or PHY.
+
+
+### 2026-10-15 first handover diagnostic 15g (not accepted)
+
+Commit cc8a34ab, unchanged 498f1eb OAI overlays/binaries; explicit PUSCH failure
+threshold 100, PDCP reordering 500 ms, modem seed 20260925. Continuous Ping
+71/72, UL 903/912, DL 907/911. Switch window Ping 15/16 (mean RTT 7274.607 ms),
+UL 182/191, DL 194/194. Overall acceptance FAILED on Ping/UL loss and timely
+delivery. Original protection comparison passed; nine dedicated core containers
+healthy before/after, owned modem/network cleanup passed. Timer changes do not
+establish a physical-channel fix.
+
+Next explicit diagnostic: OAI_NTN_CELL_KOFFSET_MS=48, only isolated generated
+gNB configuration. Unset remains 80; zky ignores the override. Current launcher
+is mu=0. Full-trace max geometric RTT is 42.956593 ms; nominal lead 3+48-RTT
+is at least 8.043407 ms (mathematical minimum K for a 5 ms nominal margin: 45).
+This is an endpoint bound for legacy-linear geometry, not an actual write-lead
+guarantee: ordinary TA, NTA, clipping and prediction errors also affect writes.
+Physical and continuous business acceptance gates remain unchanged.

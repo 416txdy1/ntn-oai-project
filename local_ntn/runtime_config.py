@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+from ntn_timing_budget import cell_koffset_ms
 from typing import Mapping, Optional
 
 
@@ -109,6 +110,7 @@ def resolve_runtime(root: Path, profile: str, run_id: str,
     isolated = profile != 'zky'
     pusch_failure_threshold(profile, environ)
     pdcp_reordering_ms(profile, environ)
+    cell_koffset_ms(profile, environ)
 
     def path(key, default, scope=None):
         value = Path(environ.get(key) or default).expanduser().resolve()

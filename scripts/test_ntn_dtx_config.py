@@ -4,6 +4,8 @@ import sys, unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'local_ntn'))
 from runtime_config import pusch_failure_threshold, pdcp_reordering_ms, resolve_runtime
 
+from ntn_timing_budget import cell_koffset_ms, timing_budget
+
 class DtxSetting(unittest.TestCase):
  def test_old_profile_ignores_override(self):
   for value in ['100','0','1001','$(unsafe)',None]:
@@ -53,5 +55,21 @@ class DtxSetting(unittest.TestCase):
    manifest=experiment.build_manifest(config,1,env)
    self.assertEqual(manifest['pdcp_reordering_ms_override'],500)
    self.assertEqual(manifest['oai_rngseed_requested'],'20260925')
+
+ def test_koffset_validation_and_budget(self):
+  from preflight import read_trace
+  root=Path(__file__).resolve().parents[1]
+  self.assertIsNone(cell_koffset_ms('zky',{'OAI_NTN_CELL_KOFFSET_MS':'bad'}))
+  self.assertIsNone(cell_koffset_ms('legacy-handover',{}))
+  for value in ['0','1024','-1','48;echo x','48.0']:
+   with self.assertRaises(ValueError):resolve_runtime(root,'integrated-handover','k-test',{'OAI_NTN_CELL_KOFFSET_MS':value})
+  rows=read_trace(root/'local_ntn/stk_trace_seamless.csv')
+  with self.assertRaises(ValueError):timing_budget(rows,40,'legacy-linear')
+  with self.assertRaises(ValueError):timing_budget(rows,48,'hermite')
+  b=timing_budget(rows,48,'legacy-linear')
+  self.assertEqual(b['minimum_integer_koffset_ms'],45)
+  self.assertAlmostEqual(b['max_geometric_roundtrip_ms'],42.95659299863363)
+  self.assertAlmostEqual(b['nominal_write_lead_ms'],8.043407001366369)
+  self.assertGreater(timing_budget(rows,80,'legacy-linear')['nominal_write_lead_ms'],40)
 
 if __name__=='__main__':unittest.main()
