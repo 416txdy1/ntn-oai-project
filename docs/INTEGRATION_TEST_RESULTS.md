@@ -335,3 +335,88 @@ TX diagnostic records additionally retain immutable job ordinary TA, previous/
 current NTA and clock offset, avoiding inference from later mutable UE values.
 Actual C parser/window tests include boundary samples above2^32 and invalid
 inputs. A new formal build/regression and actual late diagnostic remain required.
+
+
+### 2026-10-15 late-window diagnostic at e3ed4b9
+
+Source/binary proof: `.private/task8-20261013/late-diag16a-formal-20261015/source-and-binary-proof.json`.
+`cmake --build ...` all six targets exit 0 (36.951 s),
+`bash local_ntn/run_regressions.sh` exit 0 (9.786 s),
+`bash scripts/test.sh` exit 0 (87.053 s). The diagnostic window changes logging
+only; PHY compensation calculations remain unchanged. Scoped read-only review passed.
+
+After exact-owned nine-container fresh restart (volumes preserved), ran
+`python3 scripts/handover_acceptance.py --case legacy --profile legacy-handover
+--run-id task8-legacydiag-20261015aa --max-wall-seconds 3600` with timing
+diagnostics enabled from IQ 580 s, PUSCH threshold 100, PDCP reordering 500 ms,
+Koffset 80 ms, RNG seed 20260925. This is a diagnostic FAIL, not release evidence.
+Report wall time 266.240 s; business IQ interval 14.044..604.567 s; both complete
+switch windows covered. Ping 239/244, UL 3054/3113, DL 3111/3112.
+First window: Ping 1/4, UL 21/52, DL 52/52. Second window: Ping 4/4,
+UL 53/53, DL 53/53. Loss/timely gates failed globally and at the first window.
+No case PBCH failures, RRC idle or reaccess. Cleanup exit 0, all nine isolated
+core containers healthy, original-platform comparison passed with no differences.
+
+Late diagnostic has 2111 pilot and 4225 UL-write records. Every pilot in the
+580..620 analysis bins was accepted. Offline continuous full-trace geometry
+comparison shows transient arrival prediction discrepancies around integer-second
+trace interpolation corners; this is not exact held-callback channel/FFT proof.
+The analysis omits out-of-trace values rather than freezing the last row and
+uses only valid TX predictions for immutable anchor/TA comparisons. The current
+result does not establish a unique failure cause: the previous full legacy
+run failed at the second window, whereas this one failed at the first.
+Next investigation captures the first window with unchanged compensation.
+The integrated full matrix and original final business recheck remain pending;
+no remote branch has been pushed.
+
+
+### 2026-10-15 first-window acceptance at e3ed4b9
+
+`python3 scripts/handover_acceptance.py --case firsthandover --profile integrated-handover
+--run-id task8-firstdiag-20261015ab --max-wall-seconds 3600`, with explicit
+DTX threshold100 / PDCP500 ms / Koffset80 ms / RNG20260925 / timing diagnostics1,
+diagnostic start IQ0. Same source and six binary hashes as the late-window run.
+After a fresh exact-owned core restart: PASS, exit0, report102.322 s,
+business IQ7.672..64.405. Ping79/79, UL1006/1006, DL1003/1005; complete first
+window Ping13/13, UL175/175, DL175/175. Timely and loss gates passed. QD loaded
+at both endpoints; numeric audit passed; case PBCH/idle/reaccess all0.
+Cleanup0, isolated core9 healthy, original comparison0/no differences.
+
+The actual seven-panel timeline was exported and visually checked. It preserves
+the startup/tail gaps, actual wall RTT and IQ-mapped physical geometry without
+substituting generated business results. Native gNB counters show transient
+retransmissions/errors/DTX during the physical blend despite successful business
+delivery. Large intermediate receiver prediction deviations also occur in this
+passing window, so those deviations alone are not a sufficient failure diagnosis.
+The current static/full/legacy acceptance matrix remains pending; prior FAILs
+are retained and do not become PASS because of this short-case result.
+
+
+### 2026-10-15 static PASS and startup monitor repair
+
+Current-build static case `task8-static-20261015ac`: PASS, report118.329 wall s,
+business IQ7.721..83.915, physical beyond90 IQ s. Ping96/96, UL1222/1222,
+DL1218/1221, measured offered rates approximately99.875 kbit/s/direction.
+QD loaded once at each endpoint; numeric audit passed; no case PBCH errors,
+idle or reaccess. Stop0, core9 healthy at completion, original comparison0.
+
+Full case `task8-full-20261015ad`: FAIL during startup at2.574 wall s, before
+physical channel/traffic evidence. Error `owned modem process exited`;
+preserved state has UE phase=launching, original shell executable recorded.
+Cleanup0 and original comparison0, all isolated core9 healthy. This is startup
+monitor failure evidence, not a PHY outcome or620-second test.
+
+Source inspection identified an observation race: run_local.sh performs
+shell -> ip netns exec -> selected UE executable, while concurrent acceptance
+polling required shell or selected modem even during the intermediate ip exec.
+The new helper allows observation of an unchanged live PID/start identity only
+while its record is launching and the launcher subprocess remains active.
+The launcher still requires the exact selected executable within30 seconds;
+no-IQ-progress60-second and total wall deadlines remain. Running/post-launch
+observation and stop_owned retain their existing strict executable checks.
+No new cleanup permission for ip, no PHY/math or acceptance-gate change.
+Scoped read-only review passed. Three new tests cover intermediate exec,
+dead/reused/missing identity, strict running/post-launch checks and unchanged
+cleanup matching. The complete driver test on Windows had21 successful tests,
+one skip and2 Linux-platform-specific errors (owner path and missing os.geteuid);
+Linux validation remains authoritative and is pending for this repair.

@@ -32,6 +32,26 @@ def command(args,**kwargs):
     return subprocess.run(args,check=True,**kwargs)
 
 
+
+def owned_modems_alive(records, launch_in_progress):
+    """Observe bounded exec transitions without granting cleanup authority.
+
+    run_local.sh execs ip before the UE binary. While experiment.start owns
+    its 30-second exec wait, require the original live PID/start identity;
+    the launcher still requires the exact selected modem before running.
+    Running records and post-launch records retain strict executable checks.
+    stop_owned/matches are unchanged and never accept an intermediate exe.
+    """
+    for record in records.values():
+        if record.get('phase') == 'launching' and launch_in_progress:
+            identity = process_identity(record['pid'])
+            if record.get('start') is None or not identity or identity[0] != record['start']:
+                return False
+        elif not matches(record):
+            return False
+    return True
+
+
 def snat_peer(rules,pdu_subnet,pdu_address,upf_address):
     pool=ipaddress.ip_network(pdu_subnet)
     if ipaddress.ip_address(pdu_address) not in pool:raise ValueError('PDU outside selected pool')
@@ -560,7 +580,7 @@ def run_acceptance(argv=None):
                 if now-last_progress>60:raise RuntimeError('IQ did not advance for60 wall seconds')
                 if config.state_file.is_file():
                     _,records=read_state(config.state_file,config.run_id)
-                    if records and not all(matches(record) for record in records.values()):
+                    if records and not owned_modems_alive(records, launch.poll() is None):
                         raise RuntimeError('owned modem process exited')
                 current_address=pdu_address(config.namespace)
                 if current_address:

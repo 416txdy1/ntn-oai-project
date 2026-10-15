@@ -14,6 +14,35 @@ import handover_plot as plot
 
 
 class DriverBoundaryTests(unittest.TestCase):
+    def test_launch_exec_transition_is_live_without_relaxing_cleanup(self):
+        import run_state
+        record=dict(pid=123,start='77',executable='/usr/bin/bash',
+                    expected_executable='/selected/nr-uesoftmodem',phase='launching')
+        for exe in ('/usr/bin/bash','/usr/sbin/ip','/selected/nr-uesoftmodem'):
+            with patch.object(d,'process_identity',return_value=('77',exe)), patch.object(d,'matches') as strict:
+                self.assertTrue(d.owned_modems_alive({'ue':record},True))
+                strict.assert_not_called()
+        # The observation grace does not authorize stop_owned to signal ip.
+        with patch.object(run_state,'process_identity',return_value=('77','/usr/sbin/ip')):
+            self.assertFalse(run_state.matches(record))
+
+    def test_launch_grace_rejects_dead_reused_and_missing_start_identity(self):
+        record=dict(pid=123,start='77',phase='launching')
+        for identity in (None,('78','/selected/nr-uesoftmodem')):
+            with patch.object(d,'process_identity',return_value=identity):
+                self.assertFalse(d.owned_modems_alive({'ue':record},True))
+        with patch.object(d,'process_identity',return_value=('77','/usr/sbin/ip')):
+            self.assertFalse(d.owned_modems_alive({'ue':dict(record,start=None)},True))
+
+    def test_running_or_finished_launch_still_requires_exact_executable(self):
+        for phase,launching in [('running',True),('running',False),('launching',False)]:
+            record=dict(pid=123,start='77',phase=phase)
+            with patch.object(d,'matches',return_value=False) as strict:
+                self.assertFalse(d.owned_modems_alive({'ue':record},launching))
+                strict.assert_called_once_with(record)
+            with patch.object(d,'matches',return_value=True):
+                self.assertTrue(d.owned_modems_alive({'ue':record},launching))
+
     def test_actual_stock_snat_selects_exact_peer_and_rejects_unexpected_rules(self):
         rule='-P POSTROUTING ACCEPT\n-A POSTROUTING -s 12.2.1.0/24 -o eth0 -j SNAT --to-source 192.168.71.134\n'
         self.assertEqual(d.snat_peer(rule,'12.2.1.0/24','12.2.1.2','192.168.71.134'),'192.168.71.134')

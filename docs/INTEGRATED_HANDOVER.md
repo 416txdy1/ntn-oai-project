@@ -1,7 +1,7 @@
 # 隔离的 NTN / QuaDRiGa / 伪卫星切换平台
 
-当前只完成离线实现与回归；真实四组业务验收和原平台最终复验尚待执行。
-不得把离线测试或短片段结果当作完整620 IQ秒成功证据。
+整合代码已完成编译、离线回归和多轮真实连续业务测试。当前 e3ed4b9 的首次切换测试通过，完整验收矩阵仍未全部通过；既有失败记录保留，原平台最终业务复验尚待完成，新分支尚未推送。
+不得把单次通过或短片段结果当作完整620 IQ秒稳定运行证据。实际结果见 [整合测试记录](INTEGRATION_TEST_RESULTS.md)。
 
 基底是完整 zky。新 profile 为 integrated-handover；legacy-handover 使用同一独立构建、同一STK轨迹并关闭QD。伪切换只改变连续物理信道与卫星身份日志，不是多小区Xn/RRC切换。默认 legacy-linear，timing assist关闭。原平台入口与外部源码不作为新平台部署目标。
 
@@ -22,10 +22,18 @@ ntn-qd-ue、ntn-qd-host/peer、10.202.0.0/30、RF TCP4044。
 四组验收必须串行且使用fresh run ID：
 
 ~~~bash
-sudo python3 scripts/handover_acceptance.py --case static --profile integrated-handover --run-id integrated-static-001 --max-wall-seconds 3600
-sudo python3 scripts/handover_acceptance.py --case firsthandover --profile integrated-handover --run-id integrated-first-001 --max-wall-seconds 3600
-sudo python3 scripts/handover_acceptance.py --case legacy --profile legacy-handover --run-id integrated-legacy-001 --max-wall-seconds 3600
-sudo python3 scripts/handover_acceptance.py --case full --profile integrated-handover --run-id integrated-full-001 --max-wall-seconds 3600
+# 当前诊断/验收使用的显式参数；原始默认值与 zky profile 保持不变。
+# sudo env 确保参数实际传递到启动器及其 gNB/UE 子进程。
+ntn_acceptance() {
+  sudo env OAI_NTN_TIMING_DIAG=1 OAI_NTN_TIMING_DIAG_START_IQ_S=0 \
+    OAI_NTN_PUSCH_FAILURE_THRES=100 OAI_NTN_PDCP_REORDERING_MS=500 \
+    OAI_NTN_CELL_KOFFSET_MS=80 OAI_RNGSEED=20260925 \
+    python3 scripts/handover_acceptance.py "$@"
+}
+ntn_acceptance --case static --profile integrated-handover --run-id integrated-static-001 --max-wall-seconds 3600
+ntn_acceptance --case firsthandover --profile integrated-handover --run-id integrated-first-001 --max-wall-seconds 3600
+ntn_acceptance --case legacy --profile legacy-handover --run-id integrated-legacy-001 --max-wall-seconds 3600
+ntn_acceptance --case full --profile integrated-handover --run-id integrated-full-001 --max-wall-seconds 3600
 ~~~
 
 每组应同时核对真实退出码、acceptance/report.json passed/failure_reasons/stop_exit、
