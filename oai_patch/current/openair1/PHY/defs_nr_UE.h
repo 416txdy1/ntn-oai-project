@@ -572,6 +572,12 @@ typedef struct nr_rxtx_thread_data_s {
   UE_nr_rxtx_proc_t proc;
   PHY_VARS_NR_UE *UE;
   int writeBlockSize;
+  /* Main-owned immutable transmit compensation for isolated NTN RFsim jobs. */
+  bool ntn_tx_prediction_valid;
+  double ntn_tx_total_fo, ntn_tx_base_ul;
+  int ntn_tx_used_total_ta, ntn_tx_computed_ntn_ta;
+  uint64_t ntn_tx_q_rx, ntn_tx_q_tx;
+  double ntn_tx_arrival, ntn_tx_delay;
   nr_phy_data_t phy_data;
   dynamic_barrier_t* next_barrier;
   uint64_t absolute_deadline_us;

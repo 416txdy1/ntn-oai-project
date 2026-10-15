@@ -95,3 +95,58 @@ PYTHONDONTWRITEBYTECODE=1 python3 local_ntn/test_real_iq.py
 ~~~
 
 最终原平台业务后测、完整保护对比、四组新平台验收和全分支独立审查仍待完成。
+## 2026-10-14 接收端候选实测（整合验收尚未完成）
+
+`acb576ab0b40931fc3cc2ee3f43051a5b01b165e` 的独立源树正式构建六个目标
+`nr-softmodem nr-uesoftmodem rfsimulator params_libconfig nr_prachsim nr_pbchsim`
+（`cmake --build .runtime/oai/cmake_targets/ran_build/build --target ... -j 6`）
+完成 391/391 步，退出码 0。`bash local_ntn/run_regressions.sh` 与
+`bash scripts/test.sh` 均退出 0；实际接收 IQ 28 场景独立重跑及范围审查通过。
+部署源树是经过归档校验与覆盖文件校验的 `verified_archive`，固定 OAI commit
+`1e0c78bfbb80424f275e73a3103f582e0f903413`；没有声称它存在自身 Git HEAD。
+实际验证了 27 项覆盖文件与六个二进制的 SHA256，私有证明保留。
+
+~~~bash
+python3 scripts/handover_acceptance.py --case firsthandover --profile integrated-handover --run-id task8-first-20261014a --max-wall-seconds 3600
+python3 scripts/handover_acceptance.py --case static --profile integrated-handover --run-id task8-static-20261014b --max-wall-seconds 3600
+~~~
+
+首次切换命令实际退出 1。业务覆盖 IQ 18.976925–65.009187 秒；物理观测双侧
+覆盖 70 秒，QD 双侧各加载一次，idle/reaccess 为 0，停止与清理成功。全程
+Ping 78/78，UL 983/983，DL 979/983（0.407% 最终丢失）。切换窗口 Ping
+16/16、UL 209/209、DL 210/210 是**最终交付**，不是及时交付：窗口平均
+Ping RTT 13.235 秒，上行约 9 IQ 秒无包到达，随后出现积压包集中到达。
+窗口 Ping、UL、DL 延迟 p95 分别约 19.877、16.135、6.274 秒（墙钟）。
+这些持续业务数据明确显示物理切换的业务影响，不能宣称运行正常或切换验收通过。
+
+脚本报告 PBCH 错误 10，停止后的完整私有日志实际共有 29；所有错误都集中在
+短轨迹末界附近，首次错误的现有时钟括号 [69.954093,70.055021] 跨越 IQ70。
+现有脚本未按错误的原生输入样本归属测试区间，且停止后未读完日志，不能据此
+直接删掉错误。新增诊断将记录真实输入样本跨度；跨边界或时间未知仍判失败，
+原失败报告保留。业务验收还将保留最终丢包事实，独立检查现有五秒墙钟期限的
+及时交付，并报告延迟分位数和接收中断，防止长时间排队被最终交付掩盖。
+
+静态命令实际退出 0：90 IQ 秒完整覆盖，业务 IQ 20.211348–84.205 秒；Ping
+89/89，平均 RTT 186.705 ms，UL 1139/1139，DL 1134/1138（0.351% 最终
+丢失），PBCH/idle/reaccess 为 0。Ping 与 UL 五秒超时均为 0，DL 四个缺失
+包计超时；QD 双侧各加载一次，停止与资源清理成功。这是冻结候选的静态结果，
+仍不能替代最终候选的完整矩阵及原平台后测。
+
+实际 UE 运行使用 `--cont-fo-comp 2`。源码净 residualULFo 为
+`+freq_offset * fUL/fDL`（先取负，模式 2 再反转）；模式 1 净值为负，模式 3
+为零。此前只依据后一条反转语句解释符号的诊断口述已撤回。上行排队归因须结合
+实际频偏、时间提前和发射样本诊断，当前没有以改符号或物理模型宣称修复。
+
+## 2026-10-14: first-switch diagnostic 14d (FAILED, preserved)
+
+Project/source/build: 032277b9d33fdcf4cf5fb8abbe44cc7236dd6f2a; verified-archive OAI pin 1e0c78bfbb80424f275e73a3103f582e0f903413; formal-diag-harness-032 recorded six-target build, trace/parser/IQ regression and scripts/test.sh exit 0. Receiver and harness were unchanged for this case.
+
+Command: OAI_NTN_TIMING_DIAG=1 python3 scripts/handover_acceptance.py --case firsthandover --profile integrated-handover --run-id task8-firstdiag-20261014d --max-wall-seconds 3600. Exit 1, controller wall 139.115 s. All nine dedicated core containers were healthy before and after. The earlier 14c readiness failure is retained as an environment failure; it is not receiver/business evidence.
+
+Actual RF sample rate 7.68 MHz; physical start verified on both sides; continuous business IQ interval 17.572881380208333--65.0031875 s. Global Ping 41/89 received (48 missing), UL UDP 518/1125 (607 missing), DL UDP 931/1124 (193 missing). First-switch conservative window: Ping 0/19, UL UDP 0/237, DL UDP 237/237. Timely gates also failed. No RRC idle or reaccess. No in-case PBCH failure: all 51 raw failure events were attributed beyond the closed 70-second RF case from their actual input sample spans. The first span begins at native sample 537716488, greater than the case endpoint 537600000. All events remain counted in the terminal-outside category.
+
+Numeric diagnostics: 3426 serving-pilot events, 3375 accepted (51 terminal events rejected); 6852 actual UL-write records. All in-window pilots accepted. UL compensation is mode 2 with autonomous TA. At IQ 39--44 s, applied UL FO minus independently reconstructed physical FO at write time has one-second medians about -356, -384, -400, -421, -436 Hz. Autonomous NTN TA minus two geometric delays at write time has medians about 99, 107, 183, 196, 204 us. These are diagnostic comparisons, not the complete desired transmit-timing equation. Native arrival/frame comparisons additionally identify time misalignment during the business interruption. Physical equations were evaluated separately from controller observations; no STK truth was fed back into a receiver.
+
+Causal offline forecast experiments are retained privately. Initial SIB TA plus only preceding accepted pilot coordinates/FO can reduce the steady lag, but linear delay extrapolation retains curvature error and naive quadratic fits produce overshoot around piecewise trace boundaries. These experiments are NOT a live PASS and are not production changes. Further receiver-derived transmit-time and boundary handling must pass actual IQ checks and fresh live acceptance before release.
+
+Stop exit 0, cleanup error null; modem processes and isolated UE network resources absent. Read-only original-platform protection comparison against post-restart-pre-receiver.json passed with differences=[] after this run. Final original business revalidation and the four-case passing integration matrix remain outstanding. New integration branch has NOT been pushed.

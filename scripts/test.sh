@@ -37,4 +37,5 @@ for dataset in seamless firsthandover; do
   python3 quadriga/tests/run_qd_rfsim_adapter_test.py --sanitize --oai-repo "$OAI_REPO" --build-repo "$OAI_REPO" --bundle "$bundle_root/$direction" --trace "$trace"
  done
 done
+python3 scripts/test_tx_predictor_contract.py --root "$ROOT"
 python3 scripts/test_rx_tracker_iq.py --root "$ROOT"

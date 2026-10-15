@@ -9,6 +9,7 @@
 #include "executables/nr-ue-ru.h"
 #include "executables/stk_timing_assist.h"
 #include "PHY/NR_UE_ESTIMATION/nr_ntn_rx_tracker.h"
+#include "PHY/NR_UE_ESTIMATION/nr_ntn_tx_predictor.h"
 #include "executables/nr-uesoftmodem.h"
 #include "PHY/INIT/nr_phy_init.h"
 #include "NR_MAC_UE/mac_proto.h"
@@ -106,7 +107,7 @@ static bool nr_ntn_job_spans(const NR_DL_FRAME_PARMS *fp, unsigned slot,
   return true;
 }
 static void nr_ntn_prepare_job(PHY_VARS_NR_UE *ue, UE_nr_rxtx_proc_t *proc,
-                               nr_ntn_rx_snapshot *s, nr_ntn_rx_tracker *tracker,
+                               nr_ntn_rx_snapshot *s, nr_ntn_rx_tracker *tracker, ntn_tx_clock *tx_clock,
                                double consumed, bool diag, unsigned *diag_sequence, int last_read_shift)
 {
   if (!s) return;
@@ -152,6 +153,10 @@ static void nr_ntn_prepare_job(PHY_VARS_NR_UE *ue, UE_nr_rxtx_proc_t *proc,
         s->active = true; s->fft_delta = pilot.delta; s->total_fo = pilot.total_fo;
         s->observed_sample = pilot.observed_sample;
         committed = true;
+        if (tx_clock && proc->ntn_rx_domain_valid
+            && pilot.observed_sample <= UINT64_MAX - proc->ntn_rx_first_ts)
+          ntn_tx_observe(tx_clock, pci, pilot.observed_sample + proc->ntn_rx_first_ts,
+                         q, pilot.total_fo, fs);
       }
     }
     if (log_pilot) {
@@ -482,9 +487,11 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
     else if (get_nrUE_params()->cont_fo_comp == 3) // do not consider residual DL FO for UL pre-compensation at all
       ul_freq_offset = 0;
     for (int i = 0; i < fp->nb_antennas_tx; i++) {
-      const double total_ul_fo = UE->ul_Doppler_shift + ul_freq_offset;
+      const double total_ul_fo = rxtxD->ntn_tx_prediction_valid
+          ? rxtxD->ntn_tx_total_fo : UE->ul_Doppler_shift + ul_freq_offset;
       if (i == 0 && stk_diag_ul_call > 0 && stk_diag_ul_call <= NR_NTN_DIAG_UL_LIMIT) {
-        stk_diag_ul_residual = ul_freq_offset;
+        stk_diag_ul_residual = rxtxD->ntn_tx_prediction_valid
+            ? total_ul_fo-rxtxD->ntn_tx_base_ul : ul_freq_offset;
         stk_diag_ul_total = total_ul_fo;
         stk_diag_ul_applied = true;
       }
@@ -511,6 +518,12 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
           UE->timing_advance, UE->timing_advance_ntn, UE->N_TA_offset, writeBlockSize,
           (unsigned long long)rf_sample,rf_valid,(unsigned long long)device->firstTS,(double)UE->dl_Doppler_shift,get_nrUE_params()->autonomous_ta);
   }
+  if (nr_ntn_diag_stride(stk_diag_ul_call,NR_NTN_DIAG_UL_LIMIT,NR_NTN_DIAG_UL_STRIDE))
+    LOG_I(PHY,"STKUE_DIAG_TXPRED call %u valid %d qRX %llu qTX %llu usedTotalTA %d computedNTNTA %d arrivalRF %.9f delaySamples %.9f totalULFo %.9f\n",
+          stk_diag_ul_call,rxtxD->ntn_tx_prediction_valid,
+          (unsigned long long)rxtxD->ntn_tx_q_rx,(unsigned long long)rxtxD->ntn_tx_q_tx,
+          rxtxD->ntn_tx_used_total_ta,rxtxD->ntn_tx_computed_ntn_ta,
+          rxtxD->ntn_tx_arrival,rxtxD->ntn_tx_delay,rxtxD->ntn_tx_total_fo);
   int tmp = nrue_ru_write_reorder(UE, writeTimestamp, (void **)txp, writeBlockSize, fp->nb_antennas_tx, flags);
   AssertFatal(tmp == writeBlockSize, "");
 }
@@ -907,6 +920,14 @@ void *UE_thread(void *arg)
   }
   int shiftForNextFrame = 0;
   const bool use_rx_tracker = nr_ntn_rx_enabled() && !UE->sl_mode;
+  const char *tx_prediction_flag = getenv("OAI_NTN_TX_PREDICTOR");
+  const bool use_tx_predictor = use_rx_tracker && IS_SOFTMODEM_RFSIM
+      && get_nrUE_params()->cont_fo_comp == 2 && get_nrUE_params()->autonomous_ta
+      && (!tx_prediction_flag || !strcmp(tx_prediction_flag,"1"));
+  ntn_tx_clock tx_clock = {0};
+  bool tx_sib_pending = false;
+  uint64_t tx_sib_q_epoch = 0;
+  double tx_sib_half_ta = 0;
   const bool ntn_failure_metadata = nr_ntn_new_profile() && !UE->sl_mode;
   uint64_t ntn_rx_job_id = 0;
   unsigned ntn_pilot_diag_sequence = 0;
@@ -1087,6 +1108,7 @@ void *UE_thread(void *arg)
       }
       if (use_rx_tracker) {
         rx_tracker = (nr_ntn_rx_tracker){0};
+      tx_clock = (ntn_tx_clock){0}; tx_sib_pending = false;
         nr_ntn_history_clear(&rx_history);
         rx_native_ref = sync_timestamp;
         rx_nominal_ref = (uint64_t)(absolute_slot + 1) / nb_slot_frame * fp->samples_per_frame;
@@ -1111,6 +1133,12 @@ void *UE_thread(void *arg)
         const int abs_subframe_tx = (absolute_slot + 1 + duration_rx_to_tx) / fp->slots_per_subframe;
         apply_ntn_timing_advance_and_doppler(UE, fp, abs_subframe_tx);
         ntn_targetcell = false;
+      }
+      if (use_tx_predictor && ntn_koffset > 0 && UE->timing_advance_ntn > 0) {
+        tx_sib_q_epoch = ((uint64_t)(absolute_slot + 1 + duration_rx_to_tx)
+                             / fp->slots_per_subframe) * fp->samples_per_subframe;
+        tx_sib_half_ta = UE->timing_advance_ntn / 2.0;
+        tx_sib_pending = true;
       }
       if (stk_timing_diag) {
         ++stk_diag_sync;
@@ -1230,6 +1258,7 @@ void *UE_thread(void *arg)
     if (use_rx_tracker && !nr_ntn_history_append(&rx_history, rxp, fp->nb_antennas_rx,
                                                  rx_timestamp, readBlockSize, rx_history_capacity)) {
       rx_tracker = (nr_ntn_rx_tracker){0};
+      tx_clock = (ntn_tx_clock){0}; tx_sib_pending = false;
       rx_native_ref = rx_timestamp >= (uint64_t)firstSymSamp ? rx_timestamp - firstSymSamp : rx_timestamp;
       rx_nominal_ref = (uint64_t)absolute_slot / nb_slot_frame * fp->samples_per_frame
                        + get_samples_slot_timestamp(fp, slot_nr);
@@ -1264,13 +1293,78 @@ void *UE_thread(void *arg)
         int tmp = nrue_ru_read(UE, &ignore_timestamp, (void **)UE->common_vars.rxdata, first_symbols, fp->nb_antennas_rx);
         AssertFatal(first_symbols == tmp, "");
         if (use_rx_tracker && !nr_ntn_history_append(&rx_history, UE->common_vars.rxdata, fp->nb_antennas_rx,
-                                                      ignore_timestamp, first_symbols, rx_history_capacity))
+                                                      ignore_timestamp, first_symbols, rx_history_capacity)) {
           rx_tracker = (nr_ntn_rx_tracker){0};
+          tx_clock = (ntn_tx_clock){0}; tx_sib_pending = false;
+        }
 
       } else
         LOG_E(PHY,"can't compensate: diff =%d\n", first_symbols);
     }
 
+    const uint64_t tx_q_rx = (uint64_t)absolute_slot / nb_slot_frame * fp->samples_per_frame
+                            + get_samples_slot_timestamp(fp,slot_nr);
+    const uint64_t tx_absolute_slot = (uint64_t)absolute_slot + duration_rx_to_tx;
+    const uint64_t tx_q_tx = tx_absolute_slot / nb_slot_frame * fp->samples_per_frame
+                            + get_samples_slot_timestamp(fp,tx_absolute_slot % nb_slot_frame);
+    const double tx_fs = fp->samples_per_subframe * 1000.0;
+    ntn_tx_prediction tx_prediction = {0};
+    ntn_tx_prediction tx_next_prediction = {0};
+    const int new_N_TA_offset = determine_N_TA_offset(UE);
+    const int tx_used_total_ta = timing_advance;
+    bool tx_prediction_valid = false;
+    const openair0_device_t *tx_device = &openair0_dev[UE->rf_map.card];
+    if (use_tx_predictor && tx_sib_pending && !tx_clock.anchored && tx_clock.n >= NTN_TX_HISTORY)
+      ntn_tx_anchor(&tx_clock,tx_sib_q_epoch,tx_sib_half_ta,tx_fs);
+    if (use_tx_predictor && tx_clock.anchored && tx_device->firstTS_initialized
+        && tx_device->firstTS >= 0 && rx_timestamp >= firstSymSamp
+        && (uint64_t)(rx_timestamp-firstSymSamp) <= UINT64_MAX-(uint64_t)tx_device->firstTS) {
+      const uint64_t raw_rf_slot = (uint64_t)(rx_timestamp-firstSymSamp)+(uint64_t)tx_device->firstTS;
+      const double hold_s = (double)nr_ntn_hold_samples(UE)/tx_fs;
+      const uint64_t tx_ahead = get_samples_slot_duration(fp,slot_nr,duration_rx_to_tx);
+      const uint64_t tx_slot_samples = get_samples_per_slot(tx_absolute_slot % nb_slot_frame,fp);
+      const double ahead_s = (tx_ahead+tx_slot_samples)/tx_fs;
+      /* Current write uses the previous TA. Its actual propagation epoch
+       * determines current FO; the next TA is a separate prediction. */
+      const int64_t used_offset = (int64_t)UE->N_TA_offset+tx_used_total_ta;
+      if (used_offset >= 0 && raw_rf_slot <= UINT64_MAX-tx_ahead
+          && raw_rf_slot+tx_ahead >= (uint64_t)used_offset) {
+        const uint64_t actual_write = raw_rf_slot+tx_ahead-used_offset;
+        tx_prediction_valid = ntn_tx_at_write(&tx_clock,fp->Nid_cell,actual_write,tx_q_rx,tx_fs,
+            hold_s,ahead_s,fp->dl_CarrierFreq,fp->ul_CarrierFreq,rx_tracker.fo_rate_hz_s,&tx_prediction);
+      }
+      /* The already executed read fixes next RX's raw nominal offset exactly:
+       * (raw_rx_next-q_rx_next)=(raw_rx_now-q_rx_now)-iq_shift_to_apply.
+       * Preserve the previous-TA timestamp/current-TA block-size contract. */
+      const bool next_raw_valid = iq_shift_to_apply >= 0
+          ? raw_rf_slot >= (uint64_t)iq_shift_to_apply
+          : raw_rf_slot <= UINT64_MAX-(uint64_t)(-(int64_t)iq_shift_to_apply);
+      if (tx_prediction_valid && next_raw_valid && tx_q_tx <= UINT64_MAX-tx_slot_samples) {
+        const uint64_t next_raw_offset = iq_shift_to_apply >= 0
+            ? raw_rf_slot-(uint64_t)iq_shift_to_apply
+            : raw_rf_slot+(uint64_t)(-(int64_t)iq_shift_to_apply);
+        ntn_tx_prediction tx_current_target = {0};
+        if (ntn_tx_predict(&tx_clock,fp->Nid_cell,next_raw_offset,tx_q_rx,tx_q_tx+tx_slot_samples,tx_fs,
+            hold_s,ahead_s,new_N_TA_offset,UE->timing_advance,fp->dl_CarrierFreq,fp->ul_CarrierFreq,
+            rx_tracker.fo_rate_hz_s,&tx_next_prediction)
+            && ntn_tx_predict(&tx_clock,fp->Nid_cell,raw_rf_slot,tx_q_rx,tx_q_tx,tx_fs,
+            hold_s,ahead_s,UE->N_TA_offset,UE->timing_advance,fp->dl_CarrierFreq,fp->ul_CarrierFreq,
+            rx_tracker.fo_rate_hz_s,&tx_current_target)) {
+          /* RU_write prepends excess samples when a block grows. With
+           * X=NTA+totalTA, payload starts at raw+ahead-min(Xold,Xnew+shift).
+           * Satisfy current payload alignment AND the next stream boundary. */
+          const double x_current = UE->N_TA_offset+UE->timing_advance+tx_current_target.ta_samples;
+          const double x_next = new_N_TA_offset+UE->timing_advance+tx_next_prediction.ta_samples;
+          const double selected = fmax(x_next,x_current-iq_shift_to_apply)
+                                  -new_N_TA_offset-UE->timing_advance;
+          if (isfinite(selected) && selected > 0 && selected <= INT_MAX) {
+            UE->timing_advance_ntn = (int)llround(selected);
+            tx_next_prediction.ta_samples = selected;
+          }
+        }
+      }
+    }
+    // Keep the original previous-TA timestamp/current-TA block-size contract.
     // use previous timing_advance value to compute writeTimestamp
     const openair0_timestamp_t writeTimestamp =
         rx_timestamp + get_samples_slot_duration(fp, slot_nr, duration_rx_to_tx) - firstSymSamp - UE->N_TA_offset - timing_advance;
@@ -1287,7 +1381,6 @@ void *UE_thread(void *arg)
       writeBlockSize -= new_timing_advance - timing_advance;
       timing_advance = new_timing_advance;
     }
-    int new_N_TA_offset = determine_N_TA_offset(UE);
     if (new_N_TA_offset != UE->N_TA_offset) {
       LOG_I(PHY, "N_TA_offset changed from %d to %d\n", UE->N_TA_offset, new_N_TA_offset);
       writeBlockSize -= new_N_TA_offset - UE->N_TA_offset;
@@ -1297,6 +1390,21 @@ void *UE_thread(void *arg)
       timing_advance += writeBlockSize;
       LOG_I(PHY, "writeBlockSize is %d, setting it to 0 and changing timing_advance to %d\n", writeBlockSize, timing_advance);
       writeBlockSize = 0;
+    }
+
+    if (tx_prediction_valid) {
+      /* This is the actual RU_write compensation point after its prefix.
+       * The actor consumes only this immutable job's FO result. */
+      const int slot_samples = get_samples_per_slot(tx_absolute_slot % nb_slot_frame,fp);
+      const uint64_t prefix = writeBlockSize > slot_samples ? writeBlockSize-slot_samples : 0;
+      const uint64_t first = (uint64_t)tx_device->firstTS;
+      const double ahead_s = (get_samples_slot_duration(fp,slot_nr,duration_rx_to_tx)
+                              +(uint64_t)slot_samples)/tx_fs;
+      tx_prediction_valid = writeTimestamp >= 0 && (uint64_t)writeTimestamp <= UINT64_MAX-first
+          && (uint64_t)writeTimestamp+first <= UINT64_MAX-prefix
+          && ntn_tx_at_write(&tx_clock,fp->Nid_cell,(uint64_t)writeTimestamp+first+prefix,tx_q_rx,tx_fs,
+              (double)nr_ntn_hold_samples(UE)/tx_fs,ahead_s,
+              fp->dl_CarrierFreq,fp->ul_CarrierFreq,rx_tracker.fo_rate_hz_s,&tx_prediction);
     }
 
     if (curMsg.proc.nr_slot_rx == 0)
@@ -1327,7 +1435,7 @@ void *UE_thread(void *arg)
         rx_consumed = (double)da - (double)dq;
         nr_ntn_rx_snapshot *snapshot = nr_ntn_snapshot_copy(&rx_history, slot_native,
             get_samples_slot_timestamp(fp, slot_nr), q, get_samples_per_slot(slot_nr, fp));
-        nr_ntn_prepare_job(UE, &curMsgRx->proc, snapshot, &rx_tracker, rx_consumed,
+        nr_ntn_prepare_job(UE, &curMsgRx->proc, snapshot, &rx_tracker, use_tx_predictor ? &tx_clock : NULL, rx_consumed,
                            stk_timing_diag, &ntn_pilot_diag_sequence, ntn_last_read_shift);
       }
     }
@@ -1349,6 +1457,9 @@ void *UE_thread(void *arg)
     }
 
     // apply new NTN timing information
+    const bool tx_serving_update = UE->nrUE_config.ntn_config.params_changed
+                                   && !UE->nrUE_config.ntn_config.is_targetcell;
+    const int tx_receiver_ta = UE->timing_advance_ntn;
     apply_ntn_config(UE,
                      fp,
                      curMsg.proc.hfn_rx,
@@ -1359,6 +1470,19 @@ void *UE_thread(void *arg)
                      &ntn_koffset,
                      &ntn_targetcell);
 
+    if (use_tx_predictor && tx_serving_update && ntn_koffset > 0) {
+      if (tx_clock.anchored) {
+        // Preserve receiver-derived autonomous delay across serving SIB updates.
+        // The SIB still updates scheduling/koffset and its original FO predictor.
+        UE->timing_advance_ntn = tx_receiver_ta;
+      } else if (!tx_sib_pending && UE->timing_advance_ntn > 0) {
+        tx_sib_q_epoch = ((uint64_t)(absolute_slot + duration_rx_to_tx)
+                             / fp->slots_per_subframe) * fp->samples_per_subframe;
+        tx_sib_half_ta = UE->timing_advance_ntn / 2.0;
+        tx_sib_pending = true;
+      }
+    }
+
     // Start TX slot processing here. It runs in parallel with RX slot processing
     // in current code, DURATION_RX_TO_TX constant is the limit to get UL data to encode from a RX slot
     notifiedFIFO_elt_t *newTx = newNotifiedFIFO_elt(sizeof(nr_rxtx_thread_data_t), 0, 0, processSlotTX);
@@ -1366,6 +1490,15 @@ void *UE_thread(void *arg)
     memset(curMsgTx, 0, sizeof(*curMsgTx));
     curMsgTx->proc = curMsg.proc;
     curMsgTx->writeBlockSize = writeBlockSize;
+    curMsgTx->ntn_tx_prediction_valid = tx_prediction_valid;
+    curMsgTx->ntn_tx_total_fo = tx_prediction.total_ul_fo;
+    curMsgTx->ntn_tx_base_ul = UE->ul_Doppler_shift;
+    curMsgTx->ntn_tx_used_total_ta = tx_used_total_ta;
+    curMsgTx->ntn_tx_computed_ntn_ta = (int)llround(tx_next_prediction.ta_samples);
+    curMsgTx->ntn_tx_q_rx = tx_q_rx;
+    curMsgTx->ntn_tx_q_tx = tx_q_tx;
+    curMsgTx->ntn_tx_arrival = tx_prediction.arrival_sample;
+    curMsgTx->ntn_tx_delay = tx_prediction.delay_samples;
     curMsgTx->proc.timestamp_tx = writeTimestamp;
     curMsgTx->UE = UE;
     curMsgTx->absolute_deadline_us = absolute_deadline_us;
