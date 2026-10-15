@@ -39,6 +39,10 @@ case "${1:-}" in
       threshold=$((10#$OAI_NTN_PUSCH_FAILURE_THRES))
       gnb_ntn_args+=(--MACRLCs.[0].pusch_FailureThres "$threshold")
     fi
+    if [[ $OAI_NTN_PROFILE != zky && -n ${OAI_NTN_PDCP_REORDERING_MS:-} ]]; then
+      # Native gNB configuration also encodes t-Reordering into UE RRC.
+      gnb_ntn_args+=(--pdcp.drb.t_reordering "ms${OAI_NTN_PDCP_REORDERING_MS}")
+    fi
     exec ./nr-softmodem -O "$OAI_GNB_CONFIG" --rfsim \
       --rfsimulator.[0].serveraddr server --rfsimulator.[0].serverport "$OAI_RF_PORT" "${gnb_ntn_args[@]}"
     ;;

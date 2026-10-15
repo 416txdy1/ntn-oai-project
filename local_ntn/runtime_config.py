@@ -79,6 +79,17 @@ def pusch_failure_threshold(profile, environ):
         raise ValueError('OAI_NTN_PUSCH_FAILURE_THRES must be an integer from 1 to 1000')
     return int(value)
 
+def pdcp_reordering_ms(profile, environ):
+    """Finite native OAI/ASN.1 values for explicit isolated comparisons."""
+    if profile == 'zky':
+        return None
+    value = environ.get('OAI_NTN_PDCP_REORDERING_MS')
+    if value is None or value == '':
+        return None
+    if value not in ('100', '200', '500'):
+        raise ValueError('OAI_NTN_PDCP_REORDERING_MS must be 100, 200, or 500')
+    return int(value)
+
 def _user_home(environ):
     if environ.get('SUDO_USER'):
         import pwd
@@ -97,6 +108,7 @@ def resolve_runtime(root: Path, profile: str, run_id: str,
         raise ValueError('Invalid run_id: use 1 to 64 letters, digits, underscores or hyphens, starting with a letter or digit')
     isolated = profile != 'zky'
     pusch_failure_threshold(profile, environ)
+    pdcp_reordering_ms(profile, environ)
 
     def path(key, default, scope=None):
         value = Path(environ.get(key) or default).expanduser().resolve()

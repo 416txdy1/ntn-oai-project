@@ -2,7 +2,7 @@
 from pathlib import Path
 import sys, unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'local_ntn'))
-from runtime_config import pusch_failure_threshold, resolve_runtime
+from runtime_config import pusch_failure_threshold, pdcp_reordering_ms, resolve_runtime
 
 class DtxSetting(unittest.TestCase):
  def test_old_profile_ignores_override(self):
@@ -32,5 +32,26 @@ class DtxSetting(unittest.TestCase):
     self.assertEqual(children['gnb']['OAI_NTN_PUSCH_FAILURE_THRES'],'100')
     manifest=experiment.build_manifest(config,1,env)
     self.assertEqual(manifest['pusch_failure_threshold_override'],100 if profile!='zky' else None)
+
+ def test_pdcp_native_finite_values(self):
+  for value in ['100','200','500']:
+   self.assertEqual(pdcp_reordering_ms('integrated-handover',{'OAI_NTN_PDCP_REORDERING_MS':value}),int(value))
+  for value in ['0','501','infinity','ms500','500;echo x',' 500']:
+   with self.assertRaises(ValueError):pdcp_reordering_ms('legacy-handover',{'OAI_NTN_PDCP_REORDERING_MS':value})
+ def test_pdcp_old_profile_and_default_unchanged(self):
+  self.assertIsNone(pdcp_reordering_ms('zky',{'OAI_NTN_PDCP_REORDERING_MS':'infinity'}))
+  self.assertIsNone(pdcp_reordering_ms('integrated-handover',{}))
+ def test_pdcp_manifest_and_requested_seed(self):
+  from unittest.mock import patch
+  import experiment
+  root=Path(__file__).resolve().parents[1]
+  raw={'OAI_NTN_PDCP_REORDERING_MS':'500','OAI_RNGSEED':'20260925'}
+  config=resolve_runtime(root,'legacy-handover','pdcp-test',raw)
+  with patch.object(experiment,'read_trace',return_value=[[8200]]), patch.object(experiment,'sha256',return_value='a'*64), patch.object(experiment,'commit_at',return_value='b'*40), patch.object(experiment,'source_identity',return_value={'kind':'test'}):
+   env=experiment.environments(config,raw,1)
+   self.assertEqual(experiment.launcher_environments(env,qd_required=False)['gnb']['OAI_NTN_PDCP_REORDERING_MS'],'500')
+   manifest=experiment.build_manifest(config,1,env)
+   self.assertEqual(manifest['pdcp_reordering_ms_override'],500)
+   self.assertEqual(manifest['oai_rngseed_requested'],'20260925')
 
 if __name__=='__main__':unittest.main()

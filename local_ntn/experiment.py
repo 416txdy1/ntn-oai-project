@@ -14,7 +14,7 @@ from network_config import check_network
 from network_owner import NetworkManager
 from preflight import preflight, channel_environments, read_trace
 from run_state import process_identity, read_state, matches, save_state, stop_owned
-from runtime_config import resolve_runtime, pusch_failure_threshold
+from runtime_config import resolve_runtime, pusch_failure_threshold, pdcp_reordering_ms
 
 BASE = Path(__file__).resolve().parent
 
@@ -82,6 +82,8 @@ def build_manifest(config, rate, environment):
                 bundles[direction]={'path':str(bundle),'files':{str(p.relative_to(bundle)):sha256(p) for p in sorted(bundle.rglob('*')) if p.is_file()}}
     return {'schema':1,'profile':config.profile,'run_id':config.run_id,'workspace':str(config.root),
             'pusch_failure_threshold_override':pusch_failure_threshold(config.profile, environment),
+            'pdcp_reordering_ms_override':pdcp_reordering_ms(config.profile, environment),
+            'oai_rngseed_requested':environment.get('OAI_RNGSEED'),
             'source_commit':commit_at(config.root),'oai_source':source_identity(config.root,config.oai_repo),
             'source_repo':str(config.oai_repo),'build_dir':str(config.build_dir),
             'binaries':{name:sha256(config.build_dir/name) for name in ('nr-softmodem','nr-uesoftmodem','librfsimulator.so','libparams_libconfig.so','libldpc.so','libdfts.so')},

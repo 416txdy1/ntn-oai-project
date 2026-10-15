@@ -12,3 +12,6 @@ Private candidate 15c additionally passed three actual OAI translation units, tr
 
 
 The explicit diagnostic environment setting `OAI_NTN_PUSCH_FAILURE_THRES` accepts 1..1000 only in the isolated profiles and records its value in run.json. When unset, OAI's default 10-event threshold is preserved. Zky ignores it. This count is not a wall/IQ duration or a HARQ round count. It is intended for a controlled comparison of transient PHY failures against the scheduler's sticky UL-failure state; increasing it does not constitute a PHY fix or acceptance result. Ping/UDP loss and delivery deadlines remain unchanged.
+
+
+`OAI_NTN_PDCP_REORDERING_MS=100|200|500` is another explicit isolated comparison setting, unset by default. Only gNB receives the native `--pdcp.drb.t_reordering msXXX` option; its native RRC builder encodes the same timer for UE. The manifest records this override and the requested OAI RNG seed. Actual seeds still require numeric startup verification. Default DRBs use AM and the existing DL/UL MCS limit is already9; neither was assumed to be UM or high-MCS. Actual late old-COUNT PDCP discards during the observed switch motivate testing the finite reordering timer, without claiming packet-level attribution or changing any business loss/deadline gate.
