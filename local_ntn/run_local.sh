@@ -33,8 +33,14 @@ if [[ $OAI_NTN_PROFILE != zky ]]; then
 fi
 case "${1:-}" in
   gnb)
+    gnb_ntn_args=()
+    if [[ $OAI_NTN_PROFILE != zky && -n ${OAI_NTN_PUSCH_FAILURE_THRES:-} ]]; then
+      # runtime_config validates the bound before resources are launched.
+      threshold=$((10#$OAI_NTN_PUSCH_FAILURE_THRES))
+      gnb_ntn_args+=(--MACRLCs.[0].pusch_FailureThres "$threshold")
+    fi
     exec ./nr-softmodem -O "$OAI_GNB_CONFIG" --rfsim \
-      --rfsimulator.[0].serveraddr server --rfsimulator.[0].serverport "$OAI_RF_PORT"
+      --rfsimulator.[0].serveraddr server --rfsimulator.[0].serverport "$OAI_RF_PORT" "${gnb_ntn_args[@]}"
     ;;
   ue)
     if [[ $OAI_NTN_PROFILE == zky ]]; then

@@ -68,6 +68,17 @@ class RuntimeConfig:
         return {key: '' if value is None else str(value) for key, value in names.items()}
 
 
+def pusch_failure_threshold(profile, environ):
+    """Optional, bounded NTN diagnostic setting; leave OAI default unchanged."""
+    if profile == 'zky':
+        return None
+    value = environ.get('OAI_NTN_PUSCH_FAILURE_THRES')
+    if value is None or value == '':
+        return None
+    if not re.fullmatch(r'[0-9]{1,4}', value) or not 1 <= int(value) <= 1000:
+        raise ValueError('OAI_NTN_PUSCH_FAILURE_THRES must be an integer from 1 to 1000')
+    return int(value)
+
 def _user_home(environ):
     if environ.get('SUDO_USER'):
         import pwd
@@ -85,6 +96,7 @@ def resolve_runtime(root: Path, profile: str, run_id: str,
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', run_id):
         raise ValueError('Invalid run_id: use 1 to 64 letters, digits, underscores or hyphens, starting with a letter or digit')
     isolated = profile != 'zky'
+    pusch_failure_threshold(profile, environ)
 
     def path(key, default, scope=None):
         value = Path(environ.get(key) or default).expanduser().resolve()
