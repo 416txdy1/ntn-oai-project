@@ -11,6 +11,7 @@ import sys
 
 from paths import OAI_REPO, BUILD_DIR, UE_CONFIG, STK_TRACE, DL_FREQUENCY_HZ, UL_FREQUENCY_HZ
 from network_config import addresses
+from spatial_config import spatial_mode
 
 
 def channel_environments(environment: dict[str, str]) -> dict[str, dict[str, str]]:
@@ -81,7 +82,10 @@ def preflight(rate: float, environment: dict[str, str] | None = None) -> dict:
     env = dict(os.environ if environment is None else environment)
     if not math.isfinite(rate) or not 0 <= rate <= 1:
         raise ValueError('rate 必须在 [0,1] 内')
+    miso = spatial_mode(env)
     children = channel_environments(env)
+    if miso and "OAI_QD_CHANNEL" not in children["gnb"]:
+        raise ValueError("miso2 必须提供双向空间 bundle")
     amf_ip, gnb_ip_cidr = addresses(env)
     required = [STK_TRACE, UE_CONFIG] + [BUILD_DIR / name for name in ('nr-softmodem', 'nr-uesoftmodem', 'librfsimulator.so', 'libparams_libconfig.so', 'libldpc.so', 'libdfts.so')]
     missing = [str(path) for path in required if not path.is_file()]
@@ -119,7 +123,15 @@ def preflight(rate: float, environment: dict[str, str] | None = None) -> dict:
         result['mode'] = 'STK+QuaDRiGa'
         for kind, direction, frequency in (('gnb', 'uplink', UL_FREQUENCY_HZ), ('ue', 'downlink', DL_FREQUENCY_HZ)):
             bundle = Path(children[kind]['OAI_QD_CHANNEL'])
-            result['bundles'][kind] = {'path': str(bundle), 'audit': check_bundle(bundle, STK_TRACE, direction, frequency)}
+            audit = check_bundle(bundle, STK_TRACE, direction, frequency)
+            expected = ((1, 2) if kind == 'gnb' else (2, 1)) if miso else (1, 1)
+            actual = (audit['tx_antennas'], audit['rx_antennas'])
+            if actual != expected:
+                raise ValueError(f'{kind} bundle Tx/Rx {actual} != 配置 {expected}')
+            result['bundles'][kind] = {'path': str(bundle), 'audit': audit}
+        if miso and b'QDCHANNEL1 spatial ports' not in (BUILD_DIR / 'librfsimulator.so').read_bytes():
+            raise ValueError('RFsim 库不支持多端口，请重新构建')
+    result['spatial_mode'] = 'miso2' if miso else 'siso'
     return result
 
 

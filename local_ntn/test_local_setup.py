@@ -15,13 +15,14 @@ from paths import OAI_REPO
 BASE = Path(__file__).resolve().parent
 with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
     work = Path(directory)
-    for name in ('prepare_local.py', 'paths.py', 'network_config.py'):
+    for name in ('prepare_local.py', 'paths.py', 'network_config.py', 'spatial_config.py'):
         shutil.copy2(BASE / name, work / name)
     private = work / 'identity.conf'
     private.write_text('imsi = "001010000000001"; nssai_sst = 1; dnn = "oai";\n'
                        'position0 = { x = 6377900; y = 0; z = 0; };\n')
     env = dict(os.environ, OAI_REPO=str(OAI_REPO), OAI_UE_CONFIG=str(private),
                OAI_AMF_IP='192.168.70.132', OAI_GNB_IP_CIDR='192.168.70.129/26')
+    env['OAI_SPATIAL_MODE'] = 'siso'
     env['OAI_STK_TRACE'] = str(work / 'stk_trace.csv')  # 测试只使用临时输入。
     template = OAI_REPO / 'ci-scripts/conf_files/gnb.sa.band254.u0.25prb.rfsim.ntn-leo.conf'
     original = template.read_bytes()

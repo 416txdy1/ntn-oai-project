@@ -24,7 +24,7 @@ typedef struct {
   qd_complex32_t *coefficients;
   double *delays_s;
   size_t history_samples;
-  float residual_gain_db;
+  float *residual_gain_db;
   bool muted;
 } qd_runtime_state_t;
 
@@ -109,9 +109,7 @@ static qd_runtime_state_t *create_state(channel_desc_t *channel)
   AssertFatal(bundle_path != NULL && *bundle_path != '\0', "OAI_QD_CHANNEL is required\n");
   AssertFatal(trace_path != NULL && *trace_path != '\0',
               "OAI_QD_CHANNEL requires OAI_STK_TRACE so STK remains the absolute channel source\n");
-  AssertFatal(channel->nb_tx == 1 && channel->nb_rx == 1,
-              "QDCHANNEL1 RFsim adapter currently supports SISO only (got %u Tx x %u Rx)\n",
-              channel->nb_tx, channel->nb_rx);
+  AssertFatal(channel->nb_tx > 0 && channel->nb_rx > 0, "QDCHANNEL1 requires positive antenna counts\n");
   AssertFatal(isfinite(channel->sampling_rate) && channel->sampling_rate > 0,
               "Invalid RFsim sampling rate for QDCHANNEL1\n");
   qd_runtime_state_t *state = NULL;
@@ -127,9 +125,11 @@ static qd_runtime_state_t *create_state(channel_desc_t *channel)
               "QDCHANNEL1 provenance: %s\n", error);
   AssertFatal(qd_channel_load(bundle_path, expected_trace_sha256, &state->bundle, error, sizeof(error)),
               "QDCHANNEL1 load: %s\n", error);
-  AssertFatal(state->bundle.rx_antennas == 1 && state->bundle.tx_antennas == 1,
-              "QDCHANNEL1 bundle must be SISO (got %zu Tx x %zu Rx)\n",
-              state->bundle.tx_antennas, state->bundle.rx_antennas);
+  AssertFatal(state->bundle.rx_antennas == channel->nb_rx && state->bundle.tx_antennas == channel->nb_tx,
+              "QDCHANNEL1 bundle %zu Tx x %zu Rx differs from RFsim %u Tx x %u Rx\n",
+              state->bundle.tx_antennas, state->bundle.rx_antennas, channel->nb_tx, channel->nb_rx);
+  AssertFatal(channel->nb_tx * channel->nb_rx == 1 || state->bundle.spatial_normalization,
+              "Multiport QDCHANNEL1 requires shared spatial normalization\n");
   const char *expected_direction = channel->is_uplink ? "uplink" : "downlink";
   AssertFatal(strcmp(state->bundle.link_direction, expected_direction) == 0,
               "QDCHANNEL1 direction %s does not match RFsim %s channel\n",
@@ -138,9 +138,11 @@ static qd_runtime_state_t *create_state(channel_desc_t *channel)
   AssertFatal(fabs(state->bundle.center_frequency_hz - (double)channel->center_freq) <= frequency_tolerance_hz,
               "QDCHANNEL1 center frequency %.3f Hz does not match RFsim %lu Hz\n",
               state->bundle.center_frequency_hz, channel->center_freq);
-  state->coefficients = calloc(state->bundle.paths, sizeof(*state->coefficients));
-  state->delays_s = calloc(state->bundle.paths, sizeof(*state->delays_s));
-  AssertFatal(state->coefficients != NULL && state->delays_s != NULL,
+  const size_t links = state->bundle.rx_antennas * state->bundle.tx_antennas;
+  state->coefficients = calloc(links * state->bundle.paths, sizeof(*state->coefficients));
+  state->delays_s = calloc(links * state->bundle.paths, sizeof(*state->delays_s));
+  state->residual_gain_db = calloc(links, sizeof(*state->residual_gain_db));
+  AssertFatal(state->coefficients != NULL && state->delays_s != NULL && state->residual_gain_db != NULL,
               "Cannot allocate QDCHANNEL1 runtime tap buffers\n");
   double maximum_delay_s = 0.0;
   const size_t total_delays = state->bundle.snapshots * state->bundle.rx_antennas
@@ -157,6 +159,7 @@ static qd_runtime_state_t *create_state(channel_desc_t *channel)
               state->history_samples);
   state->channel = channel;
   state->muted = true;
+  LOG_I(HW, "QDCHANNEL1 spatial ports: %zu Tx x %zu Rx\n", state->bundle.tx_antennas, state->bundle.rx_antennas);
   LOG_I(HW, "QDCHANNEL1 loaded %zu snapshots, %zu paths, %zu history samples, %s, %.3f Hz\n",
         state->bundle.snapshots, state->bundle.paths, state->history_samples,
         state->bundle.link_direction, state->bundle.center_frequency_hz);
@@ -175,11 +178,18 @@ void update_channel_model_from_quadriga(channel_desc_t *channel, uint64_t timest
   if (state == NULL)
     state = create_state(channel);
   char error[512] = {0};
-  const qd_channel_status_t status = qd_channel_sample(&state->bundle, trace_time_s, 0, 0,
-                                                       state->coefficients, state->delays_s,
-                                                       &state->residual_gain_db, error, sizeof(error));
-  AssertFatal(status != QD_CHANNEL_ERROR, "QDCHANNEL1 sample: %s\n", error);
-  state->muted = status == QD_CHANNEL_MUTED;
+  state->muted = false;
+  for (size_t rx = 0; rx < state->bundle.rx_antennas; rx++) {
+    for (size_t tx = 0; tx < state->bundle.tx_antennas; tx++) {
+      const size_t link = rx * state->bundle.tx_antennas + tx;
+      const size_t tap = link * state->bundle.paths;
+      const qd_channel_status_t status = qd_channel_sample(&state->bundle, trace_time_s, rx, tx,
+          state->coefficients + tap, state->delays_s + tap,
+          state->residual_gain_db + link, error, sizeof(error));
+      AssertFatal(status != QD_CHANNEL_ERROR, "QDCHANNEL1 sample: %s\n", error);
+      state->muted |= status == QD_CHANNEL_MUTED;
+    }
+  }
   pthread_mutex_unlock(&qd_lock);
 }
 
@@ -227,8 +237,7 @@ bool qd_channel_convolve(channel_desc_t *channel, c16_t **input, int rx_antenna,
 {
   if (!qd_channel_requested())
     return false;
-  AssertFatal(rx_antenna == 0 && channel->nb_tx == 1 && channel->nb_rx == 1,
-              "QDCHANNEL1 RFsim convolution currently supports SISO only\n");
+  AssertFatal(rx_antenna >= 0 && rx_antenna < channel->nb_rx, "QDCHANNEL1 invalid receive antenna\n");
   AssertFatal(samples >= 0 && output != NULL, "Invalid QDCHANNEL1 convolution output\n");
   pthread_mutex_lock(&qd_lock);
   qd_runtime_state_t *state = find_state(channel);
@@ -238,19 +247,22 @@ bool qd_channel_convolve(channel_desc_t *channel, c16_t **input, int rx_antenna,
     pthread_mutex_unlock(&qd_lock);
     return true;
   }
-  const double residual_amplitude = pow(10.0, state->residual_gain_db / 20.0);
-  for (int sample = 0; sample < samples; sample++) {
-    const size_t current = state->history_samples - 1 + (size_t)sample;
-    for (size_t path = 0; path < state->bundle.paths; path++) {
-      const double delay_samples = state->delays_s[path] * channel->sampling_rate;
-      const size_t integer_delay = (size_t)floor(delay_samples);
-      const double fraction = delay_samples - (double)integer_delay;
-      const double input_real = cubic_sample(input[0], current, integer_delay, fraction, false);
-      const double input_imag = cubic_sample(input[0], current, integer_delay, fraction, true);
-      const double tap_real = residual_amplitude * state->coefficients[path].real;
-      const double tap_imag = residual_amplitude * state->coefficients[path].imag;
-      output[sample].r += input_real * tap_real - input_imag * tap_imag;
-      output[sample].i += input_imag * tap_real + input_real * tap_imag;
+  for (size_t tx = 0; tx < state->bundle.tx_antennas; tx++) {
+    const size_t link = (size_t)rx_antenna * state->bundle.tx_antennas + tx;
+    const double residual_amplitude = pow(10.0, state->residual_gain_db[link] / 20.0);
+    for (int sample = 0; sample < samples; sample++) {
+      const size_t current = state->history_samples - 1 + (size_t)sample;
+      for (size_t path = 0; path < state->bundle.paths; path++) {
+        const double delay_samples = state->delays_s[link * state->bundle.paths + path] * channel->sampling_rate;
+        const size_t integer_delay = (size_t)floor(delay_samples);
+        const double fraction = delay_samples - (double)integer_delay;
+        const double input_real = cubic_sample(input[tx], current, integer_delay, fraction, false);
+        const double input_imag = cubic_sample(input[tx], current, integer_delay, fraction, true);
+        const double tap_real = residual_amplitude * state->coefficients[link * state->bundle.paths + path].real;
+        const double tap_imag = residual_amplitude * state->coefficients[link * state->bundle.paths + path].imag;
+        output[sample].r += input_real * tap_real - input_imag * tap_imag;
+        output[sample].i += input_imag * tap_real + input_real * tap_imag;
+      }
     }
   }
   pthread_mutex_unlock(&qd_lock);

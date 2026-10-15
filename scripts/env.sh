@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 必须 source；使用此文件位置计算路径，不依赖调用目录或用户名。
 NTN_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+export OAI_SPATIAL_MODE=siso
 export OAI_REPO="$NTN_ROOT/.runtime/oai"
 export OAI_BUILD_DIR="$OAI_REPO/cmake_targets/ran_build/build"
 export OAI_BUILD_REPO="$OAI_REPO"

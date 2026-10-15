@@ -49,3 +49,6 @@ local_ntn/Units/
 STK_LEO_Constellation_20260923_train_v2/LogFiles/
 STK_LEO_Constellation_20260923_train_v2/*.wsp
 STK_LEO_Constellation_20260923_train_v2/*.wsptb
+
+# MISO generated runtime configuration
+local_ntn/gnb.miso.conf

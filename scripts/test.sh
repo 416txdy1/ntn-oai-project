@@ -2,13 +2,14 @@
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
-source scripts/env.sh
+if [[ "${OAI_SPATIAL_MODE:-siso}" == miso2 ]]; then source scripts/env_miso.sh; else source scripts/env.sh; fi
 python3 scripts/test_full_pass.py
 python3 scripts/test_monotonic_ping.py
 python3 local_ntn/test_blend_interpolation.py
 python3 local_ntn/test_stk_timing_assist.py
 python3 local_ntn/test_network_config.py
 python3 local_ntn/test_preflight.py
+python3 local_ntn/test_spatial_config.py
 python3 local_ntn/test_local_setup.py
 python3 local_ntn/test_trace_validation.py
 python3 local_ntn/test_real_iq.py

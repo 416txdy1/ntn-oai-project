@@ -47,3 +47,8 @@ with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
                     '-lcrypto','-lm','-lpthread','-o',str(d/'test')],check=True,cwd=build)
     subprocess.run([str(d/'test'),str(trace)],check=True)
     if has_legacy:subprocess.run([str(d/'test'),'--legacy'],check=True)
+
+    for direction in ('downlink', 'uplink'):
+        bundle=base.parent/'examples/fdd-miso'/direction
+        if bundle.is_dir():
+            subprocess.run([str(d/'test'),str(base.parent/'examples/fdd-pass/trace.csv'),str(bundle)],check=True)

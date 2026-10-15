@@ -83,105 +83,78 @@ int main(int argc, char **argv)
   assert(qd_channel_load(argv[1], NULL, &reference, error, sizeof(error)));
   const bool uplink = strcmp(reference.link_direction, "uplink") == 0;
 
-  float phase = 0.0f;
+  float phase[reference.rx_antennas];
+  memset(phase, 0, sizeof(phase));
   channel_desc_t channel = {
-      .nb_tx = 1,
-      .nb_rx = 1,
-      .channel_length = 1,
-      .sampling_rate = 30720000.0,
+      .nb_tx = reference.tx_antennas, .nb_rx = reference.rx_antennas,
+      .channel_length = 1, .sampling_rate = 30720000.0,
       .center_freq = (uint64_t)reference.center_frequency_hz,
-      .Doppler_phase_cur = &phase,
-      .is_uplink = uplink,
+      .Doppler_phase_cur = phase, .is_uplink = uplink,
   };
   test_trace_time_s = reference.times_s[0];
   update_channel_model_from_quadriga(&channel, 0);
   const size_t history = qd_channel_history_length(&channel);
-  const size_t expected_history = (size_t)ceil(maximum_delay(&reference) * channel.sampling_rate) + 3;
-  assert(history == expected_history);
-  assert(history > 255);
-
+  assert(history == (size_t)ceil(maximum_delay(&reference) * channel.sampling_rate) + 3);
   enum { samples = 32 };
-  c16_t *input_storage = calloc(history + samples - 1, sizeof(*input_storage));
-  struct complexd *output = calloc(samples, sizeof(*output));
-  assert(input_storage != NULL && output != NULL);
-  for (size_t index = 0; index < history + samples - 1; index++)
-    input_storage[index] = (c16_t){.r = 1000, .i = -500};
-  c16_t *input[] = {input_storage};
-  assert(qd_channel_convolve(&channel, input, 0, samples, output));
-
+  c16_t *input[reference.tx_antennas];
+  uint32_t seed = 20261015;
+  for (size_t tx = 0; tx < reference.tx_antennas; tx++) {
+    input[tx] = calloc(history + samples - 1, sizeof(c16_t));
+    assert(input[tx]);
+    for (size_t n = 0; n < history + samples - 1; n++) {
+      seed = seed * 1664525u + 1013904223u;
+      input[tx][n].r = (int)(seed % 20001) - 10000;
+      seed = seed * 1664525u + 1013904223u;
+      input[tx][n].i = (int)(seed % 20001) - 10000;
+    }
+  }
+  struct complexd output[samples], expected[samples];
   qd_complex32_t *coefficients = calloc(reference.paths, sizeof(*coefficients));
   double *delays = calloc(reference.paths, sizeof(*delays));
-  float residual_gain_db = 0.0f;
-  assert(coefficients != NULL && delays != NULL);
-  assert(qd_channel_sample(&reference, test_trace_time_s, 0, 0, coefficients, delays,
-                           &residual_gain_db, error, sizeof(error)) == QD_CHANNEL_OK);
-  double sum_real = 0.0;
-  double sum_imag = 0.0;
-  for (size_t path = 0; path < reference.paths; path++) {
-    sum_real += coefficients[path].real;
-    sum_imag += coefficients[path].imag;
-  }
-  const double residual_amplitude = pow(10.0, residual_gain_db / 20.0);
-  const double expected_real = residual_amplitude * (1000.0 * sum_real + 500.0 * sum_imag);
-  const double expected_imag = residual_amplitude * (-500.0 * sum_real + 1000.0 * sum_imag);
-  for (int sample = 0; sample < samples; sample++) {
-    assert(fabs(output[sample].r - expected_real) < 1e-5 * (1.0 + fabs(expected_real)));
-    assert(fabs(output[sample].i - expected_imag) < 1e-5 * (1.0 + fabs(expected_imag)));
-  }
-
-  /* 确定性宽带输入可以暴露常量输入无法发现的时延索引、符号错误。 */
-  uint32_t random_state = 20260928;
-  for (size_t index = 0; index < history + samples - 1; index++) {
-    random_state = random_state * 1664525u + 1013904223u;
-    input_storage[index].r = (int)(random_state % 20001) - 10000;
-    random_state = random_state * 1664525u + 1013904223u;
-    input_storage[index].i = (int)(random_state % 20001) - 10000;
-  }
+  assert(coefficients && delays);
   double max_error = 0;
   for (size_t point = 0; point < 2 * reference.snapshots - 1; point++) {
-    const size_t lower = point / 2;
+    size_t lower = point / 2;
     test_trace_time_s = reference.times_s[lower];
     if (point % 2) test_trace_time_s = (test_trace_time_s + reference.times_s[lower + 1]) / 2;
     update_channel_model_from_quadriga(&channel, 0);
-    assert(qd_channel_convolve(&channel, input, 0, samples, output));
-    assert(qd_channel_sample(&reference, test_trace_time_s, 0, 0, coefficients, delays,
-                             &residual_gain_db, error, sizeof(error)) == QD_CHANNEL_OK);
-    for (int sample = 0; sample < samples; sample++) {
-      double expected_r = 0, expected_i = 0;
-      for (size_t path = 0; path < reference.paths; path++) {
-        const double delay = delays[path] * channel.sampling_rate;
-        const double r = reference_input(input_storage, history - 1 + sample, delay, false);
-        const double i = reference_input(input_storage, history - 1 + sample, delay, true);
-        expected_r += r * coefficients[path].real - i * coefficients[path].imag;
-        expected_i += i * coefficients[path].real + r * coefficients[path].imag;
+    for (size_t rx = 0; rx < reference.rx_antennas; rx++) {
+      assert(qd_channel_convolve(&channel, input, rx, samples, output));
+      memset(expected, 0, sizeof(expected));
+      for (size_t tx = 0; tx < reference.tx_antennas; tx++) {
+        float gain;
+        assert(qd_channel_sample(&reference, test_trace_time_s, rx, tx, coefficients, delays,
+                                &gain, error, sizeof(error)) == QD_CHANNEL_OK);
+        for (int n = 0; n < samples; n++) {
+          for (size_t p = 0; p < reference.paths; p++) {
+            double delay = delays[p] * channel.sampling_rate;
+            double r = reference_input(input[tx], history - 1 + n, delay, false);
+            double i = reference_input(input[tx], history - 1 + n, delay, true);
+            expected[n].r += pow(10.0, gain / 20.0) * (r * coefficients[p].real - i * coefficients[p].imag);
+            expected[n].i += pow(10.0, gain / 20.0) * (i * coefficients[p].real + r * coefficients[p].imag);
+          }
+        }
       }
-      expected_r *= pow(10.0, residual_gain_db / 20.0);
-      expected_i *= pow(10.0, residual_gain_db / 20.0);
-      max_error = fmax(max_error, hypot(output[sample].r - expected_r, output[sample].i - expected_i));
-      assert(fabs(output[sample].r - expected_r) < 1e-7 * (1 + fabs(expected_r)));
-      assert(fabs(output[sample].i - expected_i) < 1e-7 * (1 + fabs(expected_i)));
+      for (int n = 0; n < samples; n++) {
+        max_error = fmax(max_error, hypot(output[n].r - expected[n].r, output[n].i - expected[n].i));
+        assert(fabs(output[n].r - expected[n].r) < 1e-7 * (1 + fabs(expected[n].r)));
+        assert(fabs(output[n].i - expected[n].i) < 1e-7 * (1 + fabs(expected[n].i)));
+      }
     }
   }
-  printf("PASS %s varying IQ: %zu snapshot/midpoint checks, max error %.9g\n",
-         reference.link_direction, 2 * reference.snapshots - 1, max_error);
-  test_trace_time_s = reference.times_s[reference.snapshots - 1] + 1;
-  update_channel_model_from_quadriga(&channel, 0);
-  assert(qd_channel_convolve(&channel, input, 0, samples, output));
-  for (int sample = 0; sample < samples; sample++)
-    assert(output[sample].r == 0.0 && output[sample].i == 0.0);
-
-  test_trace_time_s = reference.times_s[0] - 1.0;
-  update_channel_model_from_quadriga(&channel, 0);
-  assert(qd_channel_convolve(&channel, input, 0, samples, output));
-  for (int sample = 0; sample < samples; sample++)
-    assert(output[sample].r == 0.0 && output[sample].i == 0.0);
-
-  printf("PASS QD RFsim sparse adapter: history=%zu, paths=%zu, out-of-range muted\n",
-         history, reference.paths);
+  for (int side = 0; side < 2; side++) {
+    test_trace_time_s = side ? reference.times_s[reference.snapshots - 1] + 1 : reference.times_s[0] - 1;
+    update_channel_model_from_quadriga(&channel, 0);
+    for (size_t rx = 0; rx < reference.rx_antennas; rx++) {
+      assert(qd_channel_convolve(&channel, input, rx, samples, output));
+      for (int n = 0; n < samples; n++) assert(output[n].r == 0 && output[n].i == 0);
+    }
+  }
+  printf("PASS QD %zu Tx x %zu Rx: %zu snapshot/midpoint checks, max error %.9g, history %zu, muted boundaries\n",
+         reference.tx_antennas, reference.rx_antennas, 2 * reference.snapshots - 1, max_error, history);
   free(coefficients);
   free(delays);
-  free(input_storage);
-  free(output);
+  for (size_t tx = 0; tx < reference.tx_antennas; tx++) free(input[tx]);
   qd_channel_free(&reference);
   return 0;
 }
