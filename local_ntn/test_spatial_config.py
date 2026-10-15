@@ -21,6 +21,7 @@ class SpatialConfigTest(unittest.TestCase):
         self.assertEqual(result, configure_miso(result, 4))
         self.assertEqual(spatial_ports({'OAI_SPATIAL_MODE':'miso4'}), 4)
         self.assertEqual(spatial_ports({}), 1)
+        self.assertEqual(spatial_ports({'OAI_SPATIAL_MODE':'miso4-subarray'}), 4)
         with self.assertRaises(ValueError): configure_miso(original, 3)
 
     def test_guards(self) -> None:

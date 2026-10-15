@@ -5,6 +5,7 @@ cd "$ROOT"
 case "${OAI_SPATIAL_MODE:-siso}" in
  miso2) source scripts/env_miso.sh ;;
  miso4) source scripts/env_miso4.sh ;;
+ miso4-subarray) source scripts/env_subarray4.sh ;;
  siso) source scripts/env.sh ;;
  *) echo "不支持的空间模式"; exit 2 ;;
 esac

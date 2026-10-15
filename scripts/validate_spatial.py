@@ -15,7 +15,7 @@ def main() -> int:
     args=parser.parse_args()
     if os.geteuid()!=0:
         parser.error('请在已 source 对应环境的 root shell 运行')
-    if os.environ.get('OAI_SPATIAL_MODE') != f'miso{args.ports}':
+    if os.environ.get('OAI_SPATIAL_MODE') not in ({'miso4', 'miso4-subarray'} if args.ports == 4 else {'miso2'}):
         parser.error('端口数量与已加载的空间模式不匹配')
     # 验算器使用原始 Hermite/STK 基线，拒绝未经记录的实验修正。
     for name, default in (('OAI_STK_TRACE_INTERPOLATION','hermite'), ('OAI_STK_BLEND_TIMING_ASSIST','0')):

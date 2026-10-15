@@ -24,3 +24,7 @@ miso.environment=scripts/env_miso.sh
 miso4.channel_directory=examples/fdd-miso4
 miso4.antenna_profile=satellite_4port_ground_omni
 miso4.environment=scripts/env_miso4.sh
+subarray4.channel_directory=examples/fdd-miso4-subarray
+subarray4.antenna_profile=satellite_16x16_4port_ground_omni
+subarray4.environment=scripts/env_subarray4.sh
+subarray4.array_reference_frequency_hz=2488400000

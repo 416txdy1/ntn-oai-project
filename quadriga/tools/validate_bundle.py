@@ -117,7 +117,7 @@ def validate_bundle(root: Path) -> dict[str, Any]:
         _require(antenna.get("stk_trace_sha256") == trace_hash, "antenna STK trace SHA256 不匹配")
         _require(antenna.get("link_direction") == radio["link_direction"], "antenna 方向不匹配")
         _require(antenna.get("center_frequency_hz") == center_frequency, "antenna 频率不匹配")
-        _require(antenna.get("profile") in {"omni", "satellite_16x16_ground_omni", "satellite_2port_ground_omni", "satellite_4port_ground_omni"}, "antenna profile 非法")
+        _require(antenna.get("profile") in {"omni", "satellite_16x16_ground_omni", "satellite_2port_ground_omni", "satellite_4port_ground_omni", "satellite_16x16_4port_ground_omni"}, "antenna profile 非法")
         satellite = _positive_int(antenna.get("satellite_rf_ports"), "antenna satellite_rf_ports")
         ground = _positive_int(antenna.get("ground_rf_ports"), "antenna ground_rf_ports")
         expected = (ground, satellite) if radio["link_direction"] == "downlink" else (satellite, ground)
@@ -125,6 +125,25 @@ def validate_bundle(root: Path) -> dict[str, Any]:
         if antenna["profile"] in {"satellite_2port_ground_omni", "satellite_4port_ground_omni"}:
             ports = 2 if "2port" in antenna["profile"] else 4
             _require(satellite == ports and ground == 1 and spatial, "多端口需要匹配维度与空间归一化")
+        elif antenna["profile"] == "satellite_16x16_4port_ground_omni":
+            _require(satellite == 4 and ground == 1 and spatial, "四子阵需要匹配维度与空间归一化")
+            _require(antenna.get("satellite_rows") == antenna.get("satellite_columns") == 16
+                     and antenna.get("subarray_rows") == antenna.get("subarray_columns") == 8
+                     and antenna.get("spacing_wavelengths") == 0.5, "子阵几何错误")
+            reference = antenna.get("array_reference_frequency_hz")
+            _require(isinstance(reference, (int, float)) and math.isfinite(reference) and reference > 0,
+                     "子阵参考频率非法")
+            _require(math.isclose(antenna.get("element_spacing_m", -1), 299792458 / reference / 2, rel_tol=1e-10)
+                     and math.isclose(antenna.get("spacing_wavelengths_at_carrier", -1), center_frequency / reference / 2, rel_tol=1e-10),
+                     "子阵物理间距与载频不一致")
+            expected_map = [1 + int(i % 16 >= 8) + 2 * int(i // 16 >= 8) for i in range(256)]
+            _require(antenna.get("element_port_map") == expected_map and antenna.get("element_index_base") == 1,
+                     "子阵映射必须覆盖 256 阵元且每端口 64 个")
+            _require(antenna.get("subarray_weight_norm2") == 1, "子阵权重必须单位功率")
+            span = antenna.get("max_subarray_delay_span_s")
+            _require(isinstance(span, (int, float)) and math.isfinite(span) and span >= 0, "子阵时延跨度非法")
+            _require(antenna.get("delay_reduction") == "uniform_subarray_mean_narrowband", "子阵时延近似未声明")
+            _require(antenna.get("absolute_array_gain_source") == "not_calibrated_STK_reference", "子阵绝对增益尚未校准")
         else:
             _require(satellite == ground == 1, "原有 profile 仅支持单波束端口")
         if antenna["profile"] == "satellite_16x16_ground_omni":

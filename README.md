@@ -47,6 +47,27 @@ sudo --preserve-env=OAI_REPO,OAI_BUILD_DIR,OAI_STK_TRACE,OAI_UE_CONFIG,OAI_QD_DL
 
 完整的 PDU 等待、ping、双向流量、停止命令见 [手动运行指南](local_ntn/MANUAL_RUN.md)。使用 Docker 所需权限由本机管理员配置；也可在 root 终端中执行初始化及运行步骤。不要将 `.private/` 提交或分享。
 
+## zky-miso 多端口入口
+
+`source scripts/env.sh` 仍选择原 SISO。多端口实验需显式选择下表环境；下行均为单数据层，UE 保持 1 Tx / 1 Rx，上行对应 1×N SIMO。
+
+| 场景 | 环境入口 | 数据目录 | 验收记录 |
+|---|---|---|---|
+| 2×1 独立 RF 通道 | `scripts/env_miso.sh` | `examples/fdd-miso/` | [2×1 验收](docs/MISO_2X1_END_TO_END_20261015.md) |
+| 4×1 独立 RF 通道 | `scripts/env_miso4.sh` | `examples/fdd-miso4/` | [4×1 验收](docs/MISO_4X1_VALIDATION_20261015.md) |
+| 16×16 阵列 → 4 个 8×8 子阵端口 → 4×1 | `scripts/env_subarray4.sh` | `examples/fdd-miso4-subarray/` | [子阵映射与验收](docs/MISO_SUBARRAY4_VALIDATION_20261015.md) |
+
+在已初始化的 Linux 实验副本中，以 root shell 运行：
+
+```bash
+source scripts/env_subarray4.sh
+python3 scripts/validate_spatial.py --ports 4
+```
+
+该入口在同一活动会话内执行静态/动态 PDU、ping、双向 UDP 和独立物理量验算，只管理自己启动的服务。2×1 使用对应环境并传 `--ports 2`。仅做离线回归可运行 `OAI_SPATIAL_MODE=miso4-subarray bash scripts/test.sh`。Windows 源码先通过现有 WSL 同步入口同步；不要用仅支持默认 SISO 的旧 smoke 包装命令来代替上述多端口入口。
+
+四子阵保留四路 IQ，不合成为单 RF 端口；256 个物理阵元不等于 256 个独立 RF 通道。以上有界业务测试不代表完整过境、绝对 EIRP 或容量对比验收。
+
 ## 源码变更与许可
 
 OAI 来源版本、排除项见 `vendor/source-manifest.json`。修改 OAI 请编辑 `oai_patch/current/`；QD C 模块编辑 `quadriga/oai/`，然后重新运行 `scripts/build.sh`。解包树是生成产物，重建时会同步这些覆盖文件。

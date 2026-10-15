@@ -6,14 +6,14 @@ from collections.abc import Mapping
 
 def spatial_mode(environment: Mapping[str, str]) -> bool:
     mode = environment.get("OAI_SPATIAL_MODE", "siso")
-    if mode not in {"siso", "miso2", "miso4"}:
-        raise ValueError("OAI_SPATIAL_MODE 只支持 siso、miso2 或 miso4")
+    if mode not in {"siso", "miso2", "miso4", "miso4-subarray"}:
+        raise ValueError("OAI_SPATIAL_MODE 只支持 siso、miso2、miso4 或 miso4-subarray")
     return mode != "siso"
 
 
 def spatial_ports(environment: Mapping[str, str]) -> int:
     """卫星端独立 RF 端口数量；先验证模式，禁止静默回退。"""
-    return int(environment["OAI_SPATIAL_MODE"][-1]) if spatial_mode(environment) else 1
+    return int(environment["OAI_SPATIAL_MODE"][4]) if spatial_mode(environment) else 1
 
 
 def configure_miso(config: str, ports: int = 2) -> str:

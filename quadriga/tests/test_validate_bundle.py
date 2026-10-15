@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -57,6 +58,31 @@ class ValidateBundleTest(unittest.TestCase):
         self._write_antenna(satellite_rf_ports=256)
         with self.assertRaisesRegex(ValidationError, "RF 端口"):
             validate_bundle(self.root)
+
+    def test_subarray_mapping_and_power_guards(self) -> None:
+        source = Path(__file__).resolve().parents[2] / 'examples/fdd-miso4-subarray/downlink'
+        target = self.root / 'subarrays'
+        shutil.copytree(source, target)
+        self.assertEqual(validate_bundle(target)['tx_antennas'], 4)
+        path = target / 'antenna.json'
+        original = json.loads(path.read_text())
+        uplink = json.loads((source.parent/'uplink/antenna.json').read_text())
+        self.assertEqual(original['element_spacing_m'], uplink['element_spacing_m'])
+        self.assertEqual(original['array_reference_frequency_hz'], uplink['array_reference_frequency_hz'])
+        self.assertNotEqual(original['spacing_wavelengths_at_carrier'], uplink['spacing_wavelengths_at_carrier'])
+        bad_map = original['element_port_map'].copy()
+        bad_map[0] = 2
+        for field, value, error in (
+            ('element_port_map', bad_map, '子阵映射'),
+            ('subarray_weight_norm2', 4, '单位功率'),
+            ('max_subarray_delay_span_s', -1, '时延跨度'),
+            ('subarray_rows', 16, '子阵几何'),
+            ('element_spacing_m', 1, '物理间距'),
+        ):
+            with self.subTest(field=field):
+                path.write_text(json.dumps(dict(original, **{field:value})))
+                with self.assertRaisesRegex(ValidationError, error):
+                    validate_bundle(target)
 
     def test_invalid_link_direction_is_rejected(self) -> None:
         manifest = self._manifest()

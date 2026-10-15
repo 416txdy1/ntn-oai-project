@@ -126,13 +126,25 @@ def preflight(rate: float, environment: dict[str, str] | None = None) -> dict:
             bundle = Path(children[kind]['OAI_QD_CHANNEL'])
             audit = check_bundle(bundle, STK_TRACE, direction, frequency)
             expected = ((1, ports) if kind == 'gnb' else (ports, 1)) if miso else (1, 1)
+            if miso:
+                expected_profile = {'miso2':'satellite_2port_ground_omni',
+                                    'miso4':'satellite_4port_ground_omni',
+                                    'miso4-subarray':'satellite_16x16_4port_ground_omni'}[env['OAI_SPATIAL_MODE']]
+                antenna = json.loads((bundle/'antenna.json').read_text())
+                if antenna.get('profile') != expected_profile:
+                    raise ValueError(f'{kind} 天线 profile 与空间模式不一致')
             actual = (audit['tx_antennas'], audit['rx_antennas'])
             if actual != expected:
                 raise ValueError(f'{kind} bundle Tx/Rx {actual} != 配置 {expected}')
             result['bundles'][kind] = {'path': str(bundle), 'audit': audit}
         if miso and b'QDCHANNEL1 spatial ports' not in (BUILD_DIR / 'librfsimulator.so').read_bytes():
             raise ValueError('RFsim 库不支持多端口，请重新构建')
-    result['spatial_mode'] = f'miso{ports}' if miso else 'siso'
+    if env.get('OAI_SPATIAL_MODE') == 'miso4-subarray':
+        arrays = [json.loads((Path(children[k]['OAI_QD_CHANNEL'])/'antenna.json').read_text()) for k in ('gnb','ue')]
+        for key in ('array_reference_frequency_hz','element_spacing_m','element_port_map'):
+            if arrays[0][key] != arrays[1][key]:
+                raise ValueError(f'FDD 双向子阵物理几何不一致: {key}')
+    result['spatial_mode'] = env.get('OAI_SPATIAL_MODE', 'siso')
     return result
 
 

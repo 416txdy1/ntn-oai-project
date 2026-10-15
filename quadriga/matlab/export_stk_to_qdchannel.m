@@ -72,8 +72,13 @@ layout.rx_array.center_frequency = options.center_frequency_hz;
 relative_times_s = trace.times_s - trace.times_s(1);
 layout.tx_track = make_track(tx_positions_m, relative_times_s, tx_name);
 layout.rx_track = make_track(rx_positions_m, relative_times_s, rx_name);
-if strcmp(options.antenna_profile, 'satellite_16x16_ground_omni')
+if any(strcmp(options.antenna_profile, {'satellite_16x16_ground_omni', 'satellite_16x16_4port_ground_omni'}))
     layout.tx_array = create_satellite_array(options.center_frequency_hz);
+    if strcmp(options.antenna_profile, 'satellite_16x16_4port_ground_omni')
+        % FDD 两方向使用同一个物理孔径，波数仍按实际载频计算。
+        layout.tx_array.element_position = layout.tx_array.element_position * ...
+            options.center_frequency_hz / options.array_reference_frequency_hz;
+    end
     [orientation, beam_weights, antenna_metadata] = satellite_beam_geometry( ...
         layout.tx_array, trace, visibility);
     layout.tx_track.orientation = orientation;
@@ -112,12 +117,22 @@ if ~isequal(size(coefficients), size(delays_s))
     error('QDCHANNEL1:IndividualDelay', '当前导出器要求 QuaDRiGa 提供逐天线路径时延');
 end
 
-if strcmp(options.antenna_profile, 'satellite_16x16_ground_omni')
+if strcmp(options.antenna_profile, 'satellite_16x16_4port_ground_omni')
+    [coefficients, delays_s, mapping] = combine_satellite_subarrays(coefficients, delays_s, beam_weights, layout.tx_array.element_position);
+    fields = fieldnames(mapping);
+    for k = 1:numel(fields), antenna_metadata.(fields{k}) = mapping.(fields{k}); end
+    antenna_metadata.profile = options.antenna_profile;
+    antenna_metadata.satellite_rf_ports = 4;
+    antenna_metadata.absolute_array_gain_source = 'not_calibrated_STK_reference';
+    antenna_metadata.array_reference_frequency_hz = options.array_reference_frequency_hz;
+    antenna_metadata.element_spacing_m = qd_simulation_parameters.speed_of_light / options.array_reference_frequency_hz / 2;
+    antenna_metadata.spacing_wavelengths_at_carrier = options.center_frequency_hz / options.array_reference_frequency_hz / 2;
+elseif strcmp(options.antenna_profile, 'satellite_16x16_ground_omni')
     delay_span_s = max(delays_s, [], 2) - min(delays_s, [], 2);
     antenna_metadata.max_element_delay_span_s = max(delay_span_s(:));
     [coefficients, delays_s] = combine_satellite_beam(coefficients, delays_s, beam_weights);
 end
-if any(strcmp(options.antenna_profile, {'satellite_2port_ground_omni', 'satellite_4port_ground_omni'}))
+if any(strcmp(options.antenna_profile, {'satellite_2port_ground_omni', 'satellite_4port_ground_omni', 'satellite_16x16_4port_ground_omni'}))
     % 上行的输入是 UE，输出是卫星阵列；转置空间轴但不取共轭。
     if strcmp(options.link_direction, 'uplink')
         coefficients = permute(coefficients, [2, 1, 3, 4]);
@@ -166,6 +181,7 @@ defaults = struct( ...
     'scenario', 'QuaDRiGa_NTN_Rural_LOS', ...
     'random_seed', 20260925, ...
     'sample_density', 2.1, ...
+    'array_reference_frequency_hz', [], ...
     'antenna_profile', 'satellite_16x16_ground_omni', ...
     'quadriga_version', '');
 allowed = fieldnames(defaults);
@@ -184,12 +200,16 @@ end
 if isempty(options.quadriga_path)
     error('QDCHANNEL1:QuaDRiGaPath', '必须显式提供 options.quadriga_path');
 end
-if ~any(strcmp(options.antenna_profile, {'satellite_16x16_ground_omni', 'satellite_2port_ground_omni', 'satellite_4port_ground_omni', 'omni'}))
+if ~any(strcmp(options.antenna_profile, {'satellite_16x16_ground_omni', 'satellite_2port_ground_omni', 'satellite_4port_ground_omni', 'satellite_16x16_4port_ground_omni', 'omni'}))
     error('QDCHANNEL1:AntennaProfile', '不支持的 antenna_profile');
 end
 if ~isscalar(options.center_frequency_hz) || options.center_frequency_hz <= 0
     error('QDCHANNEL1:Frequency', 'center_frequency_hz 必须大于 0');
 end
+if isempty(options.array_reference_frequency_hz)
+    options.array_reference_frequency_hz = options.center_frequency_hz;
+end
+validateattributes(options.array_reference_frequency_hz, {'numeric'}, {'scalar','real','finite','positive'});
 if ~isscalar(options.random_seed) || options.random_seed < 0 || fix(options.random_seed) ~= options.random_seed
     error('QDCHANNEL1:Seed', 'random_seed 必须是非负整数');
 end
