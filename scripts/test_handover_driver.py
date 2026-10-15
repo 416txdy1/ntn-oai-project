@@ -185,7 +185,28 @@ class DriverBoundaryTests(unittest.TestCase):
             return [dict(samples=100000+i*100,monotonic_ns=10000000000+int(i*.1/factor*1e9)) for i in range(31)]
         for factor,expected in [(1,612),(.1,615)]:
             self.assertAlmostEqual(d.tail_stop_iq(case_spec('full'),{'gnb':rows(factor),'ue':rows(factor)},1000),expected)
-        with self.assertRaises(ValueError):d.tail_stop_iq(case_spec('full'),{'gnb':rows(3),'ue':rows(3)},1000)
+        # A faster-than-wall replay must retain the second complete window;
+        # the independently observed drain can overrun the case boundary.
+        for factor in (2.3,3,5):
+            target=d.tail_stop_iq(case_spec('full'),{'gnb':rows(factor),'ue':rows(factor)},1000)
+            self.assertAlmostEqual(target,604.3)
+            self.assertGreater(target,604)
+            self.assertLessEqual(target,615)
+        bad={**case_spec('full'),'duration_iq_s':609}
+        with self.assertRaises(ValueError):d.tail_stop_iq(bad,{'gnb':rows(3),'ue':rows(3)},1000)
+
+    def test_late_receipts_after_case_still_fail_original_deadline(self):
+        from handover_metrics import timely_summary
+        # Case IQ ends620; this receipt is observed during a bounded drain.
+        packet=dict(sequence=1,send_ns=100_000_000_000,receive_ns=105_100_000_000,
+                    received=True,send={'iq_bounds_s':[604.3,604.4]},
+                    receive={'iq_bounds_s':[621.2,621.3]})
+        value=timely_summary([packet],0,620,106_000_000_000)
+        self.assertEqual(value['timely_definite_failed'],1)
+        self.assertEqual(value['timely_failure_upper_bound'],1)
+        self.assertEqual(value['timely_deadline_wall_ns'],5_000_000_000)
+        packet['receive_ns']=104_900_000_000
+        self.assertEqual(timely_summary([packet],0,620,106_000_000_000)['timely_definite_failed'],0)
 
     def test_sender_event_gap_cannot_be_hidden_by_heartbeat(self):
         rows=[dict(event='ready',role='sender',monotonic_ns=100,offered_wall_bits_per_second=100000),

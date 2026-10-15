@@ -290,9 +290,12 @@ def tail_stop_iq(spec,anchors,fs):
         factors.append(((b['samples']-a['samples'])/fs)/((b['monotonic_ns']-a['monotonic_ns'])/1e9))
     reserve=max(5.0,8.0*max(factors))
     minimum_stop=(spec['completions'][-1]+5-spec['trace_interval_s'][0]+.3) if spec['completions'] else 30.3
-    if spec['duration_iq_s']-reserve<minimum_stop:
-        raise ValueError('observed real-time factor leaves insufficient drain after required business coverage')
-    return spec['duration_iq_s']-reserve
+    if minimum_stop > spec['duration_iq_s']-5:
+        raise ValueError('required business window leaves no five-IQ-second tail')
+    # Keep the complete final window. A six-wall-second drain is independently
+    # observed by real channel clocks, and may finish after the case interval.
+    # No additional traffic, synthetic trace states or deadline relaxation.
+    return max(minimum_stop, spec['duration_iq_s']-reserve)
 
 
 def pdu_address(namespace):
@@ -446,6 +449,18 @@ def build_report(report,observer,output,readiness,traffic_stop_ns,drain_ns,worke
     start=max(max(p['iq_bounds_s']) for p in measurement)
     stop=[maps[side].map(traffic_stop_ns) for side in maps]
     end=min(min(p['iq_bounds_s']) for p in stop)
+    report['traffic_stop_physical']={side:mapper.map(traffic_stop_ns) for side,mapper in maps.items()}
+    report['actual_stop_reserve_iq_bounds_s']={
+        side:[spec['duration_iq_s']-entry['iq_bounds_s'][1],
+              spec['duration_iq_s']-entry['iq_bounds_s'][0]]
+        for side,entry in report['traffic_stop_physical'].items()}
+
+    drain_maps={side:mapper.map(drain_ns) for side,mapper in maps.items()}
+    report['drain_end_physical']=drain_maps
+    report['post_case_drain_observed_iq_s']={
+        side:max(0.0,entry['iq_bounds_s'][1]-spec['duration_iq_s'])
+        for side,entry in drain_maps.items()}
+    report['drain_policy']='six wall seconds after actual send stop; actual channel clocks may extend beyond case'
     report.update(rf_case_iq_interval_s=[0,spec['duration_iq_s']],physical_start_verified=True,
                   physical_channel_start=starts, startup_unobserved_iq_interval_s={side:entry['startup_unobserved_iq_interval_s'] for side,entry in starts.items()},
                   sample_rate_hz=fs,clock_sample_rates={side:rows[-1]['sampling_rate'] for side,rows in observer.anchors.items()},
@@ -610,7 +625,7 @@ def run_acceptance(argv=None):
                         report['tail_send_stop_target_iq_s']=tail_target
                         report['tail_reserved_iq_s']=spec['duration_iq_s']-tail_target
                         for name in ('uplink-sender','downlink-sender','ping'):children.signal(name,signal.SIGINT)
-                        drain_deadline=now+6
+                        drain_deadline=traffic_stop_ns/1e9+6
                         report['tail_phase']='intentional_send_stop_and_bounded_wall_drain'
                 if traffic_stop_ns is not None and drain_ns is None and now>=drain_deadline:
                     for name in ('uplink-sender','downlink-sender','ping'):

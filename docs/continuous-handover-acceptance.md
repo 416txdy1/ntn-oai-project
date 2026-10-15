@@ -114,10 +114,17 @@ Outputs are private by default under
 
 Startup is unavailable instead of zero latency/loss. Final send-stop/drain is
 marked intentional and is not presented as continuous offered traffic.
-Send-stop reserves at least five IQ seconds or eight wall seconds mapped with
-recent observed real-time factor, whichever needs more IQ coverage. It cannot
-cut a required switch window. Insufficient room for bounded draining fails
-explicitly rather than reducing coverage.
+Send-stop prefers at least five IQ seconds or eight wall seconds mapped with
+recent observed real-time factor. It remains after the complete final switch
+window, targeting at least five IQ seconds before the case end. The actual stop
+brackets and remaining IQ bounds are separately reported; polling overrun is not
+presented as verified target margin. Faster replay can make
+these preferences conflict: retain the complete window and observe the fixed
+six-wall-second drain with actual channel clocks, even if those clocks extend
+beyond the case. The report records each channel's drain endpoint and overrun.
+No traffic is added after send-stop, no trace states are extrapolated, and the
+original five-wall-second delivery deadline and one-percent gates still apply.
+Missing clocks, unresolved deadlines or late/missing packets still fail.
 Throughput bins use receive-time estimates and expose clock precision;
 loss bins use matched sender cohorts. Stable business through a transition is
 valid evidence; no synthetic degradation is introduced.

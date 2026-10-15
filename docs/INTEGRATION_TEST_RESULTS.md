@@ -269,3 +269,37 @@ The first70 actual shared-axis plot was visually checked. RTT peaked near3.5s
 and UL arrival throughput dipped/recovered during the physical transition.
 Full15m still FAILED the unchanged5s service deadline despite eventual receipt.
 No remote push or completed integration release is established.
+
+
+### 2026-10-15 startup fix actual result and fast-replay drain correction
+
+bc8c831 passed full offline regressions with the same28 OAI overlays/6 binaries.
+Fresh15o first70 PASS: Ping84/84, UL1075/1075, DL1071/1074; no case PBCH/idle/
+reaccess, numeric audit good, stop0, core9healthy, original compare0/differences[].
+PDU observed4.319478IQ; common business7.019560IQ and confirmed7.219565IQ.
+PDU-to-firstSend wall seconds Ping3.830307/UL3.742226/DL3.805513; respective UE
+IQ estimates2.633126/2.575431/2.616412, both channel bounds retained. This fixes
+unnecessary serial Docker overhead, not a claim of zero startup unavailability.
+Max received latency Ping1741.556ms/UL1964.377ms/DL409.151ms.
+
+Independent actual archive-base audit:3740 base files checked, excluding28
+recorded overlays; missing/mismatches/extra source files all empty. This
+supplements runtime source_identity, which normally checks archive+overlays.
+
+Fresh legacy15r failed before the second window at IQ590.8: measured replay
+factor~2.3 made the former preferred8wall-second tail reserve conflict with
+the620IQ case end. The driver rejected before measuring that window. It is
+not a PHY/late-packet result or a successful full case. Owned cleanup0,
+core9healthy and original compare0/differences[].
+
+The bounded observation correction retains the complete final window, then
+stops traffic at max(windowEnd+0.3IQ,caseEnd-preferredReserve), targeting at least
+5IQ before case end. If the required window itself leaves no such target,
+it still rejects. Actual stop brackets and remaining IQ ranges are reported;
+loop overshoot is not disguised as guaranteed margin. The fixed6wall drain
+starts from the actual stop timestamp and may be clock-observed beyond the
+case620 boundary. No new trace states, extrapolation, additional post-stop
+traffic, loss gate or5wall deadline changes are introduced. Late/missing/
+unresolved evidence remains failing; extra-tail RRC observations still count
+conservatively. A5.1s receipt remains late even when observed after case end.
+These changes require fresh actual validation and do not alter old outcomes.

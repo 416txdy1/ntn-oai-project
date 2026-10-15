@@ -33,7 +33,8 @@ sudo python3 scripts/handover_acceptance.py --case full --profile integrated-han
 static需90 IQ秒并至少30 IQ秒业务；short需70 IQ秒及首个完整窗口；
 legacy和full均需620 IQ秒及8239–8249、8794–8804两个完整非空窗口。
 
-持续ping和双向UDP在PDU最早可用时启动，贯穿切换窗口并有界排空。
+持续ping和双向UDP在检测到PDU并完成身份、路径及worker就绪核验后启动，贯穿切换窗口并有界排空。
+逐方向报告PDU到首次发送/收取的wall时长及双端IQ/STK边界；只有实际发包区间属于业务观测覆盖。
 timeline.csv/svg/png及switch-comparison.json把物理delay/Doppler/CN、身份/phase、
 ping RTT/loss及UDP到达吞吐/损失放到同一IQ/STK轴；wall RTT仍保留wall单位。
 完整时间映射、观测精度和保守损失边界见 [连续验收](continuous-handover-acceptance.md)。
