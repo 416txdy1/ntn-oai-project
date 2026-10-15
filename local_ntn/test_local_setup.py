@@ -15,7 +15,7 @@ from paths import OAI_REPO
 BASE = Path(__file__).resolve().parent
 with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
     work = Path(directory)
-    for name in ('prepare_local.py', 'paths.py', 'network_config.py', 'runtime_config.py'):
+    for name in ('prepare_local.py', 'paths.py', 'network_config.py', 'runtime_config.py', 'ntn_timing_budget.py', 'preflight.py'):
         shutil.copy2(BASE / name, work / name)
     private = work / 'identity.conf'
     private.write_text('imsi = "001010000000001"; nssai_sst = 1; dnn = "oai";\n'
@@ -124,6 +124,15 @@ with tempfile.TemporaryDirectory(prefix='ntn-run-config-') as directory:
     with contextlib.redirect_stdout(io.StringIO()):generate(config,1,2)
     second=config.gnb_config.read_text()
     assert first!=second,'lead must predict initial position'
+    with patch.dict(os.environ, {'OAI_NTN_CELL_KOFFSET_MS':'48'}):
+        with contextlib.redirect_stdout(io.StringIO()):generate(config,1,0)
+    assert re.search(r'cellSpecificKoffset_r17\s*=\s*48;', config.gnb_config.read_text())
+    previous=config.gnb_config.read_bytes()
+    with patch.dict(os.environ, {'OAI_NTN_CELL_KOFFSET_MS':'1'}):
+        try:generate(config,1,0)
+        except ValueError as error:assert 'nominal write lead below' in str(error)
+        else:raise AssertionError('Unsafe nominal lead accepted')
+    assert config.gnb_config.read_bytes()==previous
     assert config.initial_delay_file.parent==config.run_dir and config.gnb_config.parent==config.run_dir
     assert not (root/'local_ntn/gnb.local.conf').exists()
     assert template.read_bytes()==original
