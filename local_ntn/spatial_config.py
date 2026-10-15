@@ -1,4 +1,4 @@
-"""独立生成双端口配置；不覆盖 OAI 原始模板或私有 UE 配置。"""
+"""独立生成多端口配置；不覆盖 OAI 原始模板或私有 UE 配置。"""
 from __future__ import annotations
 import re
 from collections.abc import Mapping
@@ -6,18 +6,25 @@ from collections.abc import Mapping
 
 def spatial_mode(environment: Mapping[str, str]) -> bool:
     mode = environment.get("OAI_SPATIAL_MODE", "siso")
-    if mode not in {"siso", "miso2"}:
-        raise ValueError("OAI_SPATIAL_MODE 只支持 siso 或 miso2")
-    return mode == "miso2"
+    if mode not in {"siso", "miso2", "miso4"}:
+        raise ValueError("OAI_SPATIAL_MODE 只支持 siso、miso2 或 miso4")
+    return mode != "siso"
 
 
-def configure_miso(config: str) -> str:
-    """两个原生 OAI 发射/接收通道，UE 单天线，最多一层 PDSCH。"""
+def spatial_ports(environment: Mapping[str, str]) -> int:
+    """卫星端独立 RF 端口数量；先验证模式，禁止静默回退。"""
+    return int(environment["OAI_SPATIAL_MODE"][-1]) if spatial_mode(environment) else 1
+
+
+def configure_miso(config: str, ports: int = 2) -> str:
+    """原生 OAI 2/4 个发射接收通道，UE 单天线，最多一层 PDSCH。"""
+    if ports not in (2, 4):
+        raise ValueError("空间配置仅支持 2 或 4 个端口")
     for name in ("nb_tx", "nb_rx"):
-        config, count = re.subn(r"(?m)^(\s*" + name + r"\s*=)[^;]+;", r"\g<1> 2;", config)
+        config, count = re.subn(r"(?m)^(\s*" + name + r"\s*=)[^;]+;", rf"\g<1> {ports};", config)
         if count != 1:
             raise ValueError(f"{name}: 需要唯一 RU 端口配置")
-    settings = {"pdsch_AntennaPorts_N1": 1, "pdsch_AntennaPorts_N2": 1,
+    settings = {"pdsch_AntennaPorts_N1": ports // 2, "pdsch_AntennaPorts_N2": 1,
                 "pdsch_AntennaPorts_XP": 2, "maxMIMO_layers": 1, "do_CSIRS": 1}
     # 字段属于 gNB 实例；只改生成副本，保留原模板。
     insertion = ""

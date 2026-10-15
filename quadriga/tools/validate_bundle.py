@@ -117,13 +117,14 @@ def validate_bundle(root: Path) -> dict[str, Any]:
         _require(antenna.get("stk_trace_sha256") == trace_hash, "antenna STK trace SHA256 不匹配")
         _require(antenna.get("link_direction") == radio["link_direction"], "antenna 方向不匹配")
         _require(antenna.get("center_frequency_hz") == center_frequency, "antenna 频率不匹配")
-        _require(antenna.get("profile") in {"omni", "satellite_16x16_ground_omni", "satellite_2port_ground_omni"}, "antenna profile 非法")
+        _require(antenna.get("profile") in {"omni", "satellite_16x16_ground_omni", "satellite_2port_ground_omni", "satellite_4port_ground_omni"}, "antenna profile 非法")
         satellite = _positive_int(antenna.get("satellite_rf_ports"), "antenna satellite_rf_ports")
         ground = _positive_int(antenna.get("ground_rf_ports"), "antenna ground_rf_ports")
         expected = (ground, satellite) if radio["link_direction"] == "downlink" else (satellite, ground)
         _require((rx_antennas, tx_antennas) == expected, "antenna RF 端口维度不一致")
-        if antenna["profile"] == "satellite_2port_ground_omni":
-            _require(satellite == 2 and ground == 1 and spatial, "双端口需要空间归一化")
+        if antenna["profile"] in {"satellite_2port_ground_omni", "satellite_4port_ground_omni"}:
+            ports = 2 if "2port" in antenna["profile"] else 4
+            _require(satellite == ports and ground == 1 and spatial, "多端口需要匹配维度与空间归一化")
         else:
             _require(satellite == ground == 1, "原有 profile 仅支持单波束端口")
         if antenna["profile"] == "satellite_16x16_ground_omni":

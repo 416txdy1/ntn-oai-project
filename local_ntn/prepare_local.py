@@ -1,6 +1,6 @@
 """Generate a separate local gNB config from trace[0]; never rewrite user templates."""
 import argparse,csv,math,re,os
-from spatial_config import spatial_mode, configure_miso
+from spatial_config import spatial_mode, spatial_ports, configure_miso
 from pathlib import Path
 from paths import OAI_REPO, UE_CONFIG, STK_TRACE
 from network_config import configure
@@ -64,7 +64,7 @@ for name,value in values.items():
 # 初始时延由双段几何计算；动态回放可超过 20 ms，由运行时更新偏移。
 miso = spatial_mode(os.environ)
 if miso:
-    conf = configure_miso(conf)
+    conf = configure_miso(conf, spatial_ports(os.environ))
 out=base/('gnb.miso.conf' if miso else 'gnb.local.conf');out.write_text(configure(conf))
 (base/'initial_delay_ms.txt').write_text(f'{(rf+rs)/c*1000:.9f}\n')
 print('Generated',out,'rate',a.rate,'initial delay ms',(rf+rs)/c*1000)

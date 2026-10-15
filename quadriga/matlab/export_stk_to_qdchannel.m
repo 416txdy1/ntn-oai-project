@@ -7,7 +7,7 @@ function manifest_path = export_stk_to_qdchannel(trace_path, output_dir, options
 %   options.link_direction = 'downlink';
 %   export_stk_to_qdchannel('stk_trace.csv', 'qd_downlink', options);
 %
-% 当前实现生成卫星与 UE 之间的 SISO service link。feeder link 仍由现有
+% 当前实现生成卫星与 UE 之间的单/多端口 service link。feeder link 仍由现有
 % STKTRACE2 确定性模型负责，不在本导出器中重复建模。
 
 if nargin < 3
@@ -42,7 +42,7 @@ end
 reference_ecef_m = trace.ue_ecef_m(:, 1);
 satellite_enu_m = ecef_to_enu_track(trace.satellite_ecef_m, reference_ecef_m);
 ue_enu_m = ecef_to_enu_track(trace.ue_ecef_m, reference_ecef_m);
-% QuaDRiGa NTN 场景按卫星 Tx、地面 Rx 的规范方向生成。当前为 SISO，
+% QuaDRiGa NTN 场景按卫星 Tx、地面 Rx 的规范方向生成。
 % uplink bundle 使用该物理信道的互易表示；STK 仍分别提供 UL/DL 绝对项。
 tx_positions_m = satellite_enu_m;
 rx_positions_m = ue_enu_m;
@@ -77,16 +77,18 @@ if strcmp(options.antenna_profile, 'satellite_16x16_ground_omni')
     [orientation, beam_weights, antenna_metadata] = satellite_beam_geometry( ...
         layout.tx_array, trace, visibility);
     layout.tx_track.orientation = orientation;
-elseif strcmp(options.antenna_profile, 'satellite_2port_ground_omni')
-    % 两个独立、半波长间距的阵元端口，固定 ENU 朝向；不离线合成。
+elseif any(strcmp(options.antenna_profile, {'satellite_2port_ground_omni', 'satellite_4port_ground_omni'}))
+    % 独立半波长间距阵元，固定 ENU 朝向；不离线合成。
+    ports = 2;
+    if strcmp(options.antenna_profile, 'satellite_4port_ground_omni'), ports = 4; end
     layout.tx_array = qd_arrayant('omni');
     layout.tx_array.center_frequency = options.center_frequency_hz;
-    layout.tx_array.no_elements = 2;
+    layout.tx_array.no_elements = ports;
     spacing = qd_simulation_parameters.speed_of_light / options.center_frequency_hz / 2;
-    layout.tx_array.element_position = [0, 0; -spacing/2, spacing/2; 0, 0];
-    layout.tx_array.coupling = eye(2);
+    layout.tx_array.element_position = [zeros(1, ports); ((0:ports-1)-(ports-1)/2)*spacing; zeros(1, ports)];
+    layout.tx_array.coupling = eye(ports);
     antenna_metadata = struct('profile', options.antenna_profile, ...
-        'satellite_rf_ports', 2, 'ground_rf_ports', 1, 'spacing_wavelengths', 0.5, ...
+        'satellite_rf_ports', ports, 'ground_rf_ports', 1, 'spacing_wavelengths', 0.5, ...
         'orientation', 'fixed_ENU', 'absolute_array_gain_source', 'not_calibrated_STK_reference');
 else
     layout.tx_array = qd_arrayant('omni');
@@ -115,7 +117,7 @@ if strcmp(options.antenna_profile, 'satellite_16x16_ground_omni')
     antenna_metadata.max_element_delay_span_s = max(delay_span_s(:));
     [coefficients, delays_s] = combine_satellite_beam(coefficients, delays_s, beam_weights);
 end
-if strcmp(options.antenna_profile, 'satellite_2port_ground_omni')
+if any(strcmp(options.antenna_profile, {'satellite_2port_ground_omni', 'satellite_4port_ground_omni'}))
     % 上行的输入是 UE，输出是卫星阵列；转置空间轴但不取共轭。
     if strcmp(options.link_direction, 'uplink')
         coefficients = permute(coefficients, [2, 1, 3, 4]);
@@ -182,7 +184,7 @@ end
 if isempty(options.quadriga_path)
     error('QDCHANNEL1:QuaDRiGaPath', '必须显式提供 options.quadriga_path');
 end
-if ~any(strcmp(options.antenna_profile, {'satellite_16x16_ground_omni', 'satellite_2port_ground_omni', 'omni'}))
+if ~any(strcmp(options.antenna_profile, {'satellite_16x16_ground_omni', 'satellite_2port_ground_omni', 'satellite_4port_ground_omni', 'omni'}))
     error('QDCHANNEL1:AntennaProfile', '不支持的 antenna_profile');
 end
 if ~isscalar(options.center_frequency_hz) || options.center_frequency_hz <= 0

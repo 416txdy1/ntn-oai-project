@@ -18,7 +18,7 @@ case "${1:-}" in
   gnb)
     case "${OAI_SPATIAL_MODE:-siso}" in
       siso) CONFIG="$HERE/gnb.local.conf" ;;
-      miso2) CONFIG="$HERE/gnb.miso.conf" ;;
+      miso2|miso4) CONFIG="$HERE/gnb.miso.conf" ;;
       *) echo 'Unsupported OAI_SPATIAL_MODE'; exit 2 ;;
     esac
     exec ./nr-softmodem -O "$CONFIG" --rfsim

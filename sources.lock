@@ -21,3 +21,6 @@ example.antenna_profile=satellite_16x16_ground_omni
 miso.channel_directory=examples/fdd-miso
 miso.antenna_profile=satellite_2port_ground_omni
 miso.environment=scripts/env_miso.sh
+miso4.channel_directory=examples/fdd-miso4
+miso4.antenna_profile=satellite_4port_ground_omni
+miso4.environment=scripts/env_miso4.sh

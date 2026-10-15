@@ -2,7 +2,12 @@
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
-if [[ "${OAI_SPATIAL_MODE:-siso}" == miso2 ]]; then source scripts/env_miso.sh; else source scripts/env.sh; fi
+case "${OAI_SPATIAL_MODE:-siso}" in
+ miso2) source scripts/env_miso.sh ;;
+ miso4) source scripts/env_miso4.sh ;;
+ siso) source scripts/env.sh ;;
+ *) echo "不支持的空间模式"; exit 2 ;;
+esac
 python3 scripts/test_full_pass.py
 python3 scripts/test_spatial_audit.py
 python3 scripts/test_monotonic_ping.py
