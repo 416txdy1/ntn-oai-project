@@ -47,7 +47,9 @@ python3 local_ntn/experiment.py preflight --rate 0
 
 隔离配置测试一度缺少新模块副本，已修正；审计错误消息一度与旧测试不兼容，已恢复旧诊断约定。没有删除或跳过失败测试。
 
-## 端到端状态：尚未通过
+## 前置阶段的端到端记录（后续已通过）
+
+后续节点一的静态/动态完整业务和数值验算已通过，见 MISO_2X1_END_TO_END_20261015.md。以下保留当时失败证据。
 
 两次静态 smoke（smoke-0-1792031549691692162、smoke-0-1792031853797549185）均为 `start_exit=0, pdu_ready=false, error=PDU timeout, stop_exit=0`。无线侧已同步并完成 RRCSetup，双端实际加载 2x1 / 1x2 信道；gNB 报告 No AMF is associated。
 

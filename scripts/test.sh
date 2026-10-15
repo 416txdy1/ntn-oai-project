@@ -4,6 +4,7 @@ ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 if [[ "${OAI_SPATIAL_MODE:-siso}" == miso2 ]]; then source scripts/env_miso.sh; else source scripts/env.sh; fi
 python3 scripts/test_full_pass.py
+python3 scripts/test_spatial_audit.py
 python3 scripts/test_monotonic_ping.py
 python3 local_ntn/test_blend_interpolation.py
 python3 local_ntn/test_stk_timing_assist.py

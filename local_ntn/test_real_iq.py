@@ -50,5 +50,4 @@ with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
 
     for direction in ('downlink', 'uplink'):
         bundle=base.parent/'examples/fdd-miso'/direction
-        if bundle.is_dir():
-            subprocess.run([str(d/'test'),str(base.parent/'examples/fdd-pass/trace.csv'),str(bundle)],check=True)
+        subprocess.run([str(d/'test'),str(base.parent/'examples/fdd-pass/trace.csv'),str(bundle)],check=True)
