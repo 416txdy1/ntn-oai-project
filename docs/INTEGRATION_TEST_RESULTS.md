@@ -303,3 +303,35 @@ traffic, loss gate or5wall deadline changes are introduced. Late/missing/
 unresolved evidence remains failing; extra-tail RRC observations still count
 conservatively. A5.1s receipt remains late even when observed after case end.
 These changes require fresh actual validation and do not alter old outcomes.
+
+
+### 2026-10-15 clean-core legacy15z and second-switch diagnostics
+
+71880c legacy15x failed when uplink sender returned Errno101 after361 successful
+sends; repeated PDU establishment was observed. The dedicated nine core
+containers were then stopped/started by exact IDs/labels/owner with persistent
+volumes retained. All nine became healthy; original snapshot comparison passed.
+This was an isolated diagnostic reset, not proof of a stale-session root cause.
+
+Clean-core legacy15z completed full620IQ and both windows but FAILED original
+business gates: Ping228/231, UL2934/2953, DL2952/2952. First window Ping3/3,
+UL49/49, DL49/49. Second window Ping1/4, UL36/52, DL52/52. Case PBCH/idle/
+reaccess0, one PDU acceptance, no worker crash; independent numeric audit good,
+stop0, core9healthy and original compare0/differences[]. Thus the bounded tail
+correction reaches both windows; it does not conceal real UL loss/late delivery.
+
+gNB numeric stats show first-switch recovery by~46IQ (DTX48/errors11), whereas
+second-switch cumulative CRC errors grow12 at595.181IQ to1332 at615.581IQ;
+DTX only50->87 and stops increasing after600. SNR remains roughly14–17dB.
+No PUSCH sticky-UL-failure warning was observed. This warrants late-run timing/
+FO investigation rather than declaring QuaDRiGa or the five-second gate at fault.
+
+Optional diagnostic OAI_NTN_TIMING_DIAG_START_IQ_S accepts0..620 in isolated
+profiles (default0; zky ignores it). It delays ONLY bounded PSS/UL numeric logging
+using actual RF sample clocks, allowing start580 to observe the second switch
+without enlarging existing4000-PSS/70000-UL-call limits. Compensation main block
+is byte-identical; accepted observations, prediction and writes remain ungated.
+TX diagnostic records additionally retain immutable job ordinary TA, previous/
+current NTA and clock offset, avoiding inference from later mutable UE values.
+Actual C parser/window tests include boundary samples above2^32 and invalid
+inputs. A new formal build/regression and actual late diagnostic remain required.

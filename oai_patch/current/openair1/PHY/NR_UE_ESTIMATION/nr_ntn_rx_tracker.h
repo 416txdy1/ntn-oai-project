@@ -70,6 +70,33 @@ static inline bool nr_ntn_diag_reserve(bool enabled, unsigned *sequence, unsigne
   ++*sequence;
   return true;
 }
+/* Diagnostic window uses the actual RF sample clock, never STK geometry. */
+static inline bool nr_ntn_diag_start_value(const char *value, unsigned *start)
+{
+  if (!start) return false;
+  *start = 0;
+  if (!value || !*value) return true;
+  unsigned count = 0, result = 0;
+  for (const char *p = value; *p; ++p) {
+    if (*p < '0' || *p > '9' || ++count > 3) return false;
+    result = result * 10 + (unsigned)(*p - '0');
+  }
+  if (result > 620) return false;
+  *start = result;
+  return true;
+}
+static inline bool nr_ntn_diag_in_window(uint64_t sample, double fs, unsigned start)
+{
+  return isfinite(fs) && fs > 0 && start <= 620
+      && (long double)sample >= (long double)start * (long double)fs;
+}
+static inline bool nr_ntn_diag_at(uint64_t sample, double fs)
+{
+  unsigned start;
+  return nr_ntn_diag_start_value(getenv("OAI_NTN_TIMING_DIAG_START_IQ_S"), &start)
+      && nr_ntn_diag_in_window(sample, fs, start);
+}
+
 static inline bool nr_ntn_sample_diff(uint64_t a,uint64_t b,int64_t *out)
 {
   uint64_t magnitude=a>=b?a-b:b-a;

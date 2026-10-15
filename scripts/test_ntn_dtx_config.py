@@ -72,4 +72,13 @@ class DtxSetting(unittest.TestCase):
   self.assertAlmostEqual(b['nominal_write_lead_ms'],8.043407001366369)
   self.assertGreater(timing_budget(rows,80,'legacy-linear')['nominal_write_lead_ms'],40)
 
+ def test_diag_window_input(self):
+  from runtime_config import timing_diag_start_iq_s
+  self.assertIsNone(timing_diag_start_iq_s('zky',{'OAI_NTN_TIMING_DIAG_START_IQ_S':'bad'}))
+  self.assertEqual(timing_diag_start_iq_s('integrated-handover',{}),0)
+  for value in ['0','580','620']:
+   self.assertEqual(timing_diag_start_iq_s('legacy-handover',{'OAI_NTN_TIMING_DIAG_START_IQ_S':value}),int(value))
+  for value in ['-1','621','580.0','580;echo x','0000']:
+   with self.assertRaises(ValueError):timing_diag_start_iq_s('legacy-handover',{'OAI_NTN_TIMING_DIAG_START_IQ_S':value})
+
 if __name__=='__main__':unittest.main()

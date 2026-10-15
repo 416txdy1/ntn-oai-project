@@ -136,7 +136,11 @@ static void nr_ntn_prepare_job(PHY_VARS_NR_UE *ue, UE_nr_rxtx_proc_t *proc,
       scheduled_pss += fp->slots_per_frame * fp->symbols_per_slot / 2;
     if (physical != scheduled_pss) continue;
     double current = s->active ? s->total_fo : ue->dl_Doppler_shift + ue->freq_offset;
-    const bool log_pilot = nr_ntn_diag_reserve(diag, diag_sequence, NR_NTN_DIAG_PSS_LIMIT);
+    const bool diag_domain = proc->ntn_rx_domain_valid
+        && s->native_begin <= UINT64_MAX-proc->ntn_rx_first_ts;
+    const bool log_pilot = nr_ntn_diag_reserve(diag && diag_domain
+        && nr_ntn_diag_at(s->native_begin+proc->ntn_rx_first_ts,fs),
+        diag_sequence, NR_NTN_DIAG_PSS_LIMIT);
     struct timespec before = {0}, after = {0};
     const bool timing_start_valid = !log_pilot || clock_gettime(CLOCK_MONOTONIC, &before) == 0;
     nr_ntn_pilot pilot = nr_ntn_measure_pilot(fp, s, physical, pci, current);
@@ -475,7 +479,12 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
   // Numeric-only diagnostics: count bounded actual write calls, never sample payloads.
   static atomic_uint stk_diag_ul_calls;
   unsigned stk_diag_ul_call = 0;
-  if (stk_ue_timing_diag_enabled() && atomic_load_explicit(&stk_diag_ul_calls, memory_order_relaxed) < NR_NTN_DIAG_UL_LIMIT)
+  const openair0_device_t *diag_device=&openair0_dev[UE->rf_map.card];
+  const bool diag_rf_valid=diag_device->firstTS_initialized && diag_device->firstTS>=0 && writeTimestamp>=0
+      && (uint64_t)writeTimestamp<=UINT64_MAX-(uint64_t)diag_device->firstTS;
+  if (stk_ue_timing_diag_enabled() && diag_rf_valid
+      && nr_ntn_diag_at((uint64_t)writeTimestamp+(uint64_t)diag_device->firstTS,fp->samples_per_subframe*1000.0)
+      && atomic_load_explicit(&stk_diag_ul_calls, memory_order_relaxed) < NR_NTN_DIAG_UL_LIMIT)
     stk_diag_ul_call = atomic_fetch_add_explicit(&stk_diag_ul_calls, 1, memory_order_relaxed) + 1;
   double stk_diag_ul_residual = NAN, stk_diag_ul_total = NAN;
   bool stk_diag_ul_applied = false;
@@ -519,11 +528,12 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
           (unsigned long long)rf_sample,rf_valid,(unsigned long long)device->firstTS,(double)UE->dl_Doppler_shift,get_nrUE_params()->autonomous_ta);
   }
   if (nr_ntn_diag_stride(stk_diag_ul_call,NR_NTN_DIAG_UL_LIMIT,NR_NTN_DIAG_UL_STRIDE))
-    LOG_I(PHY,"STKUE_DIAG_TXPRED call %u valid %d qRX %llu qTX %llu usedTotalTA %d computedNTNTA %d arrivalRF %.9f delaySamples %.9f totalULFo %.9f\n",
+    LOG_I(PHY,"STKUE_DIAG_TXPRED call %u valid %d qRX %llu qTX %llu usedTotalTA %d computedNTNTA %d arrivalRF %.9f delaySamples %.9f totalULFo %.9f ordinaryTA %d previousNTA %d currentNTA %d clockB %.9f\n",
           stk_diag_ul_call,rxtxD->ntn_tx_prediction_valid,
           (unsigned long long)rxtxD->ntn_tx_q_rx,(unsigned long long)rxtxD->ntn_tx_q_tx,
           rxtxD->ntn_tx_used_total_ta,rxtxD->ntn_tx_computed_ntn_ta,
-          rxtxD->ntn_tx_arrival,rxtxD->ntn_tx_delay,rxtxD->ntn_tx_total_fo);
+          rxtxD->ntn_tx_arrival,rxtxD->ntn_tx_delay,rxtxD->ntn_tx_total_fo,
+          rxtxD->ntn_tx_job_ordinary_ta,rxtxD->ntn_tx_previous_nta,rxtxD->ntn_tx_current_nta,rxtxD->ntn_tx_clock_offset);
   int tmp = nrue_ru_write_reorder(UE, writeTimestamp, (void **)txp, writeBlockSize, fp->nb_antennas_tx, flags);
   AssertFatal(tmp == writeBlockSize, "");
 }
@@ -950,8 +960,12 @@ void *UE_thread(void *arg)
   double last_blend_timing_log=-1;
   const bool stk_timing_diag = stk_ue_timing_diag_enabled();
   unsigned stk_diag_sync = 0, stk_diag_frames = 0, stk_diag_feedback = 0;
-  if (stk_timing_diag)
-    LOG_I(PHY,"STKUE_DIAG_TRACK_CTRL enabled 1 maxPss 4000 maxULCalls 70000 ulStride 10\n");
+  if (stk_timing_diag) {
+    unsigned diag_start;
+    AssertFatal(nr_ntn_diag_start_value(getenv("OAI_NTN_TIMING_DIAG_START_IQ_S"), &diag_start),
+                "OAI_NTN_TIMING_DIAG_START_IQ_S must be an integer from 0 to 620\n");
+    LOG_I(PHY,"STKUE_DIAG_TRACK_CTRL enabled 1 maxPss 4000 maxULCalls 70000 ulStride 10 startIQ %u\n",diag_start);
+  }
   if (stk_timing_diag)
     LOG_I(PHY,
           "STKUE_DIAG_CTRL enabled 1 maxSync 20 maxFramesPerSync 200 maxFeedbackPerSync 200 Fs %.9f contFo %d timeP %.9f timeI %.9f blendAssist %d\n",
@@ -1302,6 +1316,7 @@ void *UE_thread(void *arg)
         LOG_E(PHY,"can't compensate: diff =%d\n", first_symbols);
     }
 
+    const int tx_diag_ordinary_ta=UE->timing_advance, tx_diag_previous_nta=UE->N_TA_offset;
     const uint64_t tx_q_rx = (uint64_t)absolute_slot / nb_slot_frame * fp->samples_per_frame
                             + get_samples_slot_timestamp(fp,slot_nr);
     const uint64_t tx_absolute_slot = (uint64_t)absolute_slot + duration_rx_to_tx;
@@ -1494,6 +1509,10 @@ void *UE_thread(void *arg)
     curMsgTx->ntn_tx_total_fo = tx_prediction.total_ul_fo;
     curMsgTx->ntn_tx_base_ul = UE->ul_Doppler_shift;
     curMsgTx->ntn_tx_used_total_ta = tx_used_total_ta;
+    curMsgTx->ntn_tx_job_ordinary_ta = tx_diag_ordinary_ta;
+    curMsgTx->ntn_tx_previous_nta = tx_diag_previous_nta;
+    curMsgTx->ntn_tx_current_nta = new_N_TA_offset;
+    curMsgTx->ntn_tx_clock_offset = tx_clock.clock_offset;
     curMsgTx->ntn_tx_computed_ntn_ta = (int)llround(tx_next_prediction.ta_samples);
     curMsgTx->ntn_tx_q_rx = tx_q_rx;
     curMsgTx->ntn_tx_q_tx = tx_q_tx;

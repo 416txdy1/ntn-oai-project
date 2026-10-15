@@ -576,6 +576,8 @@ typedef struct nr_rxtx_thread_data_s {
   bool ntn_tx_prediction_valid;
   double ntn_tx_total_fo, ntn_tx_base_ul;
   int ntn_tx_used_total_ta, ntn_tx_computed_ntn_ta;
+  int ntn_tx_job_ordinary_ta, ntn_tx_previous_nta, ntn_tx_current_nta;
+  double ntn_tx_clock_offset;
   uint64_t ntn_tx_q_rx, ntn_tx_q_tx;
   double ntn_tx_arrival, ntn_tx_delay;
   nr_phy_data_t phy_data;

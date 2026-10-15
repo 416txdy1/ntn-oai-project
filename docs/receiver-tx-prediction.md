@@ -15,3 +15,11 @@ The explicit diagnostic environment setting `OAI_NTN_PUSCH_FAILURE_THRES` accept
 
 
 `OAI_NTN_PDCP_REORDERING_MS=100|200|500` is another explicit isolated comparison setting, unset by default. Only gNB receives the native `--pdcp.drb.t_reordering msXXX` option; its native RRC builder encodes the same timer for UE. The manifest records this override and the requested OAI RNG seed. Actual seeds still require numeric startup verification. Default DRBs use AM and the existing DL/UL MCS limit is already9; neither was assumed to be UM or high-MCS. Actual late old-COUNT PDCP discards during the observed switch motivate testing the finite reordering timer, without claiming packet-level attribution or changing any business loss/deadline gate.
+
+
+With OAI_NTN_TIMING_DIAG=1, the optional OAI_NTN_TIMING_DIAG_START_IQ_S=580
+selects a later bounded observation window using actual RF sample coordinates.
+Default is0; isolated valid values are0..620; zky ignores the setting.
+Only numeric logging is gated. Pilot acceptance, feedback and compensation
+continue throughout the run. Native TX records include job-owned TA/NTA/clock
+values, while raw modem logs remain private. This option is not a PHY fix.

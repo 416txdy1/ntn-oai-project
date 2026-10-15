@@ -91,6 +91,14 @@ def pdcp_reordering_ms(profile, environ):
         raise ValueError('OAI_NTN_PDCP_REORDERING_MS must be 100, 200, or 500')
     return int(value)
 
+def timing_diag_start_iq_s(profile, environ):
+    if profile == 'zky':
+        return None
+    value=environ.get('OAI_NTN_TIMING_DIAG_START_IQ_S') or '0'
+    if not re.fullmatch(r'[0-9]{1,3}', value) or not 0 <= int(value) <= 620:
+        raise ValueError('OAI_NTN_TIMING_DIAG_START_IQ_S must be an integer from 0 to 620')
+    return int(value)
+
 def _user_home(environ):
     if environ.get('SUDO_USER'):
         import pwd
@@ -111,6 +119,7 @@ def resolve_runtime(root: Path, profile: str, run_id: str,
     pusch_failure_threshold(profile, environ)
     pdcp_reordering_ms(profile, environ)
     cell_koffset_ms(profile, environ)
+    timing_diag_start_iq_s(profile, environ)
 
     def path(key, default, scope=None):
         value = Path(environ.get(key) or default).expanduser().resolve()
