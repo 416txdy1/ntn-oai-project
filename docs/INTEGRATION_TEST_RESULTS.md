@@ -1,7 +1,7 @@
-# 整合测试结果（验收进行中）
+# 整合测试结果
 
 候选保护代码 7f40221（最终pre-live补充验证）；Task7审阅通过基点49a353f26e2304dca8acde9e1da1a875860c6a96。
-此文档保留初期离线检查点，并追加真实运行结果；最终验收与原平台业务后测尚未完成，不代表发布完成。
+此文档先保留初期检查点，再按时间追加真实结果。2026-10-16最终五轮验收与原平台业务复验结果见文末；历史失败和保护证据范围继续保留。
 
 | 测试 | 实际结果 |
 | --- | --- |
@@ -656,3 +656,50 @@ different-binary helper, foreign token/ancestry/reused PID rejection and state
 backup regressions pass: `python3 scripts/test_original_platform_check.py`,
 34 tests exit0. The simulator runtime files,32 OAI overlays and six binaries
 remain unchanged; full auxiliary regressions and new original recheck pending.
+
+### 2026-10-16 final residual-TA candidate validation
+
+Validated runtime code commit: `e066b99558be686aecff7d41d0ed9eadffb8ef74`. The subsequent `ae3723e7caa8fa95fb47ede327582396c29dc498` changes only the original-platform verification tool, its regression tests and notes. Source and all six runtime binaries were reverified identical; its complete trace/IQ and script regressions passed again (10.754s/90.944s). Remaining release changes are documentation and numeric artifacts. All five prospectively declared live runs passed on the exact runtime source and six binary hashes. Parameters were explicit DTX100, PDCP500ms, K80, RNG seed20260925, timing diagnostics1/start0 and `crc-good-quarter-gain-v1`. This validates those parameters; it does not establish the full-run behavior of the unset DTX/PDCP defaults.
+
+| Run | Case | Wall seconds | Ping received/sent | UL received/sent | DL received/sent |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `task8-first-ta-20261016e` | firsthandover | 108.387 | 85/85 | 1081/1081 | 1076/1080 |
+| `task8-first-ta-20261016f` | firsthandover-repeat | 131.247 | 107/107 | 1362/1362 | 1356/1359 |
+| `task8-full-ta-20261016g` | full | 968.562 | 923/923 | 11806/11806 | 11802/11805 |
+| `task8-legacy-ta-20261016h` | legacy | 284.468 | 259/259 | 3304/3304 | 3302/3303 |
+| `task8-static-ta-20261016i` | static | 128.419 | 104/104 | 1328/1328 | 1323/1327 |
+
+Each run passed the unchanged global and switch-window one-percent conservative loss and five-wall-second timely-delivery gates. Both firsthandover runs followed fresh core resets before the full test. Full and legacy each cover620 IQ seconds and both complete STK8239–8249 /8794–8804 windows; static covers90 IQ seconds. Only actual business observation intervals count as business coverage. Missing startup and drain coverage remains visible in the figures.
+
+| Run | Switch STK second | Ping received/sent | UL received/sent | DL received/sent | Mean wall RTT ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| firsthandover | 8244 | 15/15 | 187/187 | 187/187 | 283.795 |
+| firsthandover-repeat | 8244 | 15/15 | 190/190 | 191/191 | 290.341 |
+| full | 8244 | 15/15 | 189/189 | 189/189 | 287.600 |
+| full | 8799 | 15/15 | 192/192 | 193/193 | 269.306 |
+| legacy | 8244 | 4/4 | 54/54 | 55/55 | 62.737 |
+| legacy | 8799 | 4/4 | 57/57 | 57/57 | 76.898 |
+
+Full-run mean wall RTT was 196.939ms. The window RTT values and joint plot show business timing changes aligned with the physical transitions; they include host scheduling and do not isolate propagation as the only cause.
+
+
+The QD-on and QD-off runs have different observed real-time factors. Their wall RTT difference must not be attributed directly to propagation delay. Event times share the IQ/STK axis; RTT, offered rate and IQ/wall throughput retain their separately documented units.
+
+
+Formal commands `cmake --build .runtime/oai/cmake_targets/ran_build/build --target nr-softmodem nr-uesoftmodem rfsimulator params_libconfig nr_prachsim nr_pbchsim -j 6`, `bash local_ntn/run_regressions.sh` and `bash scripts/test.sh` all exited0 (18.999s,10.586s,94.769s). The source proof records32 overlays/six binary hashes. The deployed archive audit compared3738 non-overlay base files with no missing, mismatched or extra source files.
+
+Final original-platform business recheck passed: Ping30/30, UL130 datagrams and DL130 datagrams, zero loss in both15-second UDP tests. Original trace parser, trace validation, stock real-IQ regression and a separately compiled genuine address/undefined sanitizer run all exited0. Sanitizer compilation explicitly used `-UNDEBUG`, `-fsanitize=address,undefined`, `-fno-omit-frame-pointer` and `-fno-sanitize-recover=all`; it did not rely on the stock script's ignored command-line arguments.
+
+Successful original recheck ID: `integration-final-16u`. Exact source commands
+from `/mnt/d/实验室学习工作/杂活/雄安/OAI调研` were
+`cc -Wall -Wextra -Werror -Ilocal_ntn local_ntn/test_trace.c local_ntn/stk_trace.c -lm -o /home/kayoko/ntn-workspaces/ntn-quadriga-handover/.private/task8-20261016/original-final16u/original-trace-test`,
+that resulting parser binary, `python3 local_ntn/test_trace_validation.py` and
+`python3 local_ntn/test_real_iq.py`: all exit0. The full sanitizer compile argv,
+input hashes and its actual exit0 execution are retained in the private
+`original-final16u` audit; no raw UE logs are published.
+
+Before the original recheck, only the exact owned nine new core containers and one owned network were removed. Foreign Docker network configuration and endpoints and original source/template/binary/container/network fingerprints passed comparison. The successful final recheck starts and ends without a PID-state file. The earlier failed16j attempt did not durably save its prior inactive PID-record bytes; their restoration is not claimed, as disclosed above. Its exact generated state was archived then removed during verified recovery. No original configuration template or external source checkout was overwritten.
+
+Reviewed numeric evidence and exact binary hashes are in [validation/2026-10-16/index.json](validation/2026-10-16/index.json); the [full joint timeline](validation/2026-10-16/full/timeline.png) aligns physical delay/Doppler/CN and satellite transitions with continuous RTT/loss/UDP throughput. CSVs retain distinct IQ and wall throughput/time units. Raw modem and packet-event logs remain private.
+
+These are finite observed experimental runs at low offered load, not a seed-independent reliability/capacity guarantee. Earlier failed runs above remain failures. The pseudo satellite switches are physical-channel changes within one cell, not multi-cell RRC/Xn handovers. One-second QD snapshots and synthetic blended geometry retain the documented research limitations.

@@ -37,3 +37,7 @@ Bounds are20000 measurements/2000 schedules per translation unit. These
 initial gNB logs are independent of the UE-only diagnostic-start IQ window.
 Log I/O can affect wall runtime. Raw records remain private; no RNTI,
 subscriber credentials or packet payload is emitted by the new logger.
+
+## Isolated residual MAC TA controller
+
+With both receiver tracker and TX predictor enabled in integrated-handover or legacy-handover, ordinary PUSCH TA uses `crc-good-quarter-gain-v1`. CRC-failed measurements retain the last accepted command; CRC-good residual offsets from neutral31 are rounded to one quarter, nearest with ties away from zero. Random-access assignments remain native. Zky, unknown profiles, or either disabled tracker retain native ordinary feedback. Invalid accepted commands are not clamped. The manifest records the policy; diagnostics append retained/feedbackUsed to the raw measurement. This is an experimental controller change, separate from diagnostic logging. See the final validation table for the finite observed results; the earlier native-loop failures remain recorded.

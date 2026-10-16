@@ -1,0 +1,254 @@
+{
+  "case": "legacy",
+  "profile": "legacy-handover",
+  "run_id": "task8-legacy-ta-20261016h",
+  "passed": true,
+  "failure_reasons": [],
+  "stop_exit": 0,
+  "wall_seconds": 284.46771617299964,
+  "sample_rate_hz": 7680000.0,
+  "business_iq_interval_s": [
+    15.622,
+    604.422
+  ],
+  "iq_interval_s": {
+    "gnb": [
+      1.322,
+      622.822
+    ],
+    "ue": [
+      1.3279998697916666,
+      622.801837109375
+    ]
+  },
+  "clock_max_iq_gap_s": {
+    "gnb": 0.1,
+    "ue": 0.10099986979166667
+  },
+  "pbch_errors": 0,
+  "rrc_idle": 0,
+  "reaccess_count": 0,
+  "physical_start_verified": true,
+  "startup_unobserved_iq_interval_s": {
+    "gnb": [
+      0,
+      1.322
+    ],
+    "ue": [
+      0,
+      1.3279998697916666
+    ]
+  },
+  "qd_loaded": {
+    "gnb": 0,
+    "ue": 0
+  },
+  "numeric_audit_ok": true,
+  "ping": {
+    "sent": 259,
+    "received": 259,
+    "lost_packets": 0,
+    "boundary_ambiguous_sent": 0,
+    "boundary_ambiguous_missing": 0,
+    "loss_lower_bound": 0.0,
+    "loss_upper_bound": 0.0,
+    "timely_deadline_wall_ns": 5000000000,
+    "timely_definite_failed": 0,
+    "timely_boundary_ambiguous_failed": 0,
+    "timely_unresolved_deadlines": 0,
+    "timely_failure_upper_bound": 0.0,
+    "timely_failure_lower_bound": 0.0,
+    "timely_observation_ok": true,
+    "service_degraded": false,
+    "wall_rtt_ms_mean": 66.38073397683397,
+    "wall_latency_ms_p50": 61.989439,
+    "wall_latency_ms_p95": 101.270259,
+    "wall_latency_ms_max": 139.120571
+  },
+  "udp": {
+    "uplink": {
+      "sent": 3304,
+      "received": 3304,
+      "lost_packets": 0,
+      "boundary_ambiguous_sent": 0,
+      "boundary_ambiguous_missing": 0,
+      "loss_lower_bound": 0.0,
+      "loss_upper_bound": 0.0,
+      "timely_deadline_wall_ns": 5000000000,
+      "timely_definite_failed": 0,
+      "timely_boundary_ambiguous_failed": 0,
+      "timely_unresolved_deadlines": 0,
+      "timely_failure_upper_bound": 0.0,
+      "timely_failure_lower_bound": 0.0,
+      "timely_observation_ok": true,
+      "service_degraded": false,
+      "wall_latency_ms_mean": 68.03580201301445,
+      "wall_latency_ms_p50": 69.947029,
+      "wall_latency_ms_p95": 103.542895,
+      "wall_latency_ms_max": 229.586499,
+      "actual_offered_wall_bits_per_second": 99788.10698160817
+    },
+    "downlink": {
+      "sent": 3303,
+      "received": 3302,
+      "lost_packets": 1,
+      "boundary_ambiguous_sent": 0,
+      "boundary_ambiguous_missing": 0,
+      "loss_lower_bound": 0.0003027550711474417,
+      "loss_upper_bound": 0.0003027550711474417,
+      "timely_deadline_wall_ns": 5000000000,
+      "timely_definite_failed": 1,
+      "timely_boundary_ambiguous_failed": 0,
+      "timely_unresolved_deadlines": 0,
+      "timely_failure_upper_bound": 0.0003027550711474417,
+      "timely_failure_lower_bound": 0.0003027550711474417,
+      "timely_observation_ok": true,
+      "service_degraded": true,
+      "wall_latency_ms_mean": 18.61958123410057,
+      "wall_latency_ms_p50": 17.972578,
+      "wall_latency_ms_p95": 25.526862,
+      "wall_latency_ms_max": 82.904469,
+      "actual_offered_wall_bits_per_second": 99787.14823471034
+    }
+  },
+  "windows": [
+    {
+      "complete_stk_s": 8244,
+      "coverage_ok": true,
+      "ping": {
+        "sent": 4,
+        "received": 4,
+        "lost_packets": 0,
+        "boundary_ambiguous_sent": 0,
+        "boundary_ambiguous_missing": 0,
+        "loss_lower_bound": 0.0,
+        "loss_upper_bound": 0.0,
+        "timely_deadline_wall_ns": 5000000000,
+        "timely_definite_failed": 0,
+        "timely_boundary_ambiguous_failed": 0,
+        "timely_unresolved_deadlines": 0,
+        "timely_failure_upper_bound": 0.0,
+        "timely_failure_lower_bound": 0.0,
+        "timely_observation_ok": true,
+        "service_degraded": false,
+        "wall_rtt_ms_mean": 62.73737525,
+        "wall_latency_ms_p50": 47.503556,
+        "wall_latency_ms_p95": 95.75452,
+        "wall_latency_ms_max": 95.75452
+      },
+      "udp": {
+        "uplink": {
+          "sent": 54,
+          "received": 54,
+          "lost_packets": 0,
+          "boundary_ambiguous_sent": 2,
+          "boundary_ambiguous_missing": 0,
+          "loss_lower_bound": 0.0,
+          "loss_upper_bound": 0.0,
+          "timely_deadline_wall_ns": 5000000000,
+          "timely_definite_failed": 0,
+          "timely_boundary_ambiguous_failed": 0,
+          "timely_unresolved_deadlines": 0,
+          "timely_failure_upper_bound": 0.0,
+          "timely_failure_lower_bound": 0.0,
+          "timely_observation_ok": true,
+          "service_degraded": false,
+          "wall_latency_ms_mean": 80.9427844259259,
+          "wall_latency_ms_p50": 72.967225,
+          "wall_latency_ms_p95": 148.869608,
+          "wall_latency_ms_max": 229.586499
+        },
+        "downlink": {
+          "sent": 55,
+          "received": 55,
+          "lost_packets": 0,
+          "boundary_ambiguous_sent": 0,
+          "boundary_ambiguous_missing": 0,
+          "loss_lower_bound": 0.0,
+          "loss_upper_bound": 0.0,
+          "timely_deadline_wall_ns": 5000000000,
+          "timely_definite_failed": 0,
+          "timely_boundary_ambiguous_failed": 0,
+          "timely_unresolved_deadlines": 0,
+          "timely_failure_upper_bound": 0.0,
+          "timely_failure_lower_bound": 0.0,
+          "timely_observation_ok": true,
+          "service_degraded": false,
+          "wall_latency_ms_mean": 19.01173303636364,
+          "wall_latency_ms_p50": 17.690645,
+          "wall_latency_ms_p95": 30.318067,
+          "wall_latency_ms_max": 54.717145
+        }
+      }
+    },
+    {
+      "complete_stk_s": 8799,
+      "coverage_ok": true,
+      "ping": {
+        "sent": 4,
+        "received": 4,
+        "lost_packets": 0,
+        "boundary_ambiguous_sent": 0,
+        "boundary_ambiguous_missing": 0,
+        "loss_lower_bound": 0.0,
+        "loss_upper_bound": 0.0,
+        "timely_deadline_wall_ns": 5000000000,
+        "timely_definite_failed": 0,
+        "timely_boundary_ambiguous_failed": 0,
+        "timely_unresolved_deadlines": 0,
+        "timely_failure_upper_bound": 0.0,
+        "timely_failure_lower_bound": 0.0,
+        "timely_observation_ok": true,
+        "service_degraded": false,
+        "wall_rtt_ms_mean": 76.89770675,
+        "wall_latency_ms_p50": 65.805129,
+        "wall_latency_ms_p95": 117.475902,
+        "wall_latency_ms_max": 117.475902
+      },
+      "udp": {
+        "uplink": {
+          "sent": 57,
+          "received": 57,
+          "lost_packets": 0,
+          "boundary_ambiguous_sent": 1,
+          "boundary_ambiguous_missing": 0,
+          "loss_lower_bound": 0.0,
+          "loss_upper_bound": 0.0,
+          "timely_deadline_wall_ns": 5000000000,
+          "timely_definite_failed": 0,
+          "timely_boundary_ambiguous_failed": 0,
+          "timely_unresolved_deadlines": 0,
+          "timely_failure_upper_bound": 0.0,
+          "timely_failure_lower_bound": 0.0,
+          "timely_observation_ok": true,
+          "service_degraded": false,
+          "wall_latency_ms_mean": 90.78883743859646,
+          "wall_latency_ms_p50": 86.319756,
+          "wall_latency_ms_p95": 140.30726,
+          "wall_latency_ms_max": 198.245545
+        },
+        "downlink": {
+          "sent": 57,
+          "received": 57,
+          "lost_packets": 0,
+          "boundary_ambiguous_sent": 1,
+          "boundary_ambiguous_missing": 0,
+          "loss_lower_bound": 0.0,
+          "loss_upper_bound": 0.0,
+          "timely_deadline_wall_ns": 5000000000,
+          "timely_definite_failed": 0,
+          "timely_boundary_ambiguous_failed": 0,
+          "timely_unresolved_deadlines": 0,
+          "timely_failure_upper_bound": 0.0,
+          "timely_failure_lower_bound": 0.0,
+          "timely_observation_ok": true,
+          "service_degraded": false,
+          "wall_latency_ms_mean": 19.85124257894737,
+          "wall_latency_ms_p50": 15.207919,
+          "wall_latency_ms_p95": 57.835647,
+          "wall_latency_ms_max": 82.904469
+        }
+      }
+    }
+  ]
+}

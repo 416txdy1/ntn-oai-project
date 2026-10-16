@@ -1,0 +1,136 @@
+{
+  "verification_tool_commit": "ae3723e7caa8fa95fb47ede327582396c29dc498",
+  "runtime_sources_and_binaries_unchanged_by_verifier_fix": true,
+  "prior_original_attempts_failed": [
+    "integration-final-16j",
+    "integration-final-16p"
+  ],
+  "prior_inactive_pid_record_bytes_restored": "not proved; only failed-run generated PID state archived then removed; exception disclosed",
+  "verification_regressions": [
+    {
+      "command": [
+        "bash",
+        "local_ntn/run_regressions.sh"
+      ],
+      "exit": 0,
+      "wall_seconds": 10.753634505999798
+    },
+    {
+      "command": [
+        "bash",
+        "scripts/test.sh"
+      ],
+      "exit": 0,
+      "wall_seconds": 90.94398643600107
+    }
+  ],
+  "source_commit": "e066b99558be686aecff7d41d0ed9eadffb8ef74",
+  "oai_source_commit": "1e0c78bfbb80424f275e73a3103f582e0f903413",
+  "binary_sha256": {
+    "nr-softmodem": "b34815e2a2b3821392ebb4cce14bdeed261ff2d6566acdce2f111382641ab1e5",
+    "nr-uesoftmodem": "6e6a110ec5f8ef15cfa1df1e62b21b5a471b5a6c158b0d12529021539101763e",
+    "librfsimulator.so": "bfc4d1da3fd639e340790faeed5c00596675728eabcd2d08bba85901fb1e6c4b",
+    "libparams_libconfig.so": "9074da776bd1c8af2023ef9bdcf82507d97ddf66fd31cd5d90666ea5e1870c19",
+    "libldpc.so": "e8807b8845c0d9c8c02a8445d740fafed1a81aa7ba4e0d2820bb5185c2fef0f7",
+    "libdfts.so": "f392f88166a873442dff7a5b77c51a3313d4b2bc45e04fa09e9f1c6c2ff21ba0"
+  },
+  "test_parameters": {
+    "pusch_failure_threshold": 100,
+    "pdcp_reordering_ms": 500,
+    "cell_koffset_ms": 80,
+    "rngseed": 20260925,
+    "timing_diagnostics": true,
+    "diagnostic_start_iq_s": 0,
+    "mac_ta_feedback_policy": "crc-good-quarter-gain-v1"
+  },
+  "original_checks": [
+    {
+      "name": "original-business",
+      "exit": 0,
+      "wall_seconds": 194.32454022699858
+    },
+    {
+      "name": "original-parser-compile",
+      "exit": 0,
+      "wall_seconds": 0.5194635620009649
+    },
+    {
+      "name": "original-parser-run",
+      "exit": 0,
+      "wall_seconds": 0.0010911169993050862
+    },
+    {
+      "name": "original-trace-validation",
+      "exit": 0,
+      "wall_seconds": 0.5876524949999293
+    },
+    {
+      "name": "original-real-iq-stock",
+      "exit": 0,
+      "wall_seconds": 1.903383250000843
+    },
+    {
+      "name": "original-iq-sanitized-compile",
+      "exit": 0,
+      "wall_seconds": 2.9902392879994295
+    },
+    {
+      "name": "original-iq-sanitized-run",
+      "exit": 0,
+      "wall_seconds": 0.010694697999497293
+    },
+    {
+      "name": "original-final-compare",
+      "exit": 0,
+      "wall_seconds": 5.101402056998268
+    }
+  ],
+  "original_business": {
+    "ping": {
+      "sent": 30,
+      "received": 30
+    },
+    "uplink": {
+      "lost": 0,
+      "total": 130
+    },
+    "downlink": {
+      "lost": 0,
+      "total": 130
+    }
+  },
+  "original_iq_sanitizers": [
+    "address",
+    "undefined"
+  ],
+  "original_iq_assertions_enabled": true,
+  "original_foreign_docker_network_config_and_endpoints_unchanged": true,
+  "scope": "Observed experimental runs, not a seed-independent reliability or capacity guarantee. Prior failures remain in INTEGRATION_TEST_RESULTS.md. Pseudo switching changes the physical channel, not multi-cell RRC handover.",
+  "time_units": "Event x-axis is RFsim IQ mapped to STK; RTT and offered-rate measurements retain actual wall-clock units. Both IQ/wall throughput and real-time factor are retained.",
+  "privacy": "Only numeric aggregate reports and scientific plots/CSV; no raw modem logs, packet payloads, credentials or private runtime files.",
+  "files_sha256": {
+    "firsthandover/summary.json": "fed61e7779e43c4c475181bf2c597409d4b6d22349fe1b0e4d655d543cc96249",
+    "firsthandover/timeline.csv": "95193e7d10b5fbfdf9edf00497fe789e6204ace23b3b37de16c2257d6cf46335",
+    "firsthandover/timeline.png": "5a05c82961384312421d45c075bd728f147ff9c3cd9944b0812bf590707ec001",
+    "firsthandover-repeat/summary.json": "367b1e3e6fa10b7d6ece76f6ebaff50ff966ba459fe42ee7fd43a05bdcb4a2fc",
+    "firsthandover-repeat/timeline.csv": "2fde181a04ed1786a46c340bd497a7f363567b522beb747172877db97566da6f",
+    "firsthandover-repeat/timeline.png": "e7575c7138eb03d7d984d310dcf125eee9d8b8cfc84f8738ee24a9a6930b4f3e",
+    "full/summary.json": "d5af4e695b624c27ebd3a57ca7096e6fce9941dfbd9a1029bffbd7cb41b1add5",
+    "full/timeline.csv": "49d9bee186f801321fb7f94f7587b4b2e8925d6d0d1a511a14a9a7af6b2d7c5a",
+    "full/timeline.png": "c65c7d1e4355882e86f07ecc43c3598dc73485f124d631b36d8263f573fd144d",
+    "legacy/summary.json": "d62b60f9c6566ab5bd4e35da91f6ea6939c88055d340b516de4aceebca2a7d25",
+    "legacy/timeline.csv": "6f3da7d8c3a302697a391339abccd7728bde4a20c004c6759ed3fbc4e23de448",
+    "legacy/timeline.png": "4010348304a890dafb7b568b748e81a374ae51b3264d59644ac2a35c72541b44",
+    "static/summary.json": "3935521a9673828824b1eadcea3a6ce6d2f11c008f53b899d459f9ee6e3159c6",
+    "static/timeline.csv": "22ae36953c250179e3a18719228a820d8dde2f2b7cb1694269de5fc49e905ac9",
+    "static/timeline.png": "4fbd471572164a69b27153a85f3f635b9a1f18923ef21c239d0cd7dd026712c6"
+  },
+  "original_validated_csv_sha256": {
+    "firsthandover/timeline.csv": "562859c7e1e3bf28ead029a6eb20e81933ec9519d216f3f4f02890a6f9d0868d",
+    "firsthandover-repeat/timeline.csv": "191e794861f160c271dcf78aaa9dba6b22f36c05e334c75d3614a6b3605054b1",
+    "full/timeline.csv": "4fb279143e675968cbf02155b7289e07e38701a7b4f8bc4e85d3d734051d09c0",
+    "legacy/timeline.csv": "8e9ebc0549081d2d6fd139a722a38523409f7fb83e39d7665d0ab524ba2eaa19",
+    "static/timeline.csv": "a6a8e21bb8a4434fb7e04145362c4f80b375c4e775fb21ea57ae221bfaeac129"
+  },
+  "public_text_encoding": "UTF-8 with LF line endings; CSV fields and rows unchanged from validated originals. files_sha256 identifies canonical public exports."
+}

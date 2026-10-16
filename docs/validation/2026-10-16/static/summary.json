@@ -1,0 +1,115 @@
+{
+  "case": "static",
+  "profile": "integrated-handover",
+  "run_id": "task8-static-ta-20261016i",
+  "passed": true,
+  "failure_reasons": [],
+  "stop_exit": 0,
+  "wall_seconds": 128.4188412629992,
+  "sample_rate_hz": 7680000.0,
+  "business_iq_interval_s": [
+    7.761348307291667,
+    84.355
+  ],
+  "iq_interval_s": {
+    "gnb": [
+      1.355,
+      90.355
+    ],
+    "ue": [
+      1.3609998697916668,
+      90.36134830729166
+    ]
+  },
+  "clock_max_iq_gap_s": {
+    "gnb": 0.1,
+    "ue": 0.1003484375
+  },
+  "pbch_errors": 0,
+  "rrc_idle": 0,
+  "reaccess_count": 0,
+  "physical_start_verified": true,
+  "startup_unobserved_iq_interval_s": {
+    "gnb": [
+      0,
+      1.355
+    ],
+    "ue": [
+      0,
+      1.3609998697916668
+    ]
+  },
+  "qd_loaded": {
+    "gnb": 1,
+    "ue": 1
+  },
+  "numeric_audit_ok": true,
+  "ping": {
+    "sent": 104,
+    "received": 104,
+    "lost_packets": 0,
+    "boundary_ambiguous_sent": 0,
+    "boundary_ambiguous_missing": 0,
+    "loss_lower_bound": 0.0,
+    "loss_upper_bound": 0.0,
+    "timely_deadline_wall_ns": 5000000000,
+    "timely_definite_failed": 0,
+    "timely_boundary_ambiguous_failed": 0,
+    "timely_unresolved_deadlines": 0,
+    "timely_failure_upper_bound": 0.0,
+    "timely_failure_lower_bound": 0.0,
+    "timely_observation_ok": true,
+    "service_degraded": false,
+    "wall_rtt_ms_mean": 179.89559818269234,
+    "wall_latency_ms_p50": 166.380219,
+    "wall_latency_ms_p95": 281.750459,
+    "wall_latency_ms_max": 326.280643
+  },
+  "udp": {
+    "uplink": {
+      "sent": 1328,
+      "received": 1328,
+      "lost_packets": 0,
+      "boundary_ambiguous_sent": 0,
+      "boundary_ambiguous_missing": 0,
+      "loss_lower_bound": 0.0,
+      "loss_upper_bound": 0.0,
+      "timely_deadline_wall_ns": 5000000000,
+      "timely_definite_failed": 0,
+      "timely_boundary_ambiguous_failed": 0,
+      "timely_unresolved_deadlines": 0,
+      "timely_failure_upper_bound": 0.0,
+      "timely_failure_lower_bound": 0.0,
+      "timely_observation_ok": true,
+      "service_degraded": false,
+      "wall_latency_ms_mean": 172.7516431445782,
+      "wall_latency_ms_p50": 160.69002,
+      "wall_latency_ms_p95": 278.914851,
+      "wall_latency_ms_max": 361.28124,
+      "actual_offered_wall_bits_per_second": 99774.43783440278
+    },
+    "downlink": {
+      "sent": 1327,
+      "received": 1323,
+      "lost_packets": 4,
+      "boundary_ambiguous_sent": 0,
+      "boundary_ambiguous_missing": 0,
+      "loss_lower_bound": 0.003014318010550113,
+      "loss_upper_bound": 0.003014318010550113,
+      "timely_deadline_wall_ns": 5000000000,
+      "timely_definite_failed": 4,
+      "timely_boundary_ambiguous_failed": 0,
+      "timely_unresolved_deadlines": 0,
+      "timely_failure_upper_bound": 0.003014318010550113,
+      "timely_failure_lower_bound": 0.003014318010550113,
+      "timely_observation_ok": true,
+      "service_degraded": true,
+      "wall_latency_ms_mean": 35.525508015117126,
+      "wall_latency_ms_p50": 34.453758,
+      "wall_latency_ms_p95": 41.970791,
+      "wall_latency_ms_max": 162.224138,
+      "actual_offered_wall_bits_per_second": 99779.18947953143
+    }
+  },
+  "windows": []
+}

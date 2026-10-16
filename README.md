@@ -1,5 +1,7 @@
 # NTN OAI：单仓库 STK + QuaDRiGa 回放调试
 
+本整合分支以完整zky为基底，新增隔离伪卫星切换与持续业务验收。请先阅读[整合运行指南](docs/INTEGRATED_HANDOVER.md)及[最终测试证据](docs/validation/2026-10-16/index.json)，使用已验证的显式参数。以下原zky入口与资料继续保留。
+
 本仓库 zky 分支保存当前 OAI/STK/QuaDRiGa 集成源码、构建所需源码归档、真实 FDD 示例和无凭据核心网模板。接收者只需获取本仓库，无需再 clone OAI、QuaDRiGa、ASN1C 或 SIMDe 仓库。
 
 系统依赖仍需安装：Ubuntu 22.04/WSL2、C/C++ 工具链、Docker Engine + Compose v2。核心网使用 Docker 镜像（首次启动可能下载）。示例回放不需要 MATLAB/STK；重新生成信道需 MATLAB 和 STK 导出输入。这里不承诺离线安装系统依赖或支持未验证的平台。
@@ -52,5 +54,4 @@ QuaDRiGa 随附源码许可证要求非商业使用，完整条款见 `vendor/Qu
 操作与持续IQ/STK时间轴验收见 [整合指南](docs/INTEGRATED_HANDOVER.md)，
 来源文件保留清单见 [来源说明](docs/INTEGRATION_SOURCES.md)，
 实际状态见 [测试记录](docs/INTEGRATION_TEST_RESULTS.md)。
-当前处于pre-live检查阶段；完整620 IQ秒与原平台最终复验尚未完成。
-原zky入口、归档、示例与既有研究限制继续保留；新分支验收通过前不宣称已可发布。
+2026-10-16：已在明确记录的参数下通过完整620 IQ秒双切换持续业务验收、legacy/静态对照与两轮短场景，原平台最终业务和trace/IQ复验通过。原zky入口、归档、示例与既有研究限制继续保留；上文361秒调试状态描述的是原zky模式。

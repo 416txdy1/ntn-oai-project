@@ -1,6 +1,6 @@
 # 隔离的 NTN / QuaDRiGa / 伪卫星切换平台
 
-整合代码已完成编译、离线回归和多轮真实连续业务测试。当前 e3ed4b9 的首次切换测试通过，完整验收矩阵仍未全部通过；既有失败记录保留，原平台最终业务复验尚待完成，新分支尚未推送。
+整合代码 e066b99 已通过完整构建、trace/IQ 回归、两轮首次切换、620 IQ秒双切换、620 IQ秒关闭QD对照及90 IQ秒静态持续业务验收。原平台最终实际业务和回归复验也已通过。验收使用下方明确列出的参数；未设置DTX/PDCP覆盖值的配置不属于此次完整验收范围。历史失败记录继续保留。
 不得把单次通过或短片段结果当作完整620 IQ秒稳定运行证据。实际结果见 [整合测试记录](INTEGRATION_TEST_RESULTS.md)。
 
 基底是完整 zky。新 profile 为 integrated-handover；legacy-handover 使用同一独立构建、同一STK轨迹并关闭QD。伪切换只改变连续物理信道与卫星身份日志，不是多小区Xn/RRC切换。默认 legacy-linear，timing assist关闭。原平台入口与外部源码不作为新平台部署目标。
@@ -19,7 +19,7 @@ sudo python3 scripts/core_lab.py up --profile integrated-handover --run-id integ
 ntn-qd-ue、ntn-qd-host/peer、10.202.0.0/30、RF TCP4044。
 运行前不得沿用已source的zky或其他run环境；明确profile/run，再source或使用无残留OAI变量的环境。
 
-四组验收必须串行且使用fresh run ID：
+四类验收必须串行且使用fresh run ID；本次先执行两轮首次切换，再执行完整、legacy及static场景：
 
 ~~~bash
 # 当前诊断/验收使用的显式参数；原始默认值与 zky profile 保持不变。
@@ -92,3 +92,9 @@ export_handover_fdd('local_ntn/stk_trace_seamless.csv', ...
 
 长621行和短71行分别具有自己的complete provenance；两频率为DL2488400000、UL1614900000 Hz。
 仍存在1秒快照采样警告和伪切换合成位置的研究限制，不能由低速业务验收推断最大容量。
+
+## 残余 TA 反馈与复验结果
+
+新profile在接收跟踪器和TX预测器均启用时，使用 `crc-good-quarter-gain-v1`：普通PUSCH只采纳CRC成功的TA测量，并把相对中性指令31的偏差按四分之一增益取整。初始随机接入及原zky路径保留原生行为；禁用任一跟踪器也回到原生反馈。run.json记录实际策略。该策略根据实际反馈摆动诊断提出，不能由通过结果推断它是所有旧失败的唯一原因。
+
+[最终数值与原平台复验](INTEGRATION_TEST_RESULTS.md#2026-10-16-final-residual-ta-candidate-validation)；[两次切换的物理和业务联合图](validation/2026-10-16/full/timeline.png)；[可复核CSV](validation/2026-10-16/full/timeline.csv)。
