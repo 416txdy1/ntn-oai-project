@@ -26,6 +26,7 @@ typedef struct {
   size_t history_samples;
   float *residual_gain_db;
   bool muted;
+  uint64_t timestamp;
 } qd_runtime_state_t;
 
 static pthread_mutex_t qd_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -178,6 +179,7 @@ void update_channel_model_from_quadriga(channel_desc_t *channel, uint64_t timest
   if (state == NULL)
     state = create_state(channel);
   char error[512] = {0};
+  state->timestamp = timestamp;
   state->muted = false;
   for (size_t rx = 0; rx < state->bundle.rx_antennas; rx++) {
     for (size_t tx = 0; tx < state->bundle.tx_antennas; tx++) {
@@ -243,23 +245,32 @@ bool qd_channel_convolve(channel_desc_t *channel, c16_t **input, int rx_antenna,
   qd_runtime_state_t *state = find_state(channel);
   AssertFatal(state != NULL, "QDCHANNEL1 channel was not updated before convolution\n");
   memset(output, 0, (size_t)samples * sizeof(*output));
-  if (state->muted) {
-    pthread_mutex_unlock(&qd_lock);
-    return true;
-  }
-  for (size_t tx = 0; tx < state->bundle.tx_antennas; tx++) {
-    const size_t link = (size_t)rx_antenna * state->bundle.tx_antennas + tx;
-    const double residual_amplitude = pow(10.0, state->residual_gain_db[link] / 20.0);
-    for (int sample = 0; sample < samples; sample++) {
-      const size_t current = state->history_samples - 1 + (size_t)sample;
+  /* 按接收采样时刻更新；不能把加密后的信道冻结到整个 IQ 块末尾。
+   * 每个 Rx 都使用同一块起点，支持 rate=0、非均匀快照和块内越界静音。 */
+  AssertFatal((uint64_t)samples <= UINT64_MAX - state->timestamp, "QD timestamp overflow\n");
+  char error[512] = {0};
+  for (int sample = 0; sample < samples; sample++) {
+    double time_s;
+    AssertFatal(stk_trace_time_at_timestamp(state->timestamp + (uint64_t)sample,
+                channel->sampling_rate, &time_s), "QD sample clock unavailable\n");
+    const size_t current = state->history_samples - 1 + (size_t)sample;
+    for (size_t tx = 0; tx < state->bundle.tx_antennas; tx++) {
+      const size_t link = (size_t)rx_antenna * state->bundle.tx_antennas + tx;
+      const size_t offset = link * state->bundle.paths;
+      const qd_channel_status_t status = qd_channel_sample(&state->bundle, time_s, rx_antenna, tx,
+          state->coefficients + offset, state->delays_s + offset,
+          state->residual_gain_db + link, error, sizeof(error));
+      AssertFatal(status != QD_CHANNEL_ERROR, "QDCHANNEL1 sample: %s\n", error);
+      if (status == QD_CHANNEL_MUTED) continue;
+      const double residual_amplitude = pow(10.0, state->residual_gain_db[link] / 20.0);
       for (size_t path = 0; path < state->bundle.paths; path++) {
-        const double delay_samples = state->delays_s[link * state->bundle.paths + path] * channel->sampling_rate;
+        const double delay_samples = state->delays_s[offset + path] * channel->sampling_rate;
         const size_t integer_delay = (size_t)floor(delay_samples);
         const double fraction = delay_samples - (double)integer_delay;
         const double input_real = cubic_sample(input[tx], current, integer_delay, fraction, false);
         const double input_imag = cubic_sample(input[tx], current, integer_delay, fraction, true);
-        const double tap_real = residual_amplitude * state->coefficients[link * state->bundle.paths + path].real;
-        const double tap_imag = residual_amplitude * state->coefficients[link * state->bundle.paths + path].imag;
+        const double tap_real = residual_amplitude * state->coefficients[offset + path].real;
+        const double tap_imag = residual_amplitude * state->coefficients[offset + path].imag;
         output[sample].r += input_real * tap_real - input_imag * tap_imag;
         output[sample].i += input_imag * tap_real + input_real * tap_imag;
       }

@@ -34,11 +34,10 @@ void exit_function(const char *file, const char *function, const int line,
 }
 
 static double test_trace_time_s;
+static double test_trace_rate = 1;
 bool stk_trace_time_at_timestamp(uint64_t timestamp, double sampling_rate, double *trace_time_s)
 {
-  (void)timestamp;
-  (void)sampling_rate;
-  *trace_time_s = test_trace_time_s;
+  *trace_time_s = test_trace_time_s + test_trace_rate * (double)timestamp / sampling_rate;
   return true;
 }
 
@@ -113,6 +112,9 @@ int main(int argc, char **argv)
   double *delays = calloc(reference.paths, sizeof(*delays));
   assert(coefficients && delays);
   double max_error = 0;
+  const double rates[] = {0, 0.5, 1, 1000000};
+  for (size_t rate_index = 0; rate_index < sizeof(rates)/sizeof(rates[0]); rate_index++) {
+    test_trace_rate = rates[rate_index];
   for (size_t point = 0; point < 2 * reference.snapshots - 1; point++) {
     size_t lower = point / 2;
     test_trace_time_s = reference.times_s[lower];
@@ -123,9 +125,12 @@ int main(int argc, char **argv)
       memset(expected, 0, sizeof(expected));
       for (size_t tx = 0; tx < reference.tx_antennas; tx++) {
         float gain;
-        assert(qd_channel_sample(&reference, test_trace_time_s, rx, tx, coefficients, delays,
-                                &gain, error, sizeof(error)) == QD_CHANNEL_OK);
         for (int n = 0; n < samples; n++) {
+          const qd_channel_status_t status = qd_channel_sample(&reference,
+              test_trace_time_s + test_trace_rate * (double)n / channel.sampling_rate, rx, tx, coefficients, delays,
+              &gain, error, sizeof(error));
+          assert(status != QD_CHANNEL_ERROR);
+          if (status == QD_CHANNEL_MUTED) continue;
           for (size_t p = 0; p < reference.paths; p++) {
             double delay = delays[p] * channel.sampling_rate;
             double r = reference_input(input[tx], history - 1 + n, delay, false);
@@ -142,6 +147,8 @@ int main(int argc, char **argv)
       }
     }
   }
+  }
+  test_trace_rate = 1;
   for (int side = 0; side < 2; side++) {
     test_trace_time_s = side ? reference.times_s[reference.snapshots - 1] + 1 : reference.times_s[0] - 1;
     update_channel_model_from_quadriga(&channel, 0);
