@@ -13,17 +13,17 @@ static unsigned calls;static char line[512];
 #include "ntn_ta_diag.h"
 int main(void){
  unsetenv("OAI_NTN_PROFILE");unsetenv("OAI_NTN_TIMING_DIAG");
- nr_ntn_ta_diag(0,0,0,31,31,1,150);assert(calls==0);
+ nr_ntn_ta_diag(0,0,0,31,31,1,150,31,1);assert(calls==0);
  setenv("OAI_NTN_PROFILE","zky",1);setenv("OAI_NTN_TIMING_DIAG","1",1);
- for(int i=0;i<20010;i++)nr_ntn_ta_diag(0,0,0,31,31,1,150);assert(calls==0);
+ for(int i=0;i<20010;i++)nr_ntn_ta_diag(0,0,0,31,31,1,150,31,1);assert(calls==0);
  setenv("OAI_NTN_PROFILE","integrated-handover",1);setenv("OAI_NTN_TIMING_DIAG","0",1);
- nr_ntn_ta_diag(0,0,0,31,31,1,150);assert(calls==0);
+ nr_ntn_ta_diag(0,0,0,31,31,1,150,31,1);assert(calls==0);
  setenv("OAI_NTN_TIMING_DIAG","1",1);
- nr_ntn_ta_diag(0,123,4,17,31,0,145);assert(calls==1);
+ nr_ntn_ta_diag(0,123,4,17,31,0,145,31,0);assert(calls==1);
  assert(strstr(line,"STKGNB_TA_MEAS")&&strstr(line,"command 17 previous 31 crcOk 0 snrX10 145"));
- for(int i=0;i<20010;i++)nr_ntn_ta_diag(0,0,0,31,31,1,150);assert(calls==20000);
+ for(int i=0;i<20010;i++)nr_ntn_ta_diag(0,0,0,31,31,1,150,31,1);assert(calls==20000);
  setenv("OAI_NTN_PROFILE","legacy-handover",1);
- for(int i=0;i<2010;i++)nr_ntn_ta_diag(1,0,0,31,-1,-1,-1);assert(calls==22000);
+ for(int i=0;i<2010;i++)nr_ntn_ta_diag(1,0,0,31,-1,-1,-1,31,-1);assert(calls==22000);
  assert(strstr(line,"STKGNB_TA_SCHEDULE"));puts("PASS bounded gNB TA numeric diagnostics");
 }
 '''

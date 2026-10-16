@@ -6,6 +6,7 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
+#include "ntn_ta_feedback.h"
 static inline bool nr_ntn_ta_diag_enabled(void)
 {
   const char *profile=getenv("OAI_NTN_PROFILE"), *flag=getenv("OAI_NTN_TIMING_DIAG");
@@ -13,7 +14,7 @@ static inline bool nr_ntn_ta_diag_enabled(void)
       && flag && !strcmp(flag,"1");
 }
 static inline void nr_ntn_ta_diag(bool scheduled,int frame,int slot,int command,
-                                  int previous,int crc_ok,int snr_x10)
+                                  int previous,int crc_ok,int snr_x10,int retained,int feedback_used)
 {
   static atomic_uint measurements, schedules;
   if (!nr_ntn_ta_diag_enabled()) return;
@@ -22,8 +23,8 @@ static inline void nr_ntn_ta_diag(bool scheduled,int frame,int slot,int command,
   if (atomic_load_explicit(counter,memory_order_relaxed)>=limit) return;
   const unsigned sequence=atomic_fetch_add_explicit(counter,1,memory_order_relaxed)+1;
   if (sequence>limit) return;
-  LOG_I(NR_MAC,"%s call %u frame %d slot %d command %d previous %d crcOk %d snrX10 %d\n",
+  LOG_I(NR_MAC,"%s call %u frame %d slot %d command %d previous %d crcOk %d snrX10 %d retained %d feedbackUsed %d\n",
         scheduled?"STKGNB_TA_SCHEDULE":"STKGNB_TA_MEAS",sequence,frame,slot,
-        command,previous,crc_ok,snr_x10);
+        command,previous,crc_ok,snr_x10,retained,feedback_used);
 }
 #endif

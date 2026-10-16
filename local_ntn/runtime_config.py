@@ -91,6 +91,13 @@ def pdcp_reordering_ms(profile, environ):
         raise ValueError('OAI_NTN_PDCP_REORDERING_MS must be 100, 200, or 500')
     return int(value)
 
+def ta_feedback_policy(profile, environ):
+    """Match the gNB policy only when receiver-derived geometry is enabled."""
+    active = profile in ('integrated-handover', 'legacy-handover') and all(
+        environ.get(key) is None or environ.get(key) == '1'
+        for key in ('OAI_NTN_RX_TRACKER', 'OAI_NTN_TX_PREDICTOR'))
+    return 'crc-good-quarter-gain-v1' if active else 'native'
+
 def timing_diag_start_iq_s(profile, environ):
     if profile == 'zky':
         return None

@@ -1171,7 +1171,7 @@ static void generate_dl_mac_pdu(gNB_MAC_INST *mac,
 
     // ta command is sent, values are reset
     if (sched_ctrl->ta_apply) {
-      nr_ntn_ta_diag(true,frame,slot,sched_ctrl->ta_update,-1,-1,-1);
+      nr_ntn_ta_diag(true,frame,slot,sched_ctrl->ta_update,-1,-1,-1,sched_ctrl->ta_update,-1);
       sched_ctrl->ta_apply = false;
       sched_ctrl->ta_update = 31;
       sched_ctrl->ta_frame = (frame + 100) % MAX_FRAME_NUMBER;

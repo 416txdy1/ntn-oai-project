@@ -34,6 +34,7 @@ class DtxSetting(unittest.TestCase):
     self.assertEqual(children['gnb']['OAI_NTN_PUSCH_FAILURE_THRES'],'100')
     manifest=experiment.build_manifest(config,1,env)
     self.assertEqual(manifest['pusch_failure_threshold_override'],100 if profile!='zky' else None)
+    self.assertEqual(manifest['mac_ta_feedback_policy'],'crc-good-quarter-gain-v1' if profile!='zky' else 'native')
 
  def test_pdcp_native_finite_values(self):
   for value in ['100','200','500']:

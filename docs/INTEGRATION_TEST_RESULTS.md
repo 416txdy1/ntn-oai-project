@@ -548,3 +548,44 @@ Actual-header Linux regression command
 `python3 /mnt/c/Users/WSZ/.codex/worktrees/ntn-quadriga-handover/OAI调研/scripts/test_gnb_ta_diag.py`
 exit0: PASS bounded gNB TA numeric diagnostics (profile gates, CRC fields,
 hard limits). Full deployment/build/trace/parser/IQ/script regression pending.
+
+### 2026-10-16 gNB observation result and prospective residual-TA candidate
+
+Diagnostic-only commit 475db674eadfda53b5c343b52389ef14d24fd8e6 passed the
+formal six-target build (19.520s), `bash local_ntn/run_regressions.sh`
+(10.556s), and `bash scripts/test.sh` (94.375s), all exit0. Source proof records
+31 overlays and six binary hashes. The independent archive comparison found
+3738 non-overlay base files with no missing, mismatched, or extra files.
+
+`task8-first-gnbdiag-20261016d` passed firsthandover at explicit DTX100,
+PDCP500ms, K80, seed20260925, diagnostics1/start0: 113.459 wall seconds,
+business IQ7.027559375..64.961188411; Ping89/89, UL1135/1135, DL1129/1134.
+Switch-window Ping16/16, UL197/197, DL198/198; all timely/loss gates passed.
+Numeric audit and original comparison passed; owned resources cleaned up.
+The numeric TA audit found all actually scheduled window commands had a
+CRC-good latest measurement, despite substantial positive/negative command
+oscillation. CRC-failed exclusion alone does not explain the earlier failure.
+Scheduling timestamps are native frame/slot observations, not UE receipt times.
+
+New, unproven candidate `crc-good-quarter-gain-v1`: in the two isolated
+profiles, only while both receiver tracker and TX predictor are enabled,
+ordinary PUSCH TA feedback accepts CRC-good measurements and rounds the
+residual command offset from neutral31 to one quarter. Random access, invalid
+command handling, zky and disabled-tracker behavior retain native semantics.
+The run manifest records the policy; numeric diagnostics retain raw and
+applied commands. This changes an experimental feedback controller, not the
+STK trace or QuaDRiGa path generation, and is not yet a demonstrated fix.
+
+Actual-production-block and actual-header regressions run via
+`python3 /mnt/c/Users/WSZ/.codex/worktrees/ntn-quadriga-handover/OAI调研/scripts/test_ntn_ta_feedback.py`
+and the adjacent `test_gnb_ta_diag.py`: both exit0. The former checks profile
+isolation, CRC gating, bounded gain, invalid values, the separate native RAR
+assignment, and manifest policy consistency. Its toy-loop convergence check
+does not establish PHY or business performance.
+
+Prospective validation: same K80/DTX100/PDCP500/seed/diagnostics configuration,
+two consecutive fresh-core firsthandover passes before full620, legacy620,
+and static90 tests. A failure remains a failure; no repeat-until-pass and no
+relaxation of five-wall-second delivery or one-percent loss gates. Full build,
+trace/IQ regressions, continuous business matrix, and original final platform
+recheck remain required before publishing this candidate.

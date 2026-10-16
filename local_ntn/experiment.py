@@ -15,7 +15,7 @@ from network_config import check_network
 from network_owner import NetworkManager
 from preflight import preflight, channel_environments, read_trace
 from run_state import process_identity, read_state, matches, save_state, stop_owned
-from runtime_config import resolve_runtime, pusch_failure_threshold, pdcp_reordering_ms, timing_diag_start_iq_s
+from runtime_config import resolve_runtime, pusch_failure_threshold, pdcp_reordering_ms, timing_diag_start_iq_s, ta_feedback_policy
 
 BASE = Path(__file__).resolve().parent
 
@@ -88,6 +88,7 @@ def build_manifest(config, rate, environment):
             'pdcp_reordering_ms_override':pdcp_reordering_ms(config.profile, environment),
             'oai_rngseed_requested':environment.get('OAI_RNGSEED'),
             'timing_diag_start_iq_s':timing_diag_start_iq_s(config.profile, environment),
+            'mac_ta_feedback_policy':ta_feedback_policy(config.profile, environment),
             'cell_koffset_ms_override':koffset, 'nominal_timing_budget':budget,
             'source_commit':commit_at(config.root),'oai_source':source_identity(config.root,config.oai_repo),
             'source_repo':str(config.oai_repo),'build_dir':str(config.build_dir),

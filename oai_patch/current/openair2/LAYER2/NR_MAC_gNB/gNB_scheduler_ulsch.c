@@ -947,8 +947,11 @@ static void _nr_rx_sdu(const module_id_t gnb_mod_idP,
 
       if (timing_advance != 0xffff) {
         const int previous_ta = UE_scheduling_control->ta_update;
-        UE_scheduling_control->ta_update = timing_advance;
-        nr_ntn_ta_diag(false,frameP,slotP,timing_advance,previous_ta,sduP != NULL,pusch_snrx10);
+        const bool feedback_used = nr_ntn_ta_feedback_accept(sduP != NULL);
+        if (feedback_used)
+          UE_scheduling_control->ta_update = nr_ntn_ta_feedback_value(timing_advance);
+        nr_ntn_ta_diag(false,frameP,slotP,timing_advance,previous_ta,sduP != NULL,pusch_snrx10,
+                       UE_scheduling_control->ta_update,feedback_used);
       }
 
       const NR_sched_pusch_t *sched_pusch = &UE_scheduling_control->ul_harq_processes[harq_pid].sched_pusch;
