@@ -1,32 +1,38 @@
 # Integration source preservation inventory
 
-Frozen Git source inventory at f2a3d27413a9f99d85fd51afec33b8850a7112f9. This
-generated inventory and subsequent test-result documentation are additional
-review artifacts. Source preservation is independent of runtime acceptance:
-the complete live matrix and final original-platform business recheck remain
-pending; no remote push is established by this inventory.
+Frozen Git inventory at 71043d0a718e5d67406f544e1248de4e087068c5, excluding this inventory itself. The only
+subsequent change is this generated review document. Tested code commit is
+e066b99558be686aecff7d41d0ed9eadffb8ef74; later changes are the original-platform verification tool and its
+tests atae3723e7caa8fa95fb47ede327582396c29dc498, README/documentation and
+reviewed numeric evidence. Runtime source and six binary hashes remain
+identical to the tested runtime commit. The complete live matrix and final original-platform
+business/trace/IQ recheck passed with the explicitly recorded parameters;
+see [test results](INTEGRATION_TEST_RESULTS.md) and
+[numeric evidence](validation/2026-10-16/index.json).
 
-Zky base: 70a38b5492b615498cea2332bd077c0d4f958d25.
-Original pseudo-handover source: f30bc90a626214d227a7991d7429cf7723233f96.
-Independent archived OAI commit: 1e0c78bfbb80424f275e73a3103f582e0f903413.
-Original external OAI c4125d1c740181ab1f7da0e7dd1d04ed07c37670 and original
-5GC 212f92fc6a2fb82b5df1e8f4ef20075e75acefb3 remain reference/protection targets,
-not deployment targets. Builds and private credentials/logs are excluded.
+Zky base:70a38b5492b615498cea2332bd077c0d4f958d25.
+Original pseudo-handover source:f30bc90a626214d227a7991d7429cf7723233f96.
+Independent archived OAI:1e0c78bfbb80424f275e73a3103f582e0f903413.
+Original external OAI:c4125d1c740181ab1f7da0e7dd1d04ed07c37670.
+Original external 5GC:212f92fc6a2fb82b5df1e8f4ef20075e75acefb3.
+The original external checkouts remain protection targets, not deployment targets.
 
-Every zky path is retained. All vendor archives and the existing FDD bundle
-are Git-blob-identical to zky; examples/fdd-pass/trace.csv intentionally keeps
-its original CRLF working representation. There are 158 unchanged zky files,
-32 compatible extensions, 13 byte-identical original restorations and 80 new
-integration files, excluding this inventory document. Extensions retain old
-interfaces and add isolated profiles or reviewed fixes. Provenance sidecars
-and the source lock record trace/schedule/manifest/data checksums.
+Every zky path is retained. Vendor archives and the original FDD bundle are
+Git-blob-identical to zky; its trace intentionally retains its original CRLF
+representation. File counts, excluding this inventory:
 
-The independent deployed OAI consists of the pinned archive and 28 documented
-overlays, with six binary hashes captured in private build proofs. The archive
-audit compared 3740 non-overlay source files with no missing, differing or
-unexpected source files. Neither original OAI/5GC checkout is overwritten.
-Detailed actual build/test outcomes and remaining failures are recorded in
-[INTEGRATION_TEST_RESULTS.md](INTEGRATION_TEST_RESULTS.md).
+- unchanged zky: 158
+- compatible extension: 32
+- byte-identical original restoration: 13
+- new integration content: 103
+
+The deployed independent OAI is the pinned archive plus32 documented overlays.
+Six binary SHA256 values are in the numeric evidence index. An archive audit
+compared3738 non-overlay base files with no missing, mismatched or unexpected
+source files. Neither original checkout, binary or configuration template was
+overwritten. No private runtime, raw modem logs or generated build trees are
+included. Numeric public CSV/JSON files preserve LF on both operating systems
+so their published SHA256 values remain reproducible.
 
 | Path | Classification | Git blob |
 | --- | --- | --- |
@@ -47,7 +53,7 @@ Detailed actual build/test outcomes and remaining failures are recorded in
 | .planning/2026-09-24-stk-quadriga-oai-integration-plan/step01_verify_visible.ps1 | unchanged zky | fc3e58803683dd356a5d0ded7867c8a68e4b7c62 |
 | .planning/2026-09-24-stk-quadriga-oai-integration-plan/task_plan.md | unchanged zky | 7f2b928ba9ae581ebbc49bba82938884b936baf2 |
 | AGENTS.md | unchanged zky | 1614cb9b254bcf80f729f4ca25abbab2164a7d4d |
-| README.md | compatible extension | 2f04da87dc216966acd4111a742a9a9e53aa1194 |
+| README.md | compatible extension | 626ccf92579f247193771ca22169cd01ca2e5399 |
 | STK_LEO_Constellation_20260923_train_v2/satellite_schedule_blend.csv | unchanged zky | 4b0b69a6e22c8b966bdaa91f27280c7458635e7a |
 | STK_LEO_Constellation_20260923_train_v2/stk_constellation_trace_blend.csv | unchanged zky | 1e771a5a3e5bb001dfcc781a0ff76a23e2e5274d |
 | configs/core/compose.yaml.in | unchanged zky | c7839f4992ea37f77c1155ed38f5c35256381b5c |
@@ -58,16 +64,33 @@ Detailed actual build/test outcomes and remaining failures are recorded in
 | docs/BLEND_REPAIR_20261003.md | unchanged zky | 968d3a04e5b1a7d5d0e532759524ef03a6658305 |
 | docs/DEBUG_ZKY.md | unchanged zky | b602e1dc03085097d9cfa7bc2482d88b449475d2 |
 | docs/FULL_PASS_ACCEPTANCE_20261002.md | unchanged zky | a3ab096a1a443f4a1ac395fdd334d43d08494781 |
-| docs/INTEGRATED_HANDOVER.md | new integration content | 8907a467ac86a5110edaed9c509c8d602ed361ec |
-| docs/INTEGRATION_TEST_RESULTS.md | new integration content | 918a6d0385c793dc27cfd8239304595cbf2ede14 |
+| docs/INTEGRATED_HANDOVER.md | new integration content | fc7e64e0dad2f954d699d0581d611cffe0ce2470 |
+| docs/INTEGRATION_TEST_RESULTS.md | new integration content | 1fca333c0a17f9801abc2c28779b8ed8b9377958 |
 | docs/SELF_CONTAINED_VALIDATION.md | unchanged zky | 192a2ea94ea2f2c4e231569b40b6215d41c201ec |
 | docs/continuous-handover-acceptance.md | new integration content | 71f990c84d9d4060d27ffb7a8ca67226eb342a6f |
 | docs/prach-centered-search.md | new integration content | 1a813bb9c9be63b57699c7e65e60fccfe12c1bd9 |
 | docs/receiver-pilot-tracking.md | new integration content | aad17ac52c75288ee21553018f737e2070ec7228 |
-| docs/receiver-tx-prediction.md | new integration content | 3bb751af4051b389952f27a39e5937c560d66495 |
+| docs/receiver-tx-prediction.md | new integration content | d6f8c61403ad77133e425a58413b55e0f371dcc5 |
 | docs/superpowers/plans/2026-09-10-local-ntn.md | unchanged zky | deaad17e5c82bd2e58e48b10a271ab3a2795d113 |
 | docs/superpowers/plans/2026-10-09-ntn-quadriga-handover.md | new integration content | b3dbfde6d6db392e4c4a52605eafa4cae06f2d52 |
 | docs/superpowers/specs/2026-10-09-ntn-quadriga-handover-design.md | new integration content | 54d74c4f6db99edf8c535692a5272b23cc3cc25b |
+| docs/validation/.gitattributes | new integration content | ba6155b19243a22927b7336cbd3a31a184a813bd |
+| docs/validation/2026-10-16/firsthandover-repeat/summary.json | new integration content | 5396f0f149e8a63a9e51f9c68cab004a9289b328 |
+| docs/validation/2026-10-16/firsthandover-repeat/timeline.csv | new integration content | ba851343345041c0760729362ff1f386d9fee67d |
+| docs/validation/2026-10-16/firsthandover-repeat/timeline.png | new integration content | 64282aff81d347b1116fefa271f1e1140d91df66 |
+| docs/validation/2026-10-16/firsthandover/summary.json | new integration content | ab5bcc469c48115268dbf45dae5b638dc8f3392d |
+| docs/validation/2026-10-16/firsthandover/timeline.csv | new integration content | 45c8032471daa552446daa967ddb45319753ac3f |
+| docs/validation/2026-10-16/firsthandover/timeline.png | new integration content | ad17fbe8a03168a773bd40aee46781d17ca51b55 |
+| docs/validation/2026-10-16/full/summary.json | new integration content | 4db664046dbf802c629119c32cf131d6831ef2c1 |
+| docs/validation/2026-10-16/full/timeline.csv | new integration content | e492b2392e506d2c43730db954902accb27fe601 |
+| docs/validation/2026-10-16/full/timeline.png | new integration content | fa7218cedf520bc7f6c51a5d1ad318b14dc6f353 |
+| docs/validation/2026-10-16/index.json | new integration content | b0bb4862a75832d77543fb645e5b7c569f0bdb66 |
+| docs/validation/2026-10-16/legacy/summary.json | new integration content | 8e1193260432e2fa68f399930c02c2d6f61aa0ec |
+| docs/validation/2026-10-16/legacy/timeline.csv | new integration content | 0217b000f19e507b11a6a992369027d8e054a6d9 |
+| docs/validation/2026-10-16/legacy/timeline.png | new integration content | c67cabd3cb56a9843d31273e11b1d1ec6a873113 |
+| docs/validation/2026-10-16/static/summary.json | new integration content | 2e8538e3231f159a9a5df38864b05cadd9102ab9 |
+| docs/validation/2026-10-16/static/timeline.csv | new integration content | 6dfcda744f6eed0c17e02f017236e00188756f7e |
+| docs/validation/2026-10-16/static/timeline.png | new integration content | a20f2830d27bc1ca7a961b5a94a742e132ac24ad |
 | examples/fdd-pass/downlink/coefficients.cf32 | unchanged zky | fe94ed057532675a52fa6053350724fd154d02e6 |
 | examples/fdd-pass/downlink/delays.f64 | unchanged zky | 8b87375087a5360ef2e5c995d5a02535131b5510 |
 | examples/fdd-pass/downlink/manifest.json | unchanged zky | aade4d5f3da5cb1df2299760d64589b58cbe6dd5 |
@@ -113,7 +136,7 @@ Detailed actual build/test outcomes and remaining failures are recorded in
 | local_ntn/create_leo_constellation.py | byte-identical original restoration | 695674f4f1ceaceeeed9c45590283690f0556623 |
 | local_ntn/debug_console.ps1 | unchanged zky | ceeb3d6c7c87be793eec60bc7b32d848bba469c4 |
 | local_ntn/debug_run.ps1 | unchanged zky | bc72f79d45b78bb811f956a69e8677034857644a |
-| local_ntn/experiment.py | compatible extension | 8ea2df9687fa50b3a9d9eee5253d3789d582621a |
+| local_ntn/experiment.py | compatible extension | 8909b563a383e0db36a7a44d12d6cc93f9f53a66 |
 | local_ntn/export_constellation_trace.py | byte-identical original restoration | 18ccf07fefe5eb189dfdb09683886c257ce5465c |
 | local_ntn/export_stk_trace.py | unchanged zky | 8abbea8ee86a1af111486cad3fac08708ca49143 |
 | local_ntn/handover_blend.py | byte-identical original restoration | ef32dd6ae90625bc6c5d7ec11761dba2b52b1b0a |
@@ -136,7 +159,7 @@ Detailed actual build/test outcomes and remaining failures are recorded in
 | local_ntn/run_regressions.sh | compatible extension | efc1c866b082a9003a2691874135b6f07e1b9c56 |
 | local_ntn/run_seamless_validation.sh | new integration content | 22a53fcd0070a61e99f801833b517f3b7b8ddddd |
 | local_ntn/run_state.py | new integration content | 2dc591207dee87eddc68b7e6f1972748d4503289 |
-| local_ntn/runtime_config.py | new integration content | 38c483bb1cae028a5b2bc76bafd329fc5bb0ed49 |
+| local_ntn/runtime_config.py | new integration content | 4daafa515852b0d94b6ae0dfd4597857a83fb776 |
 | local_ntn/satellite_schedule.csv | byte-identical original restoration | 03d8d7c261f2feb362cdc88ed7ccee089935aeae |
 | local_ntn/satellite_schedule.py | byte-identical original restoration | 11ec17448295b3cd0ac09e17b084b1a9c5074e8f |
 | local_ntn/satellite_schedule_firsthandover.csv | byte-identical original restoration | d8694e089cf0cf4be86054bf91bff114772aa229 |
@@ -196,6 +219,10 @@ Detailed actual build/test outcomes and remaining failures are recorded in
 | oai_patch/current/openair1/PHY/defs_nr_UE.h | new integration content | d9ae9724702430815f94ff820a092a20a224bf83 |
 | oai_patch/current/openair1/SCHED_NR_UE/phy_procedures_nr_ue.c | new integration content | d418bea35a93eca1478decd0806e15685a005916 |
 | oai_patch/current/openair1/SIMULATION/TOOLS/sim.h | unchanged zky | 93572d8ee0ccac1663b5b5e32e4d6ed40e3a89d2 |
+| oai_patch/current/openair2/LAYER2/NR_MAC_gNB/gNB_scheduler_dlsch.c | new integration content | 1d5637bc9642ba1ff783fd7067f855a1e2315d0d |
+| oai_patch/current/openair2/LAYER2/NR_MAC_gNB/gNB_scheduler_ulsch.c | new integration content | b7a995e9ce06a2c884f672749a630e4bd68a300b |
+| oai_patch/current/openair2/LAYER2/NR_MAC_gNB/ntn_ta_diag.h | new integration content | 9332121d58253d9e95ed7289d9bea946f17060b0 |
+| oai_patch/current/openair2/LAYER2/NR_MAC_gNB/ntn_ta_feedback.h | new integration content | 968fe85de6be20cadaf19112ce61b5fd52f5b5e1 |
 | oai_patch/current/radio/COMMON/common_lib.c | unchanged zky | bb97a9dce97600c793e3db33eece46b35f037206 |
 | oai_patch/current/radio/COMMON/common_lib.h | unchanged zky | e26b150179daa9d3d34f262556945838c9a8df88 |
 | oai_patch/current/radio/rfsimulator/CMakeLists.txt | compatible extension | c1a38a685fbd3aa690c2dba6920c3e633b4c1684 |
@@ -275,19 +302,21 @@ Detailed actual build/test outcomes and remaining failures are recorded in
 | scripts/init_lab.py | compatible extension | d9fe6eb302e9ed639a87e7db6616bdec21b4b23e |
 | scripts/install_deps.sh | unchanged zky | 1594d56707ce2cab07163d78ce552d9ba91cd1a8 |
 | scripts/monotonic_ping.py | unchanged zky | 494b905e816c9febdee46a0dcad22d61a1174b56 |
-| scripts/original_platform_check.py | new integration content | 5aab1fcae4e0cc1fa3fecdd2cc8b65f02d8fc452 |
+| scripts/original_platform_check.py | new integration content | 3cd87f494d961cbb4f3f6864b52c5a2048f1a87b |
 | scripts/prepare_iperf.sh | unchanged zky | e3d4ecdb56dcaf7e0eb50cfc8ad566b7aebb5228 |
 | scripts/prepare_sources.py | unchanged zky | e24607a56d12c32400c3b5f212e7c8cd8b2f13d5 |
 | scripts/smoke.py | unchanged zky | 25cc211f25ba11dea11e3787c2f3d9597660fae5 |
-| scripts/test.sh | compatible extension | 303b030e9b2016aa686c53ecd91ee3eb625591de |
+| scripts/test.sh | compatible extension | 42c6e4d42d768e9fa5088b823b3c1fa1e1440075 |
 | scripts/test_core_lab.py | new integration content | 636746e4f6d04461dea549d21b73b39ca2fee79d |
 | scripts/test_diag_window.py | new integration content | c3625a469d3984510d45490f26532a1cbcb48240 |
 | scripts/test_full_pass.py | compatible extension | 9b4d65196e4192191db94f87fb80e043b76ff68c |
+| scripts/test_gnb_ta_diag.py | new integration content | 31d89dc806201ea86538e1022bd96f9d43a06869 |
 | scripts/test_handover_driver.py | new integration content | 3622ece4315e15221b00b095f297d721d5def3e1 |
 | scripts/test_handover_metrics.py | new integration content | 2ca179aea7891dcf3cb84246b7583f1d7b77ae4b |
 | scripts/test_monotonic_ping.py | unchanged zky | 2c7896a54aae02e1cdeb7c3b5c0ca8bf7b418c05 |
-| scripts/test_ntn_dtx_config.py | new integration content | 366189a2a284510f9b0bef2424376c4de37dd05f |
-| scripts/test_original_platform_check.py | new integration content | eb55cd36e4cd7f8bc4a9783c5f392c8bbeaa466a |
+| scripts/test_ntn_dtx_config.py | new integration content | d2cca6c3e144d6dd999d1a7d4d55ec942f0c5357 |
+| scripts/test_ntn_ta_feedback.py | new integration content | ad8658e40d13e6c8eea544376893c98c7776f17a |
+| scripts/test_original_platform_check.py | new integration content | 4464992b4b7127e8d08e9f03b715f2967f5462c4 |
 | scripts/test_physical_start.py | new integration content | e1ea74a1f7f008d66aed3a8e3ec580d8c37f8bfc |
 | scripts/test_prach_centered_iq.py | new integration content | f25b42c8c681b6bdd24b3aa7aaea77f7c056298b |
 | scripts/test_rx_tracker_iq.py | new integration content | 2bacdc93d902e005633cef7f30f76a4131e44142 |
