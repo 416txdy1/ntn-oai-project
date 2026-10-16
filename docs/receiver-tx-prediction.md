@@ -23,3 +23,17 @@ Default is0; isolated valid values are0..620; zky ignores the setting.
 Only numeric logging is gated. Pilot acceptance, feedback and compensation
 continue throughout the run. Native TX records include job-owned TA/NTA/clock
 values, while raw modem logs remain private. This option is not a PHY fix.
+
+
+## gNB TA numerical observation
+
+New isolated profiles with `OAI_NTN_TIMING_DIAG=1` emit `STKGNB_TA_MEAS`
+(native command index/previous index/CRC-SDU availability/SNRx10) and
+`STKGNB_TA_SCHEDULE` (MAC CE scheduling point). Native command index31 is
+zero relative correction; it is not a sample count. Frame/slot are native
+modulo-SFN clocks; align with actual STKCLOCK anchors when analysing.
+No native assignment, timer or compensator is changed by these records.
+Bounds are20000 measurements/2000 schedules per translation unit. These
+initial gNB logs are independent of the UE-only diagnostic-start IQ window.
+Log I/O can affect wall runtime. Raw records remain private; no RNTI,
+subscriber credentials or packet payload is emitted by the new logger.

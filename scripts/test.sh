@@ -42,3 +42,4 @@ python3 scripts/test_tx_predictor_contract.py --root "$ROOT"
 python3 scripts/test_rx_tracker_iq.py --root "$ROOT"
 
 python3 scripts/test_diag_window.py
+python3 scripts/test_gnb_ta_diag.py

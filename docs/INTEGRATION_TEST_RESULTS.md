@@ -420,3 +420,131 @@ dead/reused/missing identity, strict running/post-launch checks and unchanged
 cleanup matching. The complete driver test on Windows had21 successful tests,
 one skip and2 Linux-platform-specific errors (owner path and missing os.geteuid);
 Linux validation remains authoritative and is pending for this repair.
+
+
+### 2026-10-15 f2a3d27 formal Linux validation
+
+Commit f2a3d27413a9f99d85fd51afec33b8850a7112f9. Commands and results:
+
+```bash
+python3 scripts/prepare_sources.py
+cmake --build /home/kayoko/ntn-workspaces/ntn-quadriga-handover/.runtime/oai/cmake_targets/ran_build/build --target nr-softmodem nr-uesoftmodem rfsimulator params_libconfig nr_prachsim nr_pbchsim -j 6
+bash local_ntn/run_regressions.sh
+bash scripts/test.sh
+```
+
+All exit0. Build15.379 s; trace/parser/IQ regression9.676 s;
+complete script suite87.116 s. Linux driver boundary tests24/24 passed,
+including the startup-race regression; the earlier Windows platform errors
+do not occur on the supported Linux runtime. Private formal proof:
+`.private/task8-20261013/startup-monitor16g-formal-20261015/source-and-binary-proof.json`.
+All28 OAI overlay hashes and all6 binary hashes exactly equal the e3ed4b9
+proof: the observation fix did not modify PHY compensation.
+Current inventory has every zky path present, vendor and FDD blobs identical;
+158 unchanged zky +32 compatible extensions +13 original restorations +80 new
+files, excluding the inventory document. Full current live matrix still pending.
+
+
+### 2026-10-16 confirmed complete two-switch integration PASS
+
+`python3 scripts/handover_acceptance.py --case full --profile integrated-handover
+--run-id task8-full-20261015af --max-wall-seconds 3600` at f2a3d27413a9f99d85fd51afec33b8850a7112f9,
+with explicit DTX100 / PDCP500 ms / Koffset80 ms / RNG20260925 / diagnostic1,
+diagnostic start0: PASS, exit0, report891.411 wall s (wrapper906.248 s).
+Business IQ7.040..614.270; both endpoints observed beyond622 IQ s; complete
+620 IQ s case and both required switch windows covered. Ping848/848,
+UL10859/10859, DL10855/10859; loss and5-wall-second timely gates all passed.
+Actual offered rates UL99872.854 and DL99874.419 bit/s.
+STK8244 window: Ping13/13, UL173/173, DL173/173; mean wall RTT231.597 ms.
+STK8799 window: Ping14/14, UL173/173, DL173/173; mean wall RTT235.418 ms.
+Global mean wall RTT186.957 ms. QD loaded once per modem; independent numeric
+audit passed. Case PBCH errors0, idle0, reaccess0. Stop0, cleanup confirmed,
+isolated core9 healthy at completion and original comparison0/no differences.
+The actual full seven-panel timeline was exported (PNG487448 bytes) and visually
+checked. These are observed results; previous failed runs remain preserved,
+and a single passing run does not imply seed-independent reliability/capacity.
+
+On resuming October16, WSL had a new boot and the bounded previous keeper had
+expired. Exact-owned recovery restarted only the same nine core container IDs.
+The generic before/after guard reported containers changed because its initial
+snapshot had owned containers stopped. Investigation proved the only changed
+fields were running/health/started_at on those exact nine IDs; foreign containers,
+original sources/protected files/RF network were equal. The earlier pre-live
+protection baseline compared equal after recovery. This expected recovery
+transition is separately audited; the generic failed assertion is not erased.
+Remaining current-commit legacy/static/first cases and final original business
+recheck are still pending. No remote push.
+
+
+### 2026-10-16 K80 matrix outcomes and K64 prospective diagnostic
+
+At the same f2a3d274 source and six binary hashes, K80 legacy run
+task8-legacy-20261015ag PASSED complete620 IQ s: report325.950 wall s,
+business IQ14.653..604.646; Ping297/297, UL3783/3783, DL3781/3782.
+First window Ping4/4 UL56/56 DL55/55; second Ping5/5 UL68/68 DL68/68.
+Global mean wall RTT77.691 ms; all loss and timely gates passed. QD loads0/0,
+numeric audit passed, case PBCH/idle/reaccess0; stop0/core9healthy/originalcompare0.
+Its observed timeline PNG567101 bytes was exported and visually checked.
+
+K80 static run task8-static-20261015ah PASSED90 IQ s: report184.211 wall s,
+business7.729..85.029IQ; Ping155/155, UL1973/1973, DL1968/1972.
+Actual offered UL99741.455/DL99742.777 bit/s; all gates/audit passed,
+case PBCH/idle/reaccess0, stop0/core9healthy/originalcompare0.
+
+K80 first run task8-first-20261015ai FAILED the unchanged Ping timely gates:
+report143.873 wall s, business7.184..65.014IQ. Ping114/114, UL1448/1448,
+DL1440/1447. Window Ping19/19, UL235/235, DL236/236; no window eventual loss,
+but5 Ping RTTs exceeded5 wall s (5.345..5.874 s). Window UL max one-way4.705 s,
+DL max1.612 s: the round-trip excess is real end-to-end delay, not lost replies
+or a probe timestamp error. Case PBCH/idle/reaccess0, numeric auditpassed,
+stop0/core9healthy/originalcompare0. All failed evidence retained.
+Private slow-ping16k numeric audit records true monotonic packet events,
+IQ/STK brackets and ordinaryTA swing baseline~-16 to-92 samples duringblend;
+anchor B=-9.622476198sample. This correlation is not a unique causal proof.
+
+Prospective next diagnostic changes only explicit isolated Koffset80->64 ms,
+keeping source/binaries/DTX100/PDCP500/RNG20260925/diag1(start0), trafficload,
+5-wall-second deadline and1%loss/timely gates. Source default80 unchanged.
+The full621-row legacy-linear nominal geometry budget atK64 is24.043407 ms,
+maxroundtrip42.956593 ms, required nominal5 ms/minintegerK45. This excludes
+ordinaryTA/NTA/prediction error, so it is not an actual FFT/write-lead guarantee.
+K64 is intended to shorten RX-to-TX prediction83->67 ms and test its effect,
+not to declare the observed K80 failure fixed. Before promoting K64, require
+two consecutive fresh first-window PASS runs plus complete full/legacy/static
+cases at the same configuration. No acceptance threshold is relaxed.
+Original final recheck and remote push remain pending.
+
+
+### 2026-10-16 K64 rejected; gNB native TA diagnostic added
+
+K64 single-factor case task8-first-k64-20261016b FAILED. Report129.744 wall s,
+business7.605..65.038IQ: Ping101/101, UL1282/1287, DL1281/1285.
+First window Ping17/17, UL213/218, DL221/221. Ping timely failure4/101
+global and4/17 window; window UL conservative loss5/218 and timely failure
+upper14.679%. No driver error, numeric audit passed, case PBCH/idle/reaccess0,
+stop0/core9healthy/originalcompare0. The K64 candidate did not satisfy the
+prospectively declared first-run criterion and is rejected; no repeat-until-pass
+or matrix promotion. Default/next diagnostic returns to explicit K80.
+
+Added bounded numeric-only gNB observation, with no MAC TA decision changes:
+STKGNB_TA_MEAS logs native timing-advance command index, previous retained
+index, native frame/slot, SDU/CRC-success indicator and measured SNRx10;
+STKGNB_TA_SCHEDULE logs the native MAC CE scheduling point before its timer
+reset. Scheduling is not an acknowledgement of physical transmission/UE receipt.
+Only integrated-handover/legacy-handover with timing diagnostics1 enable logs.
+Measurement/schedule hard limits are20000/2000 per translation unit. Existing
+UE diagnostic-start setting does not gate these bounded initial gNB records.
+Log I/O may affect wall runtime; no compensator, MAC field assignment, timer,
+service gate or original profile behavior is changed by this observation.
+
+The two gNB source files were byte-verified against the pinned OAI archive
+before adding only include/diagnostic calls. BaseSHA256:
+gNB_scheduler_ulsch.c83150f599143a18d90ca6afb52728472c08f35e9648ffeb2e94e869a692172f1;
+gNB_scheduler_dlsch.c4c471bb261284efad246852cd0a66594d1fa197d07ad470025ffa6b1f0ddd9fc.
+The native PUSCH path updates TA when RSSI>0 even without an SDU/CRC success;
+the new record exposes this distinction for causal investigation. It does not
+yet filter that update or establish which measurements cause the delay.
+Actual-header Linux regression command
+`python3 /mnt/c/Users/WSZ/.codex/worktrees/ntn-quadriga-handover/OAI调研/scripts/test_gnb_ta_diag.py`
+exit0: PASS bounded gNB TA numeric diagnostics (profile gates, CRC fields,
+hard limits). Full deployment/build/trace/parser/IQ/script regression pending.
