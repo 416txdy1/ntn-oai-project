@@ -44,10 +44,11 @@ static int spatial_iq(const char *trace, const char *bundle_path)
   enum {N=128};
   update_channel_model(&ch,N,0);
   size_t history=qd_channel_history_length(&ch);
+  size_t lookahead=qd_channel_lookahead_length(&ch);
   c16_t *inputs[bundle.tx_antennas];
   for(size_t tx=0;tx<bundle.tx_antennas;tx++) {
-    inputs[tx]=calloc(history+N-1,sizeof(c16_t));assert(inputs[tx]);
-    for(size_t n=0;n<history+N-1;n++)
+    inputs[tx]=calloc(history+N-1+lookahead,sizeof(c16_t));assert(inputs[tx]);
+    for(size_t n=0;n<history+N-1+lookahead;n++)
       inputs[tx][n]=(c16_t){.r=(int)(n*(17+tx)%2000)-1000,.i=(int)(n*(31+tx)%2000)-1000};
   }
   for(size_t rx=0;rx<bundle.rx_antennas;rx++) {

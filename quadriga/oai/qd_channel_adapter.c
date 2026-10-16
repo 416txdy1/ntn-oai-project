@@ -23,6 +23,8 @@ typedef struct {
   qd_channel_t bundle;
   qd_complex32_t *coefficients;
   double *delays_s;
+  double *fir_fractions;
+  double *fir_weights;
   size_t history_samples;
   float *residual_gain_db;
   bool muted;
@@ -142,9 +144,13 @@ static qd_runtime_state_t *create_state(channel_desc_t *channel)
   const size_t links = state->bundle.rx_antennas * state->bundle.tx_antennas;
   state->coefficients = calloc(links * state->bundle.paths, sizeof(*state->coefficients));
   state->delays_s = calloc(links * state->bundle.paths, sizeof(*state->delays_s));
+  state->fir_fractions = malloc(links * state->bundle.paths * sizeof(double));
+  state->fir_weights = malloc(links * state->bundle.paths * 12 * sizeof(double));
   state->residual_gain_db = calloc(links, sizeof(*state->residual_gain_db));
-  AssertFatal(state->coefficients != NULL && state->delays_s != NULL && state->residual_gain_db != NULL,
+  AssertFatal(state->coefficients != NULL && state->delays_s != NULL && state->residual_gain_db != NULL
+                  && state->fir_fractions != NULL && state->fir_weights != NULL,
               "Cannot allocate QDCHANNEL1 runtime tap buffers\n");
+  for (size_t i = 0; i < links * state->bundle.paths; i++) state->fir_fractions[i] = NAN;
   double maximum_delay_s = 0.0;
   const size_t total_delays = state->bundle.snapshots * state->bundle.rx_antennas
                               * state->bundle.tx_antennas * state->bundle.paths;
@@ -152,9 +158,9 @@ static qd_runtime_state_t *create_state(channel_desc_t *channel)
     maximum_delay_s = fmax(maximum_delay_s, state->bundle.delays_s[index]);
   const double maximum_delay_samples = maximum_delay_s * channel->sampling_rate;
   AssertFatal(isfinite(maximum_delay_samples) && maximum_delay_samples >= 0
-                  && maximum_delay_samples <= (double)(SIZE_MAX - 3),
+                  && maximum_delay_samples <= (double)(SIZE_MAX - 7),
               "QDCHANNEL1 relative delay does not fit RFsim history\n");
-  state->history_samples = (size_t)ceil(maximum_delay_samples) + 3;
+  state->history_samples = (size_t)ceil(maximum_delay_samples) + 7;
   AssertFatal(state->history_samples <= configured_history_limit(),
               "QDCHANNEL1 needs %zu history samples; raise OAI_QD_MAX_HISTORY_SAMPLES deliberately if valid\n",
               state->history_samples);
@@ -207,31 +213,52 @@ size_t qd_channel_history_length(channel_desc_t *channel)
   return history;
 }
 
-static double cubic_sample(const c16_t *input, size_t current, size_t integer_delay,
-                           double fraction, bool imaginary)
+size_t qd_channel_lookahead_length(channel_desc_t *channel)
 {
-  if (integer_delay == 0) {
-    const double current_value = imaginary ? input[current].i : input[current].r;
-    const double previous_value = imaginary ? input[current - 1].i : input[current - 1].r;
-    return (1.0 - fraction) * current_value + fraction * previous_value;
+  if (!qd_channel_requested()) return 0;
+  pthread_mutex_lock(&qd_lock);
+  qd_runtime_state_t *state = find_state(channel);
+  AssertFatal(state != NULL, "QD channel not updated before input collection\n");
+  /* 块起点静音仍可能在块内进入有效区间，必须预留完整前视缓冲。 */
+  const size_t count = 5;
+  pthread_mutex_unlock(&qd_lock);
+  return count;
+}
+
+static void fractional_sample(const c16_t *input, size_t current, size_t integer_delay,
+                              double fraction, double *last_fraction, double *weights,
+                              double *real, double *imag)
+{
+  if (fraction == 0) {
+    *real = input[current - integer_delay].r;
+    *imag = input[current - integer_delay].i;
+    return;
   }
-  const size_t first = current - integer_delay + 1;
-  const double values[4] = {
-      imaginary ? input[first].i : input[first].r,
-      imaginary ? input[first - 1].i : input[first - 1].r,
-      imaginary ? input[first - 2].i : input[first - 2].r,
-      imaginary ? input[first - 3].i : input[first - 3].r,
-  };
-  const double weights[4] = {
-      -fraction * (fraction - 1.0) * (fraction - 2.0) / 6.0,
-      (fraction + 1.0) * (fraction - 1.0) * (fraction - 2.0) / 2.0,
-      -(fraction + 1.0) * fraction * (fraction - 2.0) / 2.0,
-      (fraction + 1.0) * fraction * (fraction - 1.0) / 6.0,
-  };
-  double result = 0.0;
-  for (size_t index = 0; index < 4; index++)
-    result += weights[index] * values[index];
-  return result;
+  /* 对称 12 点 Lagrange；前看 5 点来自已有 STK 传播缓冲，不添加群时延。 */
+  static const double inverse_denominator[12] = {
+      -1.0/39916800, 1.0/3628800, -1.0/725760, 1.0/241920, -1.0/120960, 1.0/86400,
+      -1.0/86400, 1.0/120960, -1.0/241920, 1.0/725760, -1.0/3628800, 1.0/39916800};
+  /* 前后缀积直接形成基函数；避免每条路径每个 IQ 样本执行 12 次除法。
+   * 这是同一多项式的代数改写，不引入查表或分数时延量化。 */
+  /* 完全相等才复用；静态链路和固定时延 tap 不必重复计算同一组权重。 */
+  if (fraction != *last_fraction) {
+    double prefix[13];
+    prefix[0] = 1;
+    for (int j = 0; j < 12; j++) prefix[j + 1] = prefix[j] * (fraction - (j - 5));
+    double suffix = 1;
+    for (int j = 11; j >= 0; j--) {
+      weights[j] = prefix[j] * suffix * inverse_denominator[j];
+      suffix *= fraction - (j - 5);
+    }
+    *last_fraction = fraction;
+  }
+  *real = *imag = 0;
+  const size_t first = current - integer_delay + 5;
+  for (int j = 11; j >= 0; j--) {
+    const double weight = weights[j];
+    *real += weight * input[first - j].r;
+    *imag += weight * input[first - j].i;
+  }
 }
 
 bool qd_channel_convolve(channel_desc_t *channel, c16_t **input, int rx_antenna,
@@ -248,29 +275,45 @@ bool qd_channel_convolve(channel_desc_t *channel, c16_t **input, int rx_antenna,
   /* 按接收采样时刻更新；不能把加密后的信道冻结到整个 IQ 块末尾。
    * 每个 Rx 都使用同一块起点，支持 rate=0、非均匀快照和块内越界静音。 */
   AssertFatal((uint64_t)samples <= UINT64_MAX - state->timestamp, "QD timestamp overflow\n");
-  char error[512] = {0};
+  const qd_channel_t *bundle = &state->bundle;
+  const size_t links = bundle->rx_antennas * bundle->tx_antennas;
+  size_t lower = 0, upper = bundle->snapshots - 1;
+  double start_time;
+  AssertFatal(stk_trace_time_at_timestamp(state->timestamp, channel->sampling_rate, &start_time),
+              "QD sample clock unavailable\n");
+  /* 一个块只二分一次，随后随样本时钟向前移动；保持逐采样精度。 */
+  while (upper - lower > 1) {
+    const size_t middle = lower + (upper - lower) / 2;
+    if (bundle->times_s[middle] <= start_time) lower = middle;
+    else upper = middle;
+  }
   for (int sample = 0; sample < samples; sample++) {
     double time_s;
     AssertFatal(stk_trace_time_at_timestamp(state->timestamp + (uint64_t)sample,
                 channel->sampling_rate, &time_s), "QD sample clock unavailable\n");
+    if (time_s < bundle->times_s[0] || time_s > bundle->times_s[bundle->snapshots - 1]) continue;
+    while (lower + 1 < bundle->snapshots && bundle->times_s[lower + 1] <= time_s) lower++;
+    upper = lower + 1 < bundle->snapshots ? lower + 1 : lower;
+    const double weight = upper == lower ? 0 :
+        (time_s - bundle->times_s[lower]) / (bundle->times_s[upper] - bundle->times_s[lower]);
+    const double inverse = 1 - weight;
     const size_t current = state->history_samples - 1 + (size_t)sample;
     for (size_t tx = 0; tx < state->bundle.tx_antennas; tx++) {
       const size_t link = (size_t)rx_antenna * state->bundle.tx_antennas + tx;
-      const size_t offset = link * state->bundle.paths;
-      const qd_channel_status_t status = qd_channel_sample(&state->bundle, time_s, rx_antenna, tx,
-          state->coefficients + offset, state->delays_s + offset,
-          state->residual_gain_db + link, error, sizeof(error));
-      AssertFatal(status != QD_CHANNEL_ERROR, "QDCHANNEL1 sample: %s\n", error);
-      if (status == QD_CHANNEL_MUTED) continue;
-      const double residual_amplitude = pow(10.0, state->residual_gain_db[link] / 20.0);
-      for (size_t path = 0; path < state->bundle.paths; path++) {
-        const double delay_samples = state->delays_s[offset + path] * channel->sampling_rate;
+      const size_t lo = lower * links + link, hi = upper * links + link;
+      const float gain = (float)(inverse * bundle->residual_gain_db[lo] + weight * bundle->residual_gain_db[hi]);
+      const double residual_amplitude = gain == 0 ? 1 : pow(10.0, gain / 20.0);
+      for (size_t path = 0; path < bundle->paths; path++) {
+        const size_t left = lo * bundle->paths + path, right = hi * bundle->paths + path;
+        const double delay_samples = (inverse * bundle->delays_s[left] + weight * bundle->delays_s[right]) * channel->sampling_rate;
         const size_t integer_delay = (size_t)floor(delay_samples);
         const double fraction = delay_samples - (double)integer_delay;
-        const double input_real = cubic_sample(input[tx], current, integer_delay, fraction, false);
-        const double input_imag = cubic_sample(input[tx], current, integer_delay, fraction, true);
-        const double tap_real = residual_amplitude * state->coefficients[offset + path].real;
-        const double tap_imag = residual_amplitude * state->coefficients[offset + path].imag;
+        double input_real, input_imag;
+        const size_t tap = link * bundle->paths + path;
+        fractional_sample(input[tx], current, integer_delay, fraction,
+                          &state->fir_fractions[tap], &state->fir_weights[tap * 12], &input_real, &input_imag);
+        const double tap_real = residual_amplitude * (float)(inverse * bundle->coefficients[left].real + weight * bundle->coefficients[right].real);
+        const double tap_imag = residual_amplitude * (float)(inverse * bundle->coefficients[left].imag + weight * bundle->coefficients[right].imag);
         output[sample].r += input_real * tap_real - input_imag * tap_imag;
         output[sample].i += input_imag * tap_real + input_real * tap_imag;
       }

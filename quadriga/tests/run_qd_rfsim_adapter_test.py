@@ -45,7 +45,11 @@ def main() -> int:
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--trace", type=Path, required=True)
     parser.add_argument("--sanitize", action="store_true")
+    parser.add_argument("--max-points", type=int, default=0,
+                        help="大规模 bundle 的确定性分层检查数量；0 表示全部节点及中点")
     args = parser.parse_args()
+    if args.max_points < 0 or args.max_points == 1:
+        parser.error('--max-points 必须为0或至少2')
     oai_repo = args.oai_repo.resolve()
     flags, build = compile_flags(args.build_repo.resolve(), oai_repo)
     if args.sanitize:
@@ -57,7 +61,7 @@ def main() -> int:
         run(["cc", *flags, str(source), str(rfsim / "qd_channel_reader.c"),
              str(rfsim / "qd_channel_adapter.c"), "-lcrypto", "-lm", "-lpthread",
              "-o", str(executable)], build)
-        run([str(executable), str(args.bundle.resolve()), str(args.trace.resolve())], build)
+        run([str(executable), str(args.bundle.resolve()), str(args.trace.resolve()), str(args.max_points)], build)
     return 0
 
 

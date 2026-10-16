@@ -126,3 +126,13 @@ validate_runtime_fidelity('.runtime/fidelity-full/uplink','.runtime/fidelity-ful
 ```
 
 完整双向参考仍在生成。原始12点实现的 `scripts/test.sh` 通过；首次静态业务PDU超时，保留失败记录；复验 `source scripts/env_subarray4.sh; python3 scripts/validate_spatial.py --ports 4` 退出0、静态/动态业务与公式审计通过（日志 `fidelity-symmetric-business-retry.log`）。最新等价运算优化的数值回归通过，但其业务复验再次出现初始同步失败/PDU超时，原因尚未确定，不能视为只有已知尾部失败。完整361秒新信道业务尚未完成，最终验收仍待进行。
+
+#### 对称 FIR 阶段复验
+
+等价优化使用前后缀积替代逐 tap 除法，且仅在分数时延完全相等时复用权重；没有近似查表。`scripts/build.sh` 构建通过，`source scripts/env_subarray4.sh; bash scripts/test.sh` 完整通过（`fidelity-cached-fir-regression.log`）。ASan/UBSan 下 DL/UL 各723节点/中点，四种时钟速率，实际 IQ 与独立 Lagrange 计算最大误差分别2.12129e-11、1.51165e-11；包括块内跨节点与静音边界。
+
+后台生成任务降低调度优先级后，再次执行 `source scripts/env_subarray4.sh; python3 scripts/validate_spatial.py --ports 4` 退出0：静态 `smoke-0-1792167667735970373`、动态 `smoke-1-1792167791992502903` 均PDU成功，ping10/10，双向UDP零报告丢包，PBCH失败0，四端口及STK公式审计通过。日志为 `fidelity-cached-fir-business-retry.log`。先前失败记录保留；不能仅凭本次成功断言资源争用就是唯一根因。
+
+大规模完整 bundle 的 IQ 测试新增可选 `--max-points`，默认仍遍历全部节点与中点；完整精度流程使用4097个确定性分层点，始终覆盖首尾、四种速率和静音边界。17点入口已通过ASan/UBSan，误差1.63961e-11。数学精度仍遍历全部真实 QD 缓存，文件与C reader校验也不减少；分层只避免对相同卷积实现重复数亿组等价运算。
+
+上述业务使用原完整 bundle 验证新 FIR，不能替代尚未完成的新密集 bundle 的361秒业务验收。

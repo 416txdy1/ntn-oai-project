@@ -55,14 +55,14 @@ static double reference_input(const c16_t *input, size_t current, double delay, 
 {
   const long whole = (long)floor(delay);
   const double fraction = delay - whole;
-  const int count = whole == 0 ? 2 : 4;
-  const long first = whole == 0 ? (long)current : (long)current - whole + 1;
+  const int count = 12;
+  const long first = (long)current - whole + 5;
   double result = 0;
   for (int j = 0; j < count; j++) {
-    const double node = whole == 0 ? j : j - 1;
+    const double node = j - 5;
     double weight = 1;
     for (int k = 0; k < count; k++) {
-      const double other = whole == 0 ? k : k - 1;
+      const double other = k - 5;
       if (j != k) weight *= (fraction - other) / (node - other);
     }
     const c16_t value = input[first - j];
@@ -73,7 +73,9 @@ static double reference_input(const c16_t *input, size_t current, double delay, 
 
 int main(int argc, char **argv)
 {
-  assert(argc == 3);
+  assert(argc == 3 || argc == 4);
+  const size_t requested_checks = argc == 4 ? strtoull(argv[3], NULL, 10) : 0;
+  assert(requested_checks == 0 || requested_checks >= 2);
   setenv("OAI_QD_CHANNEL", argv[1], 1);
   setenv("OAI_STK_TRACE", argv[2], 1);
 
@@ -93,14 +95,16 @@ int main(int argc, char **argv)
   test_trace_time_s = reference.times_s[0];
   update_channel_model_from_quadriga(&channel, 0);
   const size_t history = qd_channel_history_length(&channel);
-  assert(history == (size_t)ceil(maximum_delay(&reference) * channel.sampling_rate) + 3);
+  assert(history == (size_t)ceil(maximum_delay(&reference) * channel.sampling_rate) + 7);
+  const size_t lookahead = qd_channel_lookahead_length(&channel);
+  assert(lookahead == 5);
   enum { samples = 32 };
   c16_t *input[reference.tx_antennas];
   uint32_t seed = 20261015;
   for (size_t tx = 0; tx < reference.tx_antennas; tx++) {
-    input[tx] = calloc(history + samples - 1, sizeof(c16_t));
+    input[tx] = calloc(history + samples - 1 + lookahead, sizeof(c16_t));
     assert(input[tx]);
-    for (size_t n = 0; n < history + samples - 1; n++) {
+    for (size_t n = 0; n < history + samples - 1 + lookahead; n++) {
       seed = seed * 1664525u + 1013904223u;
       input[tx][n].r = (int)(seed % 20001) - 10000;
       seed = seed * 1664525u + 1013904223u;
@@ -112,10 +116,13 @@ int main(int argc, char **argv)
   double *delays = calloc(reference.paths, sizeof(*delays));
   assert(coefficients && delays);
   double max_error = 0;
+  const size_t available_checks = 2 * reference.snapshots - 1;
+  const size_t selected_checks = requested_checks && requested_checks < available_checks ? requested_checks : available_checks;
   const double rates[] = {0, 0.5, 1, 1000000};
   for (size_t rate_index = 0; rate_index < sizeof(rates)/sizeof(rates[0]); rate_index++) {
     test_trace_rate = rates[rate_index];
-  for (size_t point = 0; point < 2 * reference.snapshots - 1; point++) {
+  for (size_t check = 0; check < selected_checks; check++) {
+    const size_t point = check * (available_checks - 1) / (selected_checks - 1);
     size_t lower = point / 2;
     test_trace_time_s = reference.times_s[lower];
     if (point % 2) test_trace_time_s = (test_trace_time_s + reference.times_s[lower + 1]) / 2;
@@ -157,8 +164,8 @@ int main(int argc, char **argv)
       for (int n = 0; n < samples; n++) assert(output[n].r == 0 && output[n].i == 0);
     }
   }
-  printf("PASS QD %zu Tx x %zu Rx: %zu snapshot/midpoint checks, max error %.9g, history %zu, muted boundaries\n",
-         reference.tx_antennas, reference.rx_antennas, 2 * reference.snapshots - 1, max_error, history);
+  printf("PASS QD %zu Tx x %zu Rx: %zu/%zu snapshot/midpoint checks, max error %.9g, history %zu, muted boundaries\n",
+         reference.tx_antennas, reference.rx_antennas, selected_checks, available_checks, max_error, history);
   free(coefficients);
   free(delays);
   for (size_t tx = 0; tx < reference.tx_antennas; tx++) free(input[tx]);

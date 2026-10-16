@@ -1337,7 +1337,10 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
         const uint64_t channel_offset = ptr->channel_model->channel_offset;
         const size_t channel_history = qd_channel_history_length(ptr->channel_model);
         AssertFatal(channel_history >= 1, "RFsim channel history must not be empty\n");
-        std::vector<std::vector<c16_t>> ant_buffers(ptr->nbAnt, std::vector<c16_t>(nsamps + channel_history - 1, {0, 0}));
+        const size_t channel_lookahead = qd_channel_lookahead_length(ptr->channel_model);
+        // 已等待收到 timestamp+nsamps；正传播时延保证这些前看样本已经到达。
+        AssertFatal(channel_offset >= channel_lookahead, "QD symmetric FIR needs sufficient bulk-delay buffer\n");
+        std::vector<std::vector<c16_t>> ant_buffers(ptr->nbAnt, std::vector<c16_t>(nsamps + channel_history - 1 + channel_lookahead, {0, 0}));
         c16_t *input[ant_buffers.size()];
         for (uint aatx = 0; aatx < ant_buffers.size(); aatx++) {
           input[aatx] = ant_buffers[aatx].data();
@@ -1347,7 +1350,7 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
                                ptr->received_packets,
                                timestamp - channel_offset - (channel_history - 1),
                                ptr->nbAnt,
-                               nsamps + channel_history - 1,
+                               nsamps + channel_history - 1 + channel_lookahead,
                                rx_beam_id,
                                input);
 
