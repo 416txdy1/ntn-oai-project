@@ -57,6 +57,41 @@ def _read_exact(stream: Any, size: int, label: str) -> bytes:
     return data
 
 
+def _validate_fidelity(report: dict, antenna: dict, times: tuple[float, ...]) -> None:
+    """声明精度时检查数值预算；没有报告的旧数据不视为 1% 合格。"""
+    _require(isinstance(report, dict), "fidelity 必须为对象")
+    for key in ("tolerance", "bandwidth_hz", "temporal_worst_nrmse", "temporal_global_nrmse",
+                "spatial_continuous_band_bound", "combined_bound_at_reference_times",
+                "minimum_interval_s", "maximum_interval_s"):
+        value = report.get(key)
+        _require(isinstance(value, (int, float)) and not isinstance(value, bool)
+                 and math.isfinite(value) and value >= 0, f"fidelity.{key} 非法")
+    _require(report["tolerance"] == 0.01 and report["bandwidth_hz"] == 4.5e6,
+             "fidelity 必须使用 4.5 MHz 和 1% 门限")
+    temporal = report["temporal_worst_nrmse"]
+    spatial = report["spatial_continuous_band_bound"]
+    _require(report["temporal_global_nrmse"] <= temporal, "fidelity 全局误差大于最差误差")
+    combined = temporal*(1+spatial)+spatial
+    _require(math.isclose(report["combined_bound_at_reference_times"], combined, rel_tol=1e-9, abs_tol=1e-12)
+             and combined <= 0.01, "fidelity 组合误差超标或计算不一致")
+    _require(antenna.get("wideband_error_bound") == spatial
+             and antenna.get("validated_bandwidth_hz") == report["bandwidth_hz"], "fidelity 子阵误差记录不一致")
+    output = report.get("output_snapshots")
+    references = report.get("reference_snapshots")
+    _require(isinstance(output, int) and output == len(times) and isinstance(references, int)
+             and references > output, "fidelity 必须包含独立于输出节点的参考点")
+    intervals = [b-a for a, b in zip(times, times[1:])]
+    _require(math.isclose(report["minimum_interval_s"], min(intervals), rel_tol=1e-9, abs_tol=1e-12)
+             and math.isclose(report["maximum_interval_s"], max(intervals), rel_tol=1e-9, abs_tol=1e-12),
+             "fidelity 时间间隔与 bundle 不一致")
+    if "scope" in report:
+        _require(report["scope"] == "prefix_before_unchanged_legacy_tail", "fidelity 认证范围非法")
+        start, end = report.get("validated_time_start_s"), report.get("validated_time_end_s")
+        _require(start == times[0] and end in times and end > start, "fidelity 认证时间范围不一致")
+        _require(report.get("unchanged_tail_snapshots") == sum(t > end for t in times),
+                 "fidelity 未认证尾部数量不一致")
+
+
 def validate_bundle(root: Path) -> dict[str, Any]:
     root = Path(root)
     manifest_path = root / "manifest.json"
@@ -176,6 +211,9 @@ def validate_bundle(root: Path) -> dict[str, Any]:
         times = struct.unpack(f"<{snapshots}d", _read_exact(stream, snapshots * 8, "times"))
     _require(all(math.isfinite(value) for value in times), "times 包含非有限值")
     _require(all(left < right for left, right in zip(times, times[1:])), "times 必须严格递增")
+
+    if antenna_path.exists() and "fidelity" in antenna:
+        _validate_fidelity(antenna["fidelity"], antenna, times)
 
     group_links = rx_antennas * tx_antennas if spatial else 1
     group_paths = paths * group_links

@@ -1,4 +1,4 @@
-function manifest_path = export_stk_to_qdchannel(trace_path, output_dir, options)
+function [manifest_path, result] = export_stk_to_qdchannel(trace_path, output_dir, options)
 %EXPORT_STK_TO_QDCHANNEL 用 STK 轨迹驱动 QuaDRiGa 并导出 QDCHANNEL1。
 %
 % 示例：
@@ -32,10 +32,18 @@ if ~any(strcmp(options.link_direction, {'downlink', 'uplink'}))
 end
 
 trace = read_stktrace2(trace_path);
+explicit_grid = ~isempty(options.snapshot_times_s);
+if explicit_grid
+    trace = resample_stk_geometry(trace, [], [], options.snapshot_times_s);
+elseif ~isempty(options.snapshot_interval_s)
+    trace = resample_stk_geometry(trace, options.snapshot_interval_s, options.time_window_s);
+elseif ~isempty(options.time_window_s)
+    error('QDCHANNEL1:TimeWindow', '指定窗口时必须同时指定 snapshot_interval_s');
+end
 time_steps = diff(trace.times_s);
 update_rate_s = median(time_steps);
 tolerance = max(1e-9, abs(update_rate_s) * 1e-6);
-if any(abs(time_steps - update_rate_s) > tolerance)
+if ~explicit_grid && any(abs(time_steps - update_rate_s) > tolerance)
     error('QDCHANNEL1:TraceRate', 'QuaDRiGa 导出要求 STKTRACE2 使用均匀时间步长');
 end
 
@@ -70,8 +78,8 @@ layout.no_rx = 1;
 layout.rx_array = qd_arrayant('omni');
 layout.rx_array.center_frequency = options.center_frequency_hz;
 relative_times_s = trace.times_s - trace.times_s(1);
-layout.tx_track = make_track(tx_positions_m, relative_times_s, tx_name);
-layout.rx_track = make_track(rx_positions_m, relative_times_s, rx_name);
+layout.tx_track = make_track(tx_positions_m, relative_times_s, tx_name, explicit_grid);
+layout.rx_track = make_track(rx_positions_m, relative_times_s, rx_name, explicit_grid);
 if any(strcmp(options.antenna_profile, {'satellite_16x16_ground_omni', 'satellite_16x16_4port_ground_omni'}))
     layout.tx_array = create_satellite_array(options.center_frequency_hz);
     if strcmp(options.antenna_profile, 'satellite_16x16_4port_ground_omni')
@@ -100,7 +108,7 @@ else
     layout.tx_array.center_frequency = options.center_frequency_hz;
     antenna_metadata = struct('profile', 'omni', 'satellite_rf_ports', 1, 'ground_rf_ports', 1);
 end
-layout.update_rate = update_rate_s;
+if explicit_grid, layout.update_rate = []; else, layout.update_rate = update_rate_s; end
 layout.set_scenario(options.scenario);
 
 channels = layout.get_channels();
@@ -117,8 +125,39 @@ if ~isequal(size(coefficients), size(delays_s))
     error('QDCHANNEL1:IndividualDelay', '当前导出器要求 QuaDRiGa 提供逐天线路径时延');
 end
 
+if ~isempty(options.normalization_anchor_path)
+    % QuaDRiGa 的簇功率校正依赖生成网格；使用原完整轨迹的同一初始快照
+    % 固定各阵元/路径的实数缩放，防止分块后改变信道实现或出现幅度接缝。
+    anchor=load(options.normalization_anchor_path);
+    assert(anchor.frequency_hz==options.center_frequency_hz && ...
+        strcmp(anchor.trace_sha256,sha256_file(trace_path)) && anchor.random_seed==options.random_seed && ...
+        strcmp(anchor.scenario,options.scenario),'功率参考来源不匹配');
+    assert(trace.times_s(1)==anchor.time_s && isequal(size(coefficients(:,:,:,1)),size(anchor.coefficients)), ...
+        '分块生成必须保留共同初始快照');
+    current=coefficients(:,:,:,1);
+    assert(all(abs(current(:))>0) && all(abs(anchor.coefficients(:))>0),'零系数无法用初始点标定');
+    phase_difference=angle(current./anchor.coefficients);
+    assert(max(abs(phase_difference),[],'all')<1e-5,'QDCHANNEL1:AnchorPhase','分块信道相位不一致，禁止拼接');
+    coefficients=coefficients.*(abs(anchor.coefficients)./abs(current));
+    antenna_metadata.cluster_power_reference_sha256=sha256_file(options.normalization_anchor_path);
+end
+
+if ~isempty(options.diagnostic_mat_path)
+    % 诊断缓存只由调用者显式指定；保留未平均的逐阵元路径和时延。
+    positions = layout.tx_array.element_position;
+    assert(exist('beam_weights','var')==1, '逐阵元诊断仅支持阵列 profile');
+    frequency_hz = options.center_frequency_hz;
+    times_s = trace.times_s;
+    save(options.diagnostic_mat_path, 'coefficients','delays_s','beam_weights','positions','frequency_hz','times_s','-v7.3');
+end
 if strcmp(options.antenna_profile, 'satellite_16x16_4port_ground_omni')
+    element_coefficients=coefficients; element_delays=delays_s;
     [coefficients, delays_s, mapping] = combine_satellite_subarrays(coefficients, delays_s, beam_weights, layout.tx_array.element_position);
+    if ~isempty(options.fidelity_tolerance)
+        mapping.wideband_error_bound = certify_subarray_bandwidth(element_coefficients,element_delays,beam_weights,layout.tx_array.element_position,options.bandwidth_hz);
+        assert(mapping.wideband_error_bound<=options.fidelity_tolerance, 'QDCHANNEL1:WidebandTolerance', '子阵时延近似超过误差门限');
+        mapping.validated_bandwidth_hz = options.bandwidth_hz;
+    end
     fields = fieldnames(mapping);
     for k = 1:numel(fields), antenna_metadata.(fields{k}) = mapping.(fields{k}); end
     antenna_metadata.profile = options.antenna_profile;
@@ -150,12 +189,16 @@ metadata.scenario = options.scenario;
 metadata.random_seed = options.random_seed;
 metadata.stk_trace_sha256 = sha256_file(trace_path);
 metadata.antenna = antenna_metadata;
-manifest_path = write_qdchannel1( ...
-    output_dir, trace.times_s, coefficients, delays_s, residual_gain_db, metadata);
+result=struct('times_s',trace.times_s,'coefficients',coefficients,'delays_s',delays_s,'residual_gain_db',residual_gain_db,'metadata',metadata);
+if isempty(output_dir)
+    manifest_path='';
+else
+    manifest_path = write_qdchannel1(output_dir,trace.times_s,coefficients,delays_s,residual_gain_db,metadata);
+end
 end
 
 
-function track = make_track(positions_m, relative_times_s, name)
+function track = make_track(positions_m, relative_times_s, name, force_snapshots)
 % 使用非零占位长度创建对象，随后以 STK 的完整轨迹覆盖 positions。
 track = qd_track('linear', 1, 0);
 track.name = name;
@@ -163,7 +206,7 @@ track.initial_position = positions_m(:, 1);
 relative_positions_m = positions_m - positions_m(:, 1);
 segment_lengths_m = sqrt(sum(diff(relative_positions_m, 1, 2).^2, 1));
 cumulative_distance_m = [0, cumsum(segment_lengths_m)];
-if cumulative_distance_m(end) <= 1e-9
+if cumulative_distance_m(end) <= 1e-9 && ~force_snapshots
     % 静止端只保留一个点；get_channels 会按另一端的仿真时长自动展开。
     track.positions = zeros(3, 1);
 else
@@ -182,6 +225,13 @@ defaults = struct( ...
     'random_seed', 20260925, ...
     'sample_density', 2.1, ...
     'array_reference_frequency_hz', [], ...
+    'snapshot_interval_s', [], ...
+    'snapshot_times_s', [], ...
+    'fidelity_tolerance', [], ...
+    'bandwidth_hz', 4.5e6, ...
+    'time_window_s', [], ...
+    'diagnostic_mat_path', '', ...
+    'normalization_anchor_path', '', ...
     'antenna_profile', 'satellite_16x16_ground_omni', ...
     'quadriga_version', '');
 allowed = fieldnames(defaults);
@@ -210,6 +260,12 @@ if isempty(options.array_reference_frequency_hz)
     options.array_reference_frequency_hz = options.center_frequency_hz;
 end
 validateattributes(options.array_reference_frequency_hz, {'numeric'}, {'scalar','real','finite','positive'});
+validateattributes(options.bandwidth_hz, {'numeric'}, {'scalar','real','finite','positive'});
+if ~isempty(options.fidelity_tolerance)
+    validateattributes(options.fidelity_tolerance, {'numeric'}, {'scalar','real','finite','positive','<=',1});
+    assert(strcmp(options.antenna_profile,'satellite_16x16_4port_ground_omni'), '精度认证仅支持 4 子阵 profile');
+end
+assert(isempty(options.snapshot_times_s) || isempty(options.snapshot_interval_s), '不得同时指定均匀间隔和显式时间轴');
 if ~isscalar(options.random_seed) || options.random_seed < 0 || fix(options.random_seed) ~= options.random_seed
     error('QDCHANNEL1:Seed', 'random_seed 必须是非负整数');
 end

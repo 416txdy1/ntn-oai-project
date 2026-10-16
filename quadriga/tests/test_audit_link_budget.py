@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from quadriga.tools.audit_link_budget import LinkBudgetAuditError, audit_link_budget
+from quadriga.tools.audit_link_budget import LinkBudgetAuditError, audit_link_budget, _sample_trace
 from quadriga.tools.create_example_bundle import write_example_bundle
 
 
@@ -73,6 +73,19 @@ class LinkBudgetAuditTest(unittest.TestCase):
         report = audit_link_budget(self.bundle, self.trace)
         self.assertEqual(report["max_residual_gain_abs_db"], 0.0)
         self.assertAlmostEqual(report["combined_fspl_slope"], report["stk_fspl_slope"])
+
+    def test_independent_nonuniform_geometry(self) -> None:
+        rows = []
+        for t in (0, 2):
+            rows.append(dict(time=t, x=t**3, y=1, z=2, vx=3*t*t, vy=0, vz=0,
+                             dl_valid=float(t == 0), ul_valid=1))
+        values = _sample_trace(rows, [0, 0.13, 1.7, 2])
+        for row in values:
+            self.assertAlmostEqual(row["x"], row["time"]**3)
+            self.assertAlmostEqual(row["vx"], 3*row["time"]**2)
+        self.assertEqual([row["dl_valid"] for row in values], [1, 0, 0, 0])
+        with self.assertRaisesRegex(LinkBudgetAuditError, "超出"):
+            _sample_trace(rows, [-0.01, 2])
 
     def test_range_dependent_residual_is_rejected(self) -> None:
         distances = (1_000_000.0, 1_200_000.0, 1_500_000.0)

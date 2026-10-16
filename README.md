@@ -68,6 +68,8 @@ python3 scripts/validate_spatial.py --ports 4
 
 四子阵保留四路 IQ，不合成为单 RF 端口；256 个物理阵元不等于 256 个独立 RF 通道。以上有界业务测试不代表完整过境、绝对 EIRP 或容量对比验收。
 
+精度提示：原 1 秒快照不能视为通过 4.5 MHz 带内 1% 频响验收。逐采样运行时修复、自适应真实 QD 生成、独立参考验算及覆盖范围见 [信道精度修复记录](docs/MISO_FIDELITY_20261016.md)。既有示例数据保留供历史对照。
+
 ## 源码变更与许可
 
 OAI 来源版本、排除项见 `vendor/source-manifest.json`。修改 OAI 请编辑 `oai_patch/current/`；QD C 模块编辑 `quadriga/oai/`，然后重新运行 `scripts/build.sh`。解包树是生成产物，重建时会同步这些覆盖文件。
