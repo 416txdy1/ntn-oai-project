@@ -1,6 +1,6 @@
 # Integration source preservation inventory
 
-Frozen Git inventory at 71043d0a718e5d67406f544e1248de4e087068c5, excluding this inventory itself. The only
+Frozen Git inventory at b17f78c88f10365e7b3f11af11920dfb8453b6ad, excluding this inventory itself. The only
 subsequent change is this generated review document. Tested code commit is
 e066b99558be686aecff7d41d0ed9eadffb8ef74; later changes are the original-platform verification tool and its
 tests atae3723e7caa8fa95fb47ede327582396c29dc498, README/documentation and
@@ -65,7 +65,7 @@ so their published SHA256 values remain reproducible.
 | docs/DEBUG_ZKY.md | unchanged zky | b602e1dc03085097d9cfa7bc2482d88b449475d2 |
 | docs/FULL_PASS_ACCEPTANCE_20261002.md | unchanged zky | a3ab096a1a443f4a1ac395fdd334d43d08494781 |
 | docs/INTEGRATED_HANDOVER.md | new integration content | fc7e64e0dad2f954d699d0581d611cffe0ce2470 |
-| docs/INTEGRATION_TEST_RESULTS.md | new integration content | 1fca333c0a17f9801abc2c28779b8ed8b9377958 |
+| docs/INTEGRATION_TEST_RESULTS.md | new integration content | e93ffefcd5c3a880045b8d0286f0db51434ca013 |
 | docs/SELF_CONTAINED_VALIDATION.md | unchanged zky | 192a2ea94ea2f2c4e231569b40b6215d41c201ec |
 | docs/continuous-handover-acceptance.md | new integration content | 71f990c84d9d4060d27ffb7a8ca67226eb342a6f |
 | docs/prach-centered-search.md | new integration content | 1a813bb9c9be63b57699c7e65e60fccfe12c1bd9 |
