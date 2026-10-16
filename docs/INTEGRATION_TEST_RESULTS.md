@@ -632,3 +632,27 @@ backup regressions pass in `python3 scripts/test_original_platform_check.py`
 (32 tests). This changes verification tooling, not the accepted runtime code,
 OAI overlays, binaries, channel generator or business gates. Full verifier
 suite and a new original-platform business recheck remain required.
+
+Original attempt integration-final-16p also FAILED before business counts,
+with ValueError/cleanup RuntimeError during UE launch. Its archived startup
+markers show both launchers started; later read-only collection of the same
+four native processes passed. The original exception text was not retained,
+so the precise transient cannot be uniquely identified from this evidence.
+Both groups502053/502159 and their verified network236/235 were subsequently
+cleaned by the identity-based checker; the missing prior PID state was restored
+as missing and protected source/template/binary/container/network differences
+were[]. This second failure is not a passing original-platform test.
+
+Further verifier-only regressions reproduce legitimate temporary descendants
+of a verified launch group and stale bash-to-ip executable snapshots. Helpers
+are ignored only with a still-matching recorded leader, own token throughout
+a bounded ancestry chain, matching session/group, and stable identities.
+They never become independent process-state owners. Fresh executable identity
+may be revalidated once under the same PID/start; PID reuse and unknown live
+processes remain errors. Already-exited temporary processes claim no resources.
+Private exception tracebacks are now saved inside the private run output;
+the public result still contains only exception types. The actual Linux fork,
+different-binary helper, foreign token/ancestry/reused PID rejection and state
+backup regressions pass: `python3 scripts/test_original_platform_check.py`,
+34 tests exit0. The simulator runtime files,32 OAI overlays and six binaries
+remain unchanged; full auxiliary regressions and new original recheck pending.

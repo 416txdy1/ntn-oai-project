@@ -318,6 +318,9 @@ class ConcreteBoundaryTests(unittest.TestCase):
             ops.records['777']={'pid':777,'start':'99','executable':'/usr/bin/bash','phase':'launching','expected_executable':target}
             with patch.object(protection,'process_identity',return_value=('99',ip)),patch.object(protection.os,'getpgid',return_value=777),patch.object(protection.os,'getsid',return_value=777),patch.object(protection,'process_argv',return_value=argv),patch.object(protection,'ip_executable',return_value=ip,create=True),patch.object(protection,'process_cwd',return_value=str(protection.BUILD),create=True),patch.object(protection,'original_initial_delay',return_value='3.125000000000',create=True):
                 record=ops.approved_process(777,('99',ip),'ue')
+                stale=ops.approved_process(777,('99','/usr/bin/bash'),'ue')
+                self.assertEqual(stale['expected_executable'],target)
+                with self.assertRaises(ValueError):ops.approved_process(777,('reused','/usr/bin/bash'),'ue')
                 ops.remember(777,('99',ip),record)
             self.assertEqual(ops.records['777']['expected_executable'],target)
             import run_state
@@ -362,6 +365,41 @@ class ConcreteBoundaryTests(unittest.TestCase):
             finally:
                 if identity and protection.process_identity(child.pid)==identity:os.killpg(child.pid,signal.SIGTERM)
                 child.wait(timeout=5);child.stdout.close()
+
+    def test_verified_launcher_group_helper_and_foreign_boundaries(self):
+        with tempfile.TemporaryDirectory() as d:
+            ops=self.make_ops(Path(d))
+            process=subprocess.Popen([sys.executable,'-c',
+              'import subprocess,time; p=subprocess.Popen(["sleep","30"]); print(p.pid,flush=True); time.sleep(30)'],
+              env=ops.environment,stdout=subprocess.PIPE,text=True,start_new_session=True)
+            identity=None
+            try:
+                pid=int(process.stdout.readline());identity=protection.process_identity(process.pid)
+                helper=protection.process_identity(pid);self.assertIsNotNone(helper)
+                ops.expected={identity[1]}
+                ops.records[str(process.pid)]={'pid':process.pid,'start':identity[0],'executable':identity[1]}
+                self.assertFalse(ops.native_fork_child(pid,helper))
+                self.assertTrue(ops.verified_group_descendant(pid,helper))
+                self.assertIsNone(ops.approved_process(pid,helper))
+                with self.assertRaises(ValueError):ops.approved_process(pid,helper,'ue')
+                with patch.object(ops,'has_token',return_value=False):self.assertFalse(ops.verified_group_descendant(pid,helper))
+                with patch.object(protection,'process_parent',return_value=1):self.assertFalse(ops.verified_group_descendant(pid,helper))
+                ops.records[str(process.pid)]['start']='reused'
+                self.assertFalse(ops.verified_group_descendant(pid,helper))
+                ops.records.clear()
+                with self.assertRaises(ValueError):ops.approved_process(pid,helper)
+            finally:
+                if identity and protection.process_identity(process.pid)==identity:os.killpg(process.pid,signal.SIGTERM)
+                process.wait(timeout=5);process.stdout.close()
+
+    def test_disappeared_helper_is_ignored_but_unknown_live_process_is_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            ops=self.make_ops(Path(d));identity=('99','/foreign/unknown')
+            for error in (ValueError,ProcessLookupError):
+                with patch.object(Path,'iterdir',return_value=iter([Path('/proc/777')])),patch.object(protection,'process_identity',side_effect=[identity,None]),patch.object(ops,'has_token',return_value=True),patch.object(ops,'approved_process',side_effect=error):
+                    ops.collect()
+                with patch.object(Path,'iterdir',return_value=iter([Path('/proc/777')])),patch.object(protection,'process_identity',return_value=identity),patch.object(ops,'has_token',return_value=True),patch.object(ops,'approved_process',side_effect=error):
+                    with self.assertRaises(error):ops.collect()
 
     def test_prior_inactive_state_is_durably_saved_before_launch(self):
         import hashlib

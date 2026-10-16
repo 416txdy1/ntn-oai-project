@@ -3,7 +3,7 @@ A Task8 snapshot cannot reconstruct the missing Task1 dirty-source baseline.
 """
 import argparse
 from datetime import datetime,timezone
-import hashlib,json,os,re,secrets,shutil,signal,stat,subprocess,sys,time
+import hashlib,json,os,re,secrets,shutil,signal,stat,subprocess,sys,time,traceback
 from pathlib import Path
 from types import SimpleNamespace
 ROOT=Path(__file__).resolve().parents[1]
@@ -157,7 +157,11 @@ def run_short(ops):
         ops.preflight();ops.core_up();ops.network_up();ops.start();values=ops.business();result.update(values)
         result['passed']=(values['ping']==dict(sent=30,received=30) and
           all(values[k]['total']>0 and values[k]['lost']==0 for k in ('uplink','downlink')))
-    except (Exception,KeyboardInterrupt) as error:result['error']=type(error).__name__
+    except (Exception,KeyboardInterrupt) as error:
+        result['error']=type(error).__name__
+        if hasattr(ops,'record_private_failure'):
+            try:ops.record_private_failure('run')
+            except Exception as diagnostic_error:result['private_diagnostic_error']=type(diagnostic_error).__name__
     finally:
         previous={sig:signal.getsignal(sig) for sig in (signal.SIGINT,signal.SIGTERM)}
         for sig in previous:signal.signal(sig,signal.SIG_IGN)
@@ -282,8 +286,18 @@ class OriginalShortRun:
         try:return ('OAI_ORIGINAL_CHECK_TOKEN='+self.token).encode() in Path(f'/proc/{pid}/environ').read_bytes().split(b'\0')
         except (FileNotFoundError,PermissionError,ProcessLookupError):return False
     def approved_process(self,pid,identity,kind=None):
+        try:return self._approved_process(pid,identity,kind)
+        except (OSError,ValueError):
+            current=process_identity(pid)
+            if current is None:
+                if kind is None:return None
+                raise
+            if current[0]==identity[0] and current[1]!=identity[1]:
+                return self._approved_process(pid,current,kind)
+            raise
+    def _approved_process(self,pid,identity,kind=None):
         if os.getpgid(pid)!=pid or os.getsid(pid)!=pid:
-            if kind is None and self.native_fork_child(pid,identity):return None
+            if kind is None and (self.native_fork_child(pid,identity) or self.verified_group_descendant(pid,identity)):return None
             raise ValueError('Unapproved launch session/group')
         expected={k:str((BUILD/('nr-softmodem' if k=='gnb' else 'nr-uesoftmodem')).resolve()) for k in ('gnb','ue')}
         if identity[1] in expected.values():
@@ -331,6 +345,33 @@ class OriginalShortRun:
                 or not self.has_token(pid) or not self.has_token(leader)):return False
             return process_identity(pid)==identity and process_identity(leader)==parent
         except (OSError,ValueError,IndexError):return False
+    def verified_group_descendant(self,pid,identity):
+        """Transient helpers inherit a verified launch group, token and ancestry."""
+        try:
+            leader=os.getpgid(pid);record=self.records.get(str(leader))
+            if leader==pid or not record or os.getsid(pid)!=leader:return False
+            parent=process_identity(leader)
+            allowed={record.get('executable')}
+            if record.get('phase')=='launching':allowed.add(record.get('expected_executable'))
+            if (not parent or parent[0]!=record.get('start') or parent[1] not in allowed
+                or os.getpgid(leader)!=leader or os.getsid(leader)!=leader
+                or not self.has_token(leader)):return False
+            if (record.get('executable') not in self.expected and not
+                (record.get('phase')=='launching' and record.get('expected_executable') in self.expected)):return False
+            chain={};node=pid
+            for _ in range(16):
+                if node==leader:
+                    return (process_identity(pid)==identity and process_identity(leader)==parent
+                      and all(process_identity(n)==value for n,value in chain.items()))
+                value=process_identity(node)
+                if (value is None or node in chain or os.getpgid(node)!=leader
+                    or os.getsid(node)!=leader or not self.has_token(node)):return False
+                chain[node]=value;node=process_parent(node)
+            return False
+        except (OSError,ValueError,IndexError):return False
+    def record_private_failure(self,phase):
+        self.counter+=1
+        save_new(self.output/f'failure-{self.counter}.json',{'phase':phase,'traceback':traceback.format_exc()})
     def remember(self,pid,identity,launch_record=None):
         previous=self.records.get(str(pid))
         if previous:
@@ -367,7 +408,10 @@ class OriginalShortRun:
                 allowed={self.controller_record['executable'],self.controller_record.get('expected_executable')}
                 if parent and parent[0]==self.controller_record['start'] and parent[1] in allowed:
                     if os.getpgid(pid)==self.controller.pid and os.getsid(pid)==self.controller.pid:continue
-            record=self.approved_process(pid,identity)
+            try:record=self.approved_process(pid,identity)
+            except (OSError,ValueError):
+                if process_identity(pid) is None:continue
+                raise
             if record:self.remember(pid,identity,record)
 
     def start(self):
@@ -418,9 +462,13 @@ class OriginalShortRun:
 
     def cleanup(self):
         errors=[]
+        def failed(phase,error):
+            errors.append(type(error).__name__)
+            try:self.record_private_failure(phase)
+            except Exception:pass
         if self.controller:
             try:stop_child(self.controller,self.controller_record,self.output/'controller-owned.json',self.tag)
-            except Exception as error:errors.append(type(error).__name__)
+            except Exception as error:failed('controller',error)
         try:
             self.collect()
             if self.records:
@@ -429,24 +477,24 @@ class OriginalShortRun:
                 stop_owned(state_file,self.tag)
             if any(process_identity(r['pid']) is not None and self.has_token(r['pid']) for r in self.records.values()):
                 raise RuntimeError('Owned process retained')
-        except Exception as error:errors.append(type(error).__name__)
+        except Exception as error:failed('collect-or-stop',error)
         if not errors and self.owner is not None:
             try:release_network(self.manager,self.owner)
-            except Exception as error:errors.append(type(error).__name__)
+            except Exception as error:failed('network',error)
         if self.state_owned and not errors:
             try:self.restore_state()
-            except Exception as error:errors.append(type(error).__name__)
+            except Exception as error:failed('state',error)
         if self.logs_claimed:
             for path in self.log_paths:
                 if path.is_file() and not path.is_symlink():
                     try:shutil.move(str(path),str(self.output/path.name))
-                    except Exception as error:errors.append(type(error).__name__)
+                    except Exception as error:failed('archive-log',error)
         for name,expected in reversed(list(self.started.items())):
             try:
                 current=container_info(json.loads(command(['docker','inspect',expected['id']]))[0])
                 require_container_identity(expected,current)
                 if current['running']:self.capture('stop-'+name,['docker','stop','--time','10',expected['id']],25)
-            except Exception as error:errors.append(type(error).__name__)
+            except Exception as error:failed('core-stop',error)
         if errors:raise RuntimeError('Owned cleanup failed')
 
 class SignalGuard:
