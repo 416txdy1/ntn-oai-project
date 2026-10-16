@@ -589,3 +589,46 @@ and static90 tests. A failure remains a failure; no repeat-until-pass and no
 relaxation of five-wall-second delivery or one-percent loss gates. Full build,
 trace/IQ regressions, continuous business matrix, and original final platform
 recheck remain required before publishing this candidate.
+
+### 2026-10-16 runtime matrix passed; original verification harness correction
+
+Runtime commit e066b99558be686aecff7d41d0ed9eadffb8ef74 passed its entire
+prospectively declared matrix: two fresh firsthandover runs16e/16f, full620
+run16g, legacy620 run16h and static90 run16i. All used the same six binary
+hashes, DTX100/PDCP500/K80/seed20260925/diagnostics1-start0 and quarter-gain
+policy. The unchanged global/window loss and timely-delivery gates all passed.
+Full Ping923/923, UL11806/11806, DL11802/11805; both switch windows have zero
+loss and no missed timely-delivery deadlines. Full wall RTT mean196.939ms,
+first/second window means287.600/269.306ms. Legacy Ping259/259, UL3304/3304,
+DL3302/3303; static Ping104/104, UL1328/1328, DL1323/1327. Earlier failures
+remain failures. These results do not establish unset DTX/PDCP defaults.
+
+Final original check integration-final-16j FAILED before UE startup, with
+ValueError and cleanup RuntimeError; no Ping/UDP result was produced. The
+original native gNB forks a same-binary direct child in its launch group.
+The verification harness incorrectly demanded every token-bearing process
+be its own session/group leader. It rejected the native child and then
+rejected it again during cleanup, leaving this run's gNB group/network.
+Read-only process evidence confirmed exact executable/start identity, common
+private ownership token, direct parent, session and group. Recovery stopped
+only that verified group and removed only matching ifindex216/215 and
+namespace inode4026532897. After recovery no live/zombie modems remained and
+original source/template/binary/container/network comparison had differences[].
+
+The failed harness had kept prior inactive processes.json bytes only in
+memory. Their exact restoration cannot be proved after that process exited.
+Recovery archived then removed only this failed run's generated PID state;
+the next launch starts without a stale PID record. This generated runtime
+state exception is not a source/template/binary change and must remain
+disclosed. Do not claim byte-exact restoration of that pre-failure PID file.
+
+Verifier-only correction allows ignoring a native fork child only after
+same expected binary, private token on both processes, direct-parent,
+leader-session/group and stable identity checks. Child PIDs cannot satisfy
+an explicit gNB/UE ownership-state claim. Unknown children remain errors.
+Preflight now durably saves prior PID-state bytes and a private digest before
+starting resources. Actual Linux fork/token/parent/reuse rejection and private
+backup regressions pass in `python3 scripts/test_original_platform_check.py`
+(32 tests). This changes verification tooling, not the accepted runtime code,
+OAI overlays, binaries, channel generator or business gates. Full verifier
+suite and a new original-platform business recheck remain required.

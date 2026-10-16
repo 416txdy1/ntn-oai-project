@@ -39,6 +39,10 @@ def fingerprint(path):
 def process_cwd(pid):
     return Path(os.readlink(f'/proc/{pid}/cwd')).resolve()
 
+def process_parent(pid):
+    fields=Path(f'/proc/{pid}/stat').read_text().rsplit(')',1)[1].split()
+    return int(fields[1])
+
 def ip_executable():
     value=shutil.which('ip')
     if not value:raise ValueError('Local ip executable missing')
@@ -237,7 +241,15 @@ class OriginalShortRun:
             item=existing[name]
             if item['running'] or not item['labels']['com.docker.compose.service']:
                 raise ValueError('Original containers must be stopped and Compose-owned')
+        self.backup_prior_state()
         self.logs_claimed=True
+    def backup_prior_state(self):
+        save_new(self.output/'prior-state-metadata.json',{'exists':self.old_state is not None,
+          'sha256':hashlib.sha256(self.old_state).hexdigest() if self.old_state is not None else None})
+        if self.old_state is not None:
+            fd=os.open(self.output/'prior-state.bin',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            with os.fdopen(fd,'wb') as stream:
+                stream.write(self.old_state);stream.flush();os.fsync(stream.fileno())
     def core_up(self):
         for name in CORE_ORDER:
             expected=self.before['containers'][name]
@@ -271,6 +283,7 @@ class OriginalShortRun:
         except (FileNotFoundError,PermissionError,ProcessLookupError):return False
     def approved_process(self,pid,identity,kind=None):
         if os.getpgid(pid)!=pid or os.getsid(pid)!=pid:
+            if kind is None and self.native_fork_child(pid,identity):return None
             raise ValueError('Unapproved launch session/group')
         expected={k:str((BUILD/('nr-softmodem' if k=='gnb' else 'nr-uesoftmodem')).resolve()) for k in ('gnb','ue')}
         if identity[1] in expected.values():
@@ -307,6 +320,17 @@ class OriginalShortRun:
                 return self.approved_process(pid,current,'ue')
             raise ValueError('Launch identity changed while checking')
         return record
+    def native_fork_child(self,pid,identity):
+        """A native same-binary direct child belongs to its verified leader's group."""
+        try:
+            leader=os.getpgid(pid)
+            if leader==pid or os.getsid(pid)!=leader:return False
+            parent=process_identity(leader)
+            if (not parent or identity[1] not in self.expected or identity[1]!=parent[1]
+                or os.getsid(leader)!=leader or process_parent(pid)!=leader
+                or not self.has_token(pid) or not self.has_token(leader)):return False
+            return process_identity(pid)==identity and process_identity(leader)==parent
+        except (OSError,ValueError,IndexError):return False
     def remember(self,pid,identity,launch_record=None):
         previous=self.records.get(str(pid))
         if previous:

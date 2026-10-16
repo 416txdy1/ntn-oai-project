@@ -2,7 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
-import signal,sys
+import signal,sys,os
 import subprocess
 import tempfile
 import unittest
@@ -336,5 +336,47 @@ class ConcreteBoundaryTests(unittest.TestCase):
                     with self.assertRaises(ValueError):ops.approved_process(777,('99',ip),'ue')
             with patch.object(protection.os,'getpgid',return_value=777),patch.object(protection.os,'getsid',return_value=777),patch.object(protection,'ip_executable',return_value=ip,create=True):
                 with self.assertRaises(ValueError):ops.approved_process(777,('99',ip),'gnb')
+
+    def test_real_native_fork_child_belongs_to_verified_leader(self):
+        with tempfile.TemporaryDirectory() as d:
+            ops=self.make_ops(Path(d))
+            child=subprocess.Popen([sys.executable,'-c',
+              'import os,time; p=os.fork(); print(p,flush=True) if p else None; time.sleep(30)'],
+              env=ops.environment,stdout=subprocess.PIPE,text=True,start_new_session=True)
+            identity=None
+            try:
+                pid=int(child.stdout.readline());identity=protection.process_identity(child.pid)
+                self.assertIsNotNone(identity)
+                ops.expected={identity[1]}
+                fork_identity=protection.process_identity(pid)
+                self.assertTrue(ops.native_fork_child(pid,fork_identity))
+                self.assertIsNone(ops.approved_process(pid,fork_identity))
+                with patch.object(ops,'has_token',return_value=False):
+                    self.assertFalse(ops.native_fork_child(pid,fork_identity))
+                    with self.assertRaises(ValueError):ops.approved_process(pid,fork_identity)
+                with patch.object(protection,'process_parent',return_value=1):
+                    self.assertFalse(ops.native_fork_child(pid,fork_identity))
+                with patch.object(protection,'process_identity',side_effect=[identity,fork_identity,('reused',identity[1])]):
+                    self.assertFalse(ops.native_fork_child(pid,fork_identity))
+                self.assertFalse(ops.native_fork_child(pid,('start','/foreign/binary')))
+            finally:
+                if identity and protection.process_identity(child.pid)==identity:os.killpg(child.pid,signal.SIGTERM)
+                child.wait(timeout=5);child.stdout.close()
+
+    def test_prior_inactive_state_is_durably_saved_before_launch(self):
+        import hashlib
+        for old in (None,b'{"gnb": {"pid": 999999, "start": "1"}}\n'):
+            with tempfile.TemporaryDirectory() as d:
+                ops=self.make_ops(Path(d));ops.old_state=old
+                with patch.object(protection,'ROOT',Path(d)):ops.backup_prior_state()
+                meta=json.loads((ops.output/'prior-state-metadata.json').read_text())
+                self.assertEqual(meta['exists'],old is not None)
+                backup=ops.output/'prior-state.bin'
+                if old is None:self.assertFalse(backup.exists())
+                else:
+                    self.assertEqual(backup.read_bytes(),old)
+                    self.assertEqual(meta['sha256'],hashlib.sha256(old).hexdigest())
+                    self.assertEqual(backup.stat().st_mode&0o777,0o600)
+                with patch.object(protection,'ROOT',Path(d)),self.assertRaises(FileExistsError):ops.backup_prior_state()
 
 if __name__=='__main__':unittest.main()
