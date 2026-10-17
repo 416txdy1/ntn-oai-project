@@ -10,7 +10,9 @@ case "${OAI_SPATIAL_MODE:-siso}" in
  *) echo "不支持的空间模式"; exit 2 ;;
 esac
 python3 scripts/test_full_pass.py
+python3 scripts/test_iq_udp.py
 python3 scripts/test_spatial_audit.py
+python3 local_ntn/test_feedback_diagnostics.py
 python3 scripts/test_monotonic_ping.py
 python3 local_ntn/test_blend_interpolation.py
 python3 local_ntn/test_stk_timing_assist.py
