@@ -167,3 +167,21 @@ python3 quadriga/tests/run_qd_channel_reader_tests.py
 长期业务对照 `fullpass-1792168657107651033` 在 IQ 约25秒时出现持续积压：RTT最高129秒，UL/DL约80/78 Kbit/s，低于100 Kbit/s发送量；虽然 PBCH 为0，仍不合格，已停止并保留失败结果。正在验证等价 AVX2 双精度12点点积优化，不能把这次早期积压归入原尾部失败。
 
 完整回归结果：通过 scripts/wsl_lab.sh build 调用 scripts/build.sh 成功；运行副本执行 bash scripts/test.sh（默认1×1基线）及 bash scripts/test_fidelity.sh 均退出0。后者同时通过双向报告绑定、链路预算、C reader 和 ASan/UBSan IQ测试。DL 4097/324097个候选时刻，最大误差2.21289612e-11；UL 4097/307117个候选时刻，最大误差1.48960129e-11，四种时钟速率与静音边界均通过。日志：.runtime/fidelity-scientific-regression.log、.runtime/fidelity-full-regression.log（运行副本）。
+
+#### 4×1 FIR 向量化与实际采样率回归
+
+对称12点核保留不变；AVX2 分支以共享乘积计算 Lagrange 权重，再执行四路双精度点积。不使用时延量化或近似查表，不支持 AVX2 时保留前后缀积标量实现。独立微基准（300万次变化分数时延）中，向量权重耗时0.0839秒，前后缀权重0.1159秒，输出差最大5.46e-12；该结果不能替代业务吞吐测试。
+
+测试入口新增 --sample-rate，默认保留30.72 Msps，完整信道回归明确使用业务7.68 Msps。执行：
+
+```bash
+source scripts/env_subarray4.sh
+bash scripts/test.sh
+bash scripts/test_fidelity.sh
+```
+
+通过 scripts/wsl_lab.sh build 调用标准构建成功，以上两项退出0。7.68 Msps下双向4097分层时刻、四种时钟速率及静音边界通过ASan/UBSan：DL最大误差2.93303228e-11，UL1.6512793e-11。日志为运行副本 .runtime/fidelity-vector-regression.log、fidelity-vector-full-regression.log。
+
+新密集数据业务首轮 fullpass-1792203404680158080 初始同步失败，PDU timeout；同一版本复验 fullpass-1792203659321859165 建立PDU，但到IQ21仍有积压（RTT最大7.70秒，ping230/227，DL收发差64包），已中止并保留失败记录。不能把这些失败归入原末尾故障。
+
+向量权重版本 fullpass-1792204181467086862 正在运行，截至IQ26，ping已连续收到1–292，最近RTT约1.4秒，PBCH失败0。**完整361秒验收尚未完成**，此记录仅证明当前阶段进展。独立逐字节比较确认新数据双向末尾4个快照的时间、时延、系数、增益与原 examples/fdd-miso4-subarray 一致。

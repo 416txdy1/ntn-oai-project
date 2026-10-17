@@ -2,6 +2,7 @@
 from __future__ import annotations
 import argparse
 import json
+import math
 import shlex
 import subprocess
 import tempfile
@@ -45,9 +46,13 @@ def main() -> int:
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--trace", type=Path, required=True)
     parser.add_argument("--sanitize", action="store_true")
+    parser.add_argument("--sample-rate", type=float, default=30720000,
+                        help="IQ 采样率；完整业务使用 7680000 Hz")
     parser.add_argument("--max-points", type=int, default=0,
                         help="大规模 bundle 的确定性分层检查数量；0 表示全部节点及中点")
     args = parser.parse_args()
+    if not math.isfinite(args.sample_rate) or args.sample_rate <= 0:
+        parser.error('--sample-rate 必须为有限正数')
     if args.max_points < 0 or args.max_points == 1:
         parser.error('--max-points 必须为0或至少2')
     oai_repo = args.oai_repo.resolve()
@@ -61,7 +66,8 @@ def main() -> int:
         run(["cc", *flags, str(source), str(rfsim / "qd_channel_reader.c"),
              str(rfsim / "qd_channel_adapter.c"), "-lcrypto", "-lm", "-lpthread",
              "-o", str(executable)], build)
-        run([str(executable), str(args.bundle.resolve()), str(args.trace.resolve()), str(args.max_points)], build)
+        run([str(executable), str(args.bundle.resolve()), str(args.trace.resolve()), str(args.max_points),
+             str(args.sample_rate)], build)
     return 0
 
 

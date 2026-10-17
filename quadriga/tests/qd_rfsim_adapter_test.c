@@ -73,8 +73,10 @@ static double reference_input(const c16_t *input, size_t current, double delay, 
 
 int main(int argc, char **argv)
 {
-  assert(argc == 3 || argc == 4);
-  const size_t requested_checks = argc == 4 ? strtoull(argv[3], NULL, 10) : 0;
+  assert(argc >= 3 && argc <= 5);
+  const size_t requested_checks = argc >= 4 ? strtoull(argv[3], NULL, 10) : 0;
+  const double sampling_rate = argc == 5 ? strtod(argv[4], NULL) : 30720000.0;
+  assert(isfinite(sampling_rate) && sampling_rate > 0);
   assert(requested_checks == 0 || requested_checks >= 2);
   setenv("OAI_QD_CHANNEL", argv[1], 1);
   setenv("OAI_STK_TRACE", argv[2], 1);
@@ -88,7 +90,7 @@ int main(int argc, char **argv)
   memset(phase, 0, sizeof(phase));
   channel_desc_t channel = {
       .nb_tx = reference.tx_antennas, .nb_rx = reference.rx_antennas,
-      .channel_length = 1, .sampling_rate = 30720000.0,
+      .channel_length = 1, .sampling_rate = sampling_rate,
       .center_freq = (uint64_t)reference.center_frequency_hz,
       .Doppler_phase_cur = phase, .is_uplink = uplink,
   };

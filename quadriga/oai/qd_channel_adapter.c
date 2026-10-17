@@ -242,6 +242,20 @@ static void fractional_sample(const c16_t *input, size_t current, size_t integer
    * 这是同一多项式的代数改写，不引入查表或分数时延量化。 */
   /* 完全相等才复用；静态链路和固定时延 tap 不必重复计算同一组权重。 */
   if (fraction != *last_fraction) {
+#if defined(__GNUC__) && defined(__AVX2__)
+    /* fraction 在 (0,1)，与12个整数节点均不重合。共享完整乘积，
+     * 再并行除去各节点因子；仍是精确的 Lagrange 公式，无量化。 */
+    typedef double qd_weight4 __attribute__((vector_size(32)));
+    double product = fraction * (fraction - 1);
+    for (int j = 1; j <= 5; j++) product *= (fraction + j) * (fraction - j - 1);
+    for (int j = 0; j < 12; j += 4) {
+      const qd_weight4 denominator = {fraction-(j-5), fraction-(j-4), fraction-(j-3), fraction-(j-2)};
+      const qd_weight4 scale = {inverse_denominator[j], inverse_denominator[j+1],
+                                inverse_denominator[j+2], inverse_denominator[j+3]};
+      const qd_weight4 result = (product * scale) / denominator;
+      memcpy(weights + j, &result, sizeof(result));
+    }
+#else
     double prefix[13];
     prefix[0] = 1;
     for (int j = 0; j < 12; j++) prefix[j + 1] = prefix[j] * (fraction - (j - 5));
@@ -250,15 +264,35 @@ static void fractional_sample(const c16_t *input, size_t current, size_t integer
       weights[j] = prefix[j] * suffix * inverse_denominator[j];
       suffix *= fraction - (j - 5);
     }
+#endif
     *last_fraction = fraction;
   }
   *real = *imag = 0;
   const size_t first = current - integer_delay + 5;
+#if defined(__GNUC__) && defined(__AVX2__)
+  /* 四路双精度并行点积；仅改变浮点求和次序，保留同一12点核。
+   * 不支持 AVX2 的目标沿用下面的标量实现。 */
+  typedef double qd_double4 __attribute__((vector_size(32)));
+  qd_double4 sum_real = {0, 0, 0, 0}, sum_imag = {0, 0, 0, 0};
+  for (int j = 0; j < 12; j += 4) {
+    const qd_double4 w = {weights[j], weights[j+1], weights[j+2], weights[j+3]};
+    const qd_double4 r = {input[first-j].r, input[first-j-1].r, input[first-j-2].r, input[first-j-3].r};
+    const qd_double4 i = {input[first-j].i, input[first-j-1].i, input[first-j-2].i, input[first-j-3].i};
+    sum_real += w * r;
+    sum_imag += w * i;
+  }
+  *real = (sum_real[0] + sum_real[1]) + (sum_real[2] + sum_real[3]);
+  *imag = (sum_imag[0] + sum_imag[1]) + (sum_imag[2] + sum_imag[3]);
+#else
+  double sum_real = 0, sum_imag = 0;
   for (int j = 11; j >= 0; j--) {
     const double weight = weights[j];
-    *real += weight * input[first - j].r;
-    *imag += weight * input[first - j].i;
+    sum_real += weight * input[first - j].r;
+    sum_imag += weight * input[first - j].i;
   }
+  *real = sum_real;
+  *imag = sum_imag;
+#endif
 }
 
 bool qd_channel_convolve(channel_desc_t *channel, c16_t **input, int rx_antenna,
