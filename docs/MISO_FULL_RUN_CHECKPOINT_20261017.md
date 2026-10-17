@@ -56,3 +56,13 @@ wsl -d Ubuntu-22.04 -u root -- python3 /mnt/d/synching_study/jingwenpeng/2026aut
 原始modem日志仍只留在运行副本 local_ntn/，不得提交或发布。检查点与大数据留在忽略目录.runtime/。仓库其他人的三个文档改动继续保护。
 
 当前业务进程保持运行；请保留机器、WSL和测试进程。会话换轮本身不要求重跑，但机器/WSL停止会丢失协议栈内存状态；已有数值回归、生成缓存和已落盘观测仍然有效。
+
+## 2026-10-17 后续检查：原进程已中断
+
+实时核对发现原PID2354不存在，WSL为新启动状态；没有最终full_pass报告。实际modem日志停在IQ约188.999秒，ping连续收到1–2376，最后RTT约340.5秒，PBCH失败0。检查点最后更新时间为北京时间15:13:41，原latest中的running是历史状态，不能作为当前进程存活证明。
+
+已保存的history显示：IQ111秒RTT约1.32秒，IQ131秒约60.35秒，IQ147秒约168.96秒，IQ164秒约280.21秒。北京时间11:12至15:08存在约14214秒记录间隔，但积压在该间隔之前已经出现。不能只归因中断，也不能将本轮视为仅末尾失败。原生成与精度验证继续有效，不重做百万QD参考。
+
+已实施同一快照区间内4个相邻IQ样本并行计算，每个样本保留独立时延、插值系数与12点核；跨区间和不足4样本沿用原处理。实际完整信道0/120/240秒位置，每方向每次处理1024000个样本，旧DL耗时1.406/1.366/1.414秒，新DL0.906/0.912/0.930秒；旧UL1.497/1.424/1.430秒，新UL0.981/0.933/0.931秒。输出校验值一致，速度提升约1.5倍；该局部基准不等于完整业务已通过。
+
+执行标准scripts/wsl_lab.sh build（内部scripts/build.sh）、source scripts/env_subarray4.sh后bash scripts/test.sh、bash scripts/test_fidelity.sh均退出0。完整7.68Msps回归双向4097时刻、四种时钟速率、静音边界通过ASan/UBSan。日志为运行副本.runtime/fidelity-four-sample-regression.log和fidelity-four-sample-full-regression.log；对照基准保存在源仓库.runtime/fidelity-four-sample-benchmark.log。

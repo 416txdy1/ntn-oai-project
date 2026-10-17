@@ -295,6 +295,71 @@ static void fractional_sample(const c16_t *input, size_t current, size_t integer
 #endif
 }
 
+#if defined(__GNUC__) && defined(__AVX2__)
+typedef double qd_sample4 __attribute__((vector_size(32)));
+
+/* 同一快照区间内并行计算4个相邻IQ样本；每个样本仍有独立的
+ * 插值权重、时延及复系数。避免每个tap重复水平归约，不冻结信道。 */
+static void convolve_four(const qd_runtime_state_t *state, c16_t **input, int rx,
+                          size_t current, size_t lower, size_t upper,
+                          qd_sample4 weight, double sampling_rate, struct complexd *output)
+{
+  const qd_channel_t *bundle = &state->bundle;
+  const size_t links = bundle->rx_antennas * bundle->tx_antennas;
+  const qd_sample4 inverse = 1.0 - weight;
+  qd_sample4 out_r = {0,0,0,0}, out_i = {0,0,0,0};
+  static const double denominator[12] = {
+    -1.0/39916800,1.0/3628800,-1.0/725760,1.0/241920,-1.0/120960,1.0/86400,
+    -1.0/86400,1.0/120960,-1.0/241920,1.0/725760,-1.0/3628800,1.0/39916800};
+  for (size_t tx = 0; tx < bundle->tx_antennas; tx++) {
+    const size_t link = (size_t)rx * bundle->tx_antennas + tx;
+    const size_t lo = lower * links + link, hi = upper * links + link;
+    qd_sample4 amplitude;
+    const qd_sample4 gains = inverse*bundle->residual_gain_db[lo] + weight*bundle->residual_gain_db[hi];
+    for (int k=0;k<4;k++) {
+      const float gain = (float)gains[k];
+      amplitude[k] = gain == 0 ? 1 : pow(10.0,gain/20.0);
+    }
+    for (size_t path=0;path<bundle->paths;path++) {
+      const size_t left=lo*bundle->paths+path, right=hi*bundle->paths+path;
+      const qd_sample4 delay=(inverse*bundle->delays_s[left]+weight*bundle->delays_s[right])*sampling_rate;
+      size_t whole[4]; bool integral[4]; qd_sample4 fraction;
+      for (int k=0;k<4;k++) {
+        whole[k]=(size_t)floor(delay[k]); fraction[k]=delay[k]-(double)whole[k];
+        integral[k]=fraction[k]==0;
+        /* 整数采样直接取原值；占位分数仅避免并行除法出现0/0。 */
+        if (integral[k]) fraction[k]=0.5;
+      }
+      qd_sample4 product=fraction*(fraction-1.0);
+      for (int j=1;j<=5;j++) product *= (fraction+j)*(fraction-j-1.0);
+      qd_sample4 in_r={0,0,0,0}, in_i={0,0,0,0};
+      for (int j=0;j<12;j++) {
+        const qd_sample4 w=(product*denominator[j])/(fraction-(j-5));
+        qd_sample4 r,i;
+        for (int k=0;k<4;k++) {
+          const c16_t value=input[tx][current+(size_t)k-whole[k]+5-j];
+          r[k]=value.r; i[k]=value.i;
+        }
+        in_r += w*r; in_i += w*i;
+      }
+      qd_sample4 real=inverse*bundle->coefficients[left].real+weight*bundle->coefficients[right].real;
+      qd_sample4 imag=inverse*bundle->coefficients[left].imag+weight*bundle->coefficients[right].imag;
+      for (int k=0;k<4;k++) {
+        if (integral[k]) {
+          in_r[k]=input[tx][current+(size_t)k-whole[k]].r;
+          in_i[k]=input[tx][current+(size_t)k-whole[k]].i;
+        }
+        real[k]=(float)real[k]; imag[k]=(float)imag[k];
+      }
+      real *= amplitude; imag *= amplitude;
+      out_r += in_r*real-in_i*imag;
+      out_i += in_i*real+in_r*imag;
+    }
+  }
+  for (int k=0;k<4;k++) {output[k].r=out_r[k];output[k].i=out_i[k];}
+}
+#endif
+
 bool qd_channel_convolve(channel_desc_t *channel, c16_t **input, int rx_antenna,
                          int samples, struct complexd *output)
 {
@@ -328,6 +393,23 @@ bool qd_channel_convolve(channel_desc_t *channel, c16_t **input, int rx_antenna,
     if (time_s < bundle->times_s[0] || time_s > bundle->times_s[bundle->snapshots - 1]) continue;
     while (lower + 1 < bundle->snapshots && bundle->times_s[lower + 1] <= time_s) lower++;
     upper = lower + 1 < bundle->snapshots ? lower + 1 : lower;
+#if defined(__GNUC__) && defined(__AVX2__)
+    if (sample + 3 < samples && upper != lower) {
+      double times[4] = {time_s,0,0,0};
+      for (int k=1;k<4;k++)
+        AssertFatal(stk_trace_time_at_timestamp(state->timestamp+(uint64_t)sample+k,
+                    channel->sampling_rate,&times[k]),"QD sample clock unavailable\n");
+      if (times[3] >= times[0] && times[3] < bundle->times_s[upper]) {
+        qd_sample4 weights;
+        for (int k=0;k<4;k++) weights[k]=(times[k]-bundle->times_s[lower])/
+            (bundle->times_s[upper]-bundle->times_s[lower]);
+        convolve_four(state,input,rx_antenna,state->history_samples-1+(size_t)sample,
+                      lower,upper,weights,channel->sampling_rate,output+sample);
+        sample += 3;
+        continue;
+      }
+    }
+#endif
     const double weight = upper == lower ? 0 :
         (time_s - bundle->times_s[lower]) / (bundle->times_s[upper] - bundle->times_s[lower]);
     const double inverse = 1 - weight;
