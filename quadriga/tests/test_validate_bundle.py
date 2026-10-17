@@ -47,9 +47,17 @@ class ValidateBundleTest(unittest.TestCase):
         path = self.root/'runtime_fidelity_report.json'
         path.write_text(json.dumps(report))
         self.assertTrue(validate_runtime_fidelity(self.root)['passed'])
+        scientific = dict(report, checked_reference_snapshots=1.299767e6,
+                          non_output_reference_snapshots=1.137722e6)
+        (self.root/'fidelity_report.json').write_text(json.dumps(dict(original, reference_snapshots=1.299767e6)))
+        path.write_text(json.dumps(scientific))
+        self.assertTrue(validate_runtime_fidelity(self.root)['passed'])
+        (self.root/'fidelity_report.json').write_text(json.dumps(original))
         for key, value in (('bundle_manifest_sha256', '0'*64), ('combined_bound', 0.001),
                            ('fir_worst_bound', float('nan')), ('non_output_reference_snapshots', 0),
                            ('checked_reference_snapshots', 10), ('sample_rate_hz', 30720000),
+                           ('non_output_reference_snapshots', 1.5), ('non_output_reference_snapshots', True),
+                           ('checked_reference_snapshots', float('inf')),
                            ('validated_time_end_s', summary['end_time_s']+1), ('passed', False)):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 path.write_text(json.dumps(dict(report, **{key:value})))
@@ -118,6 +126,7 @@ class ValidateBundleTest(unittest.TestCase):
         antenna = dict(wideband_error_bound=0.0001, validated_bandwidth_hz=4.5e6)
         times = (0.0, 0.001, 0.003)
         _validate_fidelity(report, antenna, times)
+        _validate_fidelity(dict(report, reference_snapshots=1.299767e6), antenna, times)
         prefix = dict(report, scope="prefix_before_unchanged_legacy_tail", validated_time_start_s=0.0,
                       validated_time_end_s=0.001, unchanged_tail_snapshots=1)
         _validate_fidelity(prefix, antenna, times)
@@ -125,6 +134,8 @@ class ValidateBundleTest(unittest.TestCase):
             _validate_fidelity(dict(prefix, unchanged_tail_snapshots=0), antenna, times)
         for key, value in (("temporal_worst_nrmse", 0.1), ("tolerance", 0.02),
                            ("reference_snapshots", 3), ("maximum_interval_s", 1),
+                           ("reference_snapshots", 11.5), ("reference_snapshots", True),
+                           ("reference_snapshots", float('inf')), ("reference_snapshots", 2**53),
                            ("combined_bound_at_reference_times", float("nan"))):
             with self.subTest(key=key), self.assertRaises(ValidationError):
                 _validate_fidelity(dict(report, **{key: value}), antenna, times)

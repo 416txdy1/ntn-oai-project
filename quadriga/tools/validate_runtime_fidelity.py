@@ -7,7 +7,7 @@ import json
 import math
 from pathlib import Path
 
-from quadriga.tools.validate_bundle import validate_bundle
+from quadriga.tools.validate_bundle import is_snapshot_count, validate_bundle
 
 
 def validate_runtime_fidelity(bundle: Path) -> dict:
@@ -41,7 +41,7 @@ def validate_runtime_fidelity(bundle: Path) -> dict:
         raise ValueError('运行时精度认证范围不一致')
     count = report.get('checked_reference_snapshots')
     holdout = report.get('non_output_reference_snapshots')
-    if not (type(count) is int and type(holdout) is int and 0 < holdout <= count
+    if not (is_snapshot_count(count) and is_snapshot_count(holdout) and 0 < holdout <= count
             and count == original.get('reference_snapshots')):
         raise ValueError('真实参考数量不足或缺少非输出节点')
     return report

@@ -318,6 +318,8 @@ static int token_string(const char *text, const json_token_t *token, char *outpu
   return 1;
 }
 
+static int token_double_value(const char *text, const json_token_t *token, double *output);
+
 static int token_size_value(const char *text, const json_token_t *token, size_t *output)
 {
   if (token->type != JSON_PRIMITIVE || token->end - token->start >= 64)
@@ -326,6 +328,17 @@ static int token_size_value(const char *text, const json_token_t *token, size_t 
   const size_t length = token->end - token->start;
   memcpy(buffer, text + token->start, length);
   buffer[length] = '\0';
+  /* MATLAB 对大数组的计数/字节数使用科学计数法。保留 JSON 语法、
+   * 有限值、整数值及安全转换检查，不能截断小数或接受溢出。 */
+  if (strpbrk(buffer, ".eE") != NULL) {
+    double value;
+    if (!token_double_value(text, token, &value) || value < 0
+        || value > 9007199254740991.0 || (long double)value > (long double)SIZE_MAX
+        || floor(value) != value)
+      return 0;
+    *output = (size_t)value;
+    return 1;
+  }
   if (length == 0 || (length > 1 && buffer[0] == '0'))
     return 0;
   for (size_t index = 0; index < length; index++)

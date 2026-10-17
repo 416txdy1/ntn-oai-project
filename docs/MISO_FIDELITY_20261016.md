@@ -136,3 +136,34 @@ validate_runtime_fidelity('.runtime/fidelity-full/uplink','.runtime/fidelity-ful
 大规模完整 bundle 的 IQ 测试新增可选 `--max-points`，默认仍遍历全部节点与中点；完整精度流程使用4097个确定性分层点，始终覆盖首尾、四种速率和静音边界。17点入口已通过ASan/UBSan，误差1.63961e-11。数学精度仍遍历全部真实 QD 缓存，文件与C reader校验也不减少；分层只避免对相同卷积实现重复数亿组等价运算。
 
 上述业务使用原完整 bundle 验证新 FIR，不能替代尚未完成的新密集 bundle 的361秒业务验收。
+
+#### 完整密集参考验收（2026-10-17）
+
+双向完整生成及 MATLAB `validate_runtime_fidelity` 已完成。认证范围为原始 STK 7882–8239 秒（IQ 0–357 秒）；原始末尾 358–361 秒的4个快照保留，未纳入精度认证。
+
+| 项目 | DL 4×1 | UL 1×4 |
+|---|---:|---:|
+| 输出快照（含4个原尾部） | 162049 | 153559 |
+| 实际 QD 参考快照 | 1299767 | 1231839 |
+| 非输出节点参考 | 1137722 | 1078284 |
+| FIR 最差上界 | 0.721442% | 0.788985% |
+| 时间插值与 FIR 联合上界 | 0.944566% | 0.939939% |
+| 子阵宽带上界 | 0.004417% | 0.004076% |
+| 三项组合上界 | **0.949024%** | **0.944053%** |
+
+全缓存运行时验算使用序列化后的 bundle；其时间误差与生成时只抽取部分参考的报告不同。最终以全缓存组合上界为准，双向均通过 4.5 MHz / 1% 门限。manifest SHA256：DL `d9523a0f7e54f31f49a7746d137842d7a0e32dd00600c6d299fb037d6a6164a5`；UL `c52cb38be4792e76095d345ec0bcac3d2d9cb9c5464509c543d0b628964439ba`。
+
+完整数据首次加载揭示 MATLAB 将百万级参考计数和文件字节数编码为科学计数法。Python 参考计数及 C 尺寸解析现兼容这种表示，仍拒绝非整数、非有限值、布尔计数和越界值。没有修改信道二进制或放宽误差门限。
+
+验证命令（WSL Ubuntu-22.04，项目根目录）：
+
+```bash
+python3 -m unittest quadriga.tests.test_validate_bundle quadriga.tests.test_audit_link_budget
+python3 quadriga/tests/run_qd_channel_reader_tests.py
+```
+
+结果：15项 Python 测试通过；C reader 合法科学计数法以及小数、负数、溢出、无效 JSON 数字反例均通过。完整原轨迹及密集信道回归正在重新运行，尚不代表业务验收完成。
+
+长期业务对照 `fullpass-1792168657107651033` 在 IQ 约25秒时出现持续积压：RTT最高129秒，UL/DL约80/78 Kbit/s，低于100 Kbit/s发送量；虽然 PBCH 为0，仍不合格，已停止并保留失败结果。正在验证等价 AVX2 双精度12点点积优化，不能把这次早期积压归入原尾部失败。
+
+完整回归结果：通过 scripts/wsl_lab.sh build 调用 scripts/build.sh 成功；运行副本执行 bash scripts/test.sh（默认1×1基线）及 bash scripts/test_fidelity.sh 均退出0。后者同时通过双向报告绑定、链路预算、C reader 和 ASan/UBSan IQ测试。DL 4097/324097个候选时刻，最大误差2.21289612e-11；UL 4097/307117个候选时刻，最大误差1.48960129e-11，四种时钟速率与静音边界均通过。日志：.runtime/fidelity-scientific-regression.log、.runtime/fidelity-full-regression.log（运行副本）。

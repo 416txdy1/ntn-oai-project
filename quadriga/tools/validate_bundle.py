@@ -57,6 +57,12 @@ def _read_exact(stream: Any, size: int, label: str) -> bytes:
     return data
 
 
+def is_snapshot_count(value: Any) -> bool:
+    """MATLAB 大计数可能采用科学计数法；只接受可精确表示的非负整数。"""
+    return (not isinstance(value, bool) and isinstance(value, (int, float))
+            and math.isfinite(value) and 0 <= value <= 2**53 - 1 and value == int(value))
+
+
 def _validate_fidelity(report: dict, antenna: dict, times: tuple[float, ...]) -> None:
     """声明精度时检查数值预算；没有报告的旧数据不视为 1% 合格。"""
     _require(isinstance(report, dict), "fidelity 必须为对象")
@@ -78,7 +84,7 @@ def _validate_fidelity(report: dict, antenna: dict, times: tuple[float, ...]) ->
              and antenna.get("validated_bandwidth_hz") == report["bandwidth_hz"], "fidelity 子阵误差记录不一致")
     output = report.get("output_snapshots")
     references = report.get("reference_snapshots")
-    _require(isinstance(output, int) and output == len(times) and isinstance(references, int)
+    _require(is_snapshot_count(output) and output == len(times) and is_snapshot_count(references)
              and references > output, "fidelity 必须包含独立于输出节点的参考点")
     intervals = [b-a for a, b in zip(times, times[1:])]
     _require(math.isclose(report["minimum_interval_s"], min(intervals), rel_tol=1e-9, abs_tol=1e-12)
