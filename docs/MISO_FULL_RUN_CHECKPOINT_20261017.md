@@ -74,3 +74,5 @@ wsl -d Ubuntu-22.04 -u root -- python3 /mnt/d/synching_study/jingwenpeng/2026aut
 已实施同一快照区间内4个相邻IQ样本并行计算，每个样本保留独立时延、插值系数与12点核；跨区间和不足4样本沿用原处理。实际完整信道0/120/240秒位置，每方向每次处理1024000个样本，旧DL耗时1.406/1.366/1.414秒，新DL0.906/0.912/0.930秒；旧UL1.497/1.424/1.430秒，新UL0.981/0.933/0.931秒。输出校验值一致，速度提升约1.5倍；该局部基准不等于完整业务已通过。
 
 执行标准scripts/wsl_lab.sh build（内部scripts/build.sh）、source scripts/env_subarray4.sh后bash scripts/test.sh、bash scripts/test_fidelity.sh均退出0。完整7.68Msps回归双向4097时刻、四种时钟速率、静音边界通过ASan/UBSan。日志为运行副本.runtime/fidelity-four-sample-regression.log和fidelity-four-sample-full-regression.log；对照基准保存在源仓库.runtime/fidelity-four-sample-benchmark.log。
+
+2026-10-17：fullpass-1792221840958142385 已到361秒，strict passed=false。ping3248/2750，末498个未收，最大RTT459005.848ms；UL98596/DL84909bit/s。PBCH200次首次前置IQ356.99955符合旧尾部位置，但IQ300开始MCS降到0、DL约0.2Mbps并持续积压，故不能按仅尾部失败验收。检查点已包含最终报告，无需重跑收集。代码检查确认配置缺失pusch_AntennaPorts（上游默认1），PUCCH硬编码numSpatialStreamIndices=1，PHY确实仅使用该数目的接收IQ。正补齐NO_BEAM_MODE下PUCCH接收端口及生成配置的PUSCH端口；尚未证明这是全部业务故障根因。未改尾部、负载、MCS或物理信道。WSL无rg，已用Windows rg读取UNC源码。首次build尚未纳入未跟踪overlay，暂存新文件后重新执行标准build。

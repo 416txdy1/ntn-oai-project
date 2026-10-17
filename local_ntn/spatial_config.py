@@ -25,7 +25,8 @@ def configure_miso(config: str, ports: int = 2) -> str:
         if count != 1:
             raise ValueError(f"{name}: 需要唯一 RU 端口配置")
     settings = {"pdsch_AntennaPorts_N1": ports // 2, "pdsch_AntennaPorts_N2": 1,
-                "pdsch_AntennaPorts_XP": 2, "maxMIMO_layers": 1, "do_CSIRS": 1}
+                "pdsch_AntennaPorts_XP": 2, "pusch_AntennaPorts": ports,
+                "maxMIMO_layers": 1, "do_CSIRS": 1}
     # 字段属于 gNB 实例；只改生成副本，保留原模板。
     insertion = ""
     for name, value in settings.items():
