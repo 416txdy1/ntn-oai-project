@@ -44,7 +44,7 @@ def main() -> int:
             # smoke stdout 是去敏结果 JSON；原始 modem 日志保留在 .runtime/local_ntn。
             result=json.loads(process.stdout)
             print(json.dumps(result,indent=2),flush=True)
-            report=audit_run(root,result['label'],args.ports)
+            report=audit_run(root,result['label'],args.ports,Path(os.environ['OAI_STK_TRACE']))
             (root/'.runtime/reports'/f"{result['label']}-spatial-audit.json").write_text(json.dumps(report,indent=2))
             print(json.dumps(report,indent=2),flush=True)
             if process.returncode or not report['passed']:

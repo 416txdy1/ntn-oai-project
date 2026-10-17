@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import bisect
 import csv
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -42,14 +43,18 @@ def expected_state(rows: list[list[float]], time_s: float, rate: float, uplink: 
             "valid": int(bool(left[valid_col] and right[valid_col]))}
 
 
-def audit_run(root: Path, label: str, ports: int) -> dict:
+def audit_run(root: Path, label: str, ports: int, trace_path: Path | None = None) -> dict:
     # label 只允许文件名字符，避免从日志参数读取工作区外任意文件。
     if not re.fullmatch(r"smoke-[01]-[0-9]+", label):
         raise ValueError("非法 smoke label")
     result = json.loads((root/'.runtime/reports'/f'{label}.json').read_text())
-    rows = list(csv.reader(line for line in (root/'examples/fdd-pass/trace.csv').read_text().splitlines()[1:] if line and not line.startswith('#')))
+    trace_path = trace_path or (root/'examples/fdd-pass/trace.csv')
+    trace_bytes = trace_path.read_bytes()
+    rows = list(csv.reader(line for line in trace_bytes.decode('utf-8').splitlines()[1:] if line and not line.startswith('#')))
     trace = [list(map(float,row)) for row in rows]
     report = {"label": label, "ports": ports, "business_passed": result.get('passed',False), "rate": result['rate'], "directions": {}}
+    report['trace_path'] = str(trace_path.resolve())
+    report['trace_sha256'] = hashlib.sha256(trace_bytes).hexdigest()
     for kind, uplink in (('gnb',True),('ue',False)):
         text = (root/'local_ntn'/f'{kind}-{label}.log').read_text(errors='replace')
         expected_ports = f"1 Tx x {ports} Rx" if uplink else f"{ports} Tx x 1 Rx"
@@ -93,9 +98,10 @@ def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('label')
     parser.add_argument('--ports',type=int,choices=(2,4),required=True)
+    parser.add_argument('--trace', type=Path, help='本次运行实际使用的 STKTRACE2；默认原始完整轨迹')
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
-    report=audit_run(root,args.label,args.ports)
+    report=audit_run(root,args.label,args.ports,args.trace)
     (root/'.runtime/reports'/f'{args.label}-spatial-audit.json').write_text(json.dumps(report,indent=2))
     print(json.dumps(report,indent=2))
     return 0 if report['passed'] else 1

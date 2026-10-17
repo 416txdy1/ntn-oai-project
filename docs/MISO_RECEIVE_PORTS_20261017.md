@@ -43,3 +43,13 @@
 恢复顺序：读取active.json和其checkpoint_path；检查PID启动标识是否匹配；如果仍在运行，只观察既有会话/日志；如果已完成，直接审计最终报告；若无最终报告且进程消失，先诊断中断，保留历史。不要重做百万QD参考、构建或已通过的IQ回归。协议栈没有中途恢复功能，重启不能伪装为无缝续跑。
 
 运行控制日志`.runtime/fidelity-receive-ports-business.log`，记录器日志`.runtime/fidelity-receive-ports-checkpoint.log`；旧启动失败日志另存fidelity-receive-ports-business-start-failed.log，失败标签fullpass-1792234550406584446已有单独检查点。原361秒失败轮次fullpass-1792221840958142385完整保留。没有push，没有停止当前测试。
+
+2026-10-17续查：4854a30完整fullpass-1792234702783642530已经结束并到361秒，仍不合格。ping3386/2701，最大RTT648276.757ms；UL98602.116bit/s、DL79963.328bit/s，收发差345/6043。IQ258仍稳定、281已积压51.7秒，DL MCS0；PBCH仍200次、首次前置356.99955。接收端口缺口修复未解决全部积压，不能归因于单一配置。用户新增授权：成功验收之后pull远端；当前未验收，尚未pull，仍不得push。
+正在隔离后段：从既有dense bundle逐字节切片原IQ300..357及对应trace，运行副本.runtime/diagnostic-late300-v3。原数据未改、未重新生成；诊断副本更新哈希且不继承全程fidelity认证。初两次校验分别因antenna哈希、fidelity计数拒绝；v3正确标为diagnostic_only并通过原预算审计，DL30668/UL27637快照，功率误差<5e-8、残余增益0。只用于判断晚段物理信道与累积运行状态，不替代361秒验收。静态/动态诊断使用validate_spatial原负载，日志运行副本.runtime/diagnostic-late300-business.log。
+
+2026-10-18定位阶段：后段静态smoke-0-1792252543914358773业务通过（ping10/10，UL0/130、DL0/117）；原audit_spatial_run硬编码全轨迹导致300秒epoch误报，已增加显式trace参数，并由validate_spatial传入实际OAI_STK_TRACE。复用静态日志重审通过，未重跑静态结果。新增独立静止卫星手算夹具：错误trace拒绝、正确非零起点通过并记录SHA256，2项测试通过。
+动态smoke-1-1792252868700185836在IQ8附近PDU超时，PBCH0，UE多次初始同步，无Msg4，不能评价持续业务。诊断manifest扩展字段被严格C reader拒绝已修正到DIAGNOSTIC.json，不改变schema或放宽reader。
+新增默认关闭OAI_NTN_FEEDBACK_DIAGNOSTICS=1诊断，记录UE真实CRC ACK/NACK及gNB PUCCH01/234 ACK/NACK/拒绝累计，256事件一行，不改变HARQ决策；四线程3072事件计数及关闭/非法开关测试通过。标准构建通过；标准trace/IQ回归+后段带计数静态/动态试验正在会话75298，日志运行副本.runtime/feedback-diagnostics-regression.log与diagnostic-feedback-late300.log。源代码尚未本地提交本阶段，之前4854a30/ed01bd4保留。未pull（成功验收条件未满足）、未push。
+
+2026-10-18诊断结束：会话75298退出1；标准scripts/test.sh通过，后段静态业务及显式trace物理审计通过，动态smoke-1-1792253303623545789在IQ约8秒PDU超时，尚未进入持续业务。保留失败，不宣称完整验收通过。
+用户确认实验口径调整：每个IQ仿真秒双向各100 Kbit UDP payload，单独记录墙钟吞吐、RTT和仿真速度。旧墙钟负载报告保持原样。新脚本实现中，完整361秒尚待重验；成功前不pull，不push。

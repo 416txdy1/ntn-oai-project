@@ -10,3 +10,5 @@
 当前实验需要的覆盖文件在 oai_patch/current/（含构建版本标识适配、可选 blend 时延前馈及多接收端口 PUCCH 调度）与 quadriga/oai/（3 个文件），解包器只将它们同步到本仓库 .runtime/oai，不会覆盖外部源码。新增的 openair2/LAYER2/NR_MAC_gNB/gNB_scheduler_uci.c 沿用本归档版本，仅在 NO_BEAM_MODE 下使 PUCCH 使用与 PUSCH 相同的接收端口集合；不修改公开函数签名或有波束模式。
 
 源码之外的操作系统依赖用发行版包安装；5GC 通过容器镜像运行。不会为了构建启用 E2/FlexRIC 或自动下载 ASN1C。
+
+`common/utils/ntn_feedback_diagnostics.h`、`openair2/NR_UE_PHY_INTERFACE/NR_IF_Module.c`及上述PUCCH调度overlay还提供默认关闭的反馈诊断。设置`OAI_NTN_FEEDBACK_DIAGNOSTICS=1`后，每256个事件输出一次UE CRC和gNB反馈累计计数；不修改译码、HARQ和功率控制判定，不输出UE身份或凭据。

@@ -16,6 +16,7 @@
 #include "common/utils/T/T.h"
 #include "common/utils/nr/nr_common.h"
 #include "nfapi/oai_integration/vendor_ext.h"
+#include "common/utils/ntn_feedback_diagnostics.h"
 static void nr_fill_nfapi_pucch(gNB_MAC_INST *nrmac, frame_t frame, slot_t slot, const NR_sched_pucch_t *pucch, NR_UE_info_t* UE)
 {
 
@@ -943,6 +944,11 @@ void handle_nr_uci_pucch_0_1(module_id_t mod_id, frame_t frame, slot_t slot, con
       LOG_D(NR_MAC,"%4d.%2d bit %d pid %d ack/nack %d\n",frame, slot, harq_bit,pid,harq_value);
       nr_mac_update_pdcch_closed_loop_adjust(sched_ctrl, harq_confidence != 0);
       bool success = harq_value == 0 && harq_confidence == 0;
+      static ntn_feedback_diagnostics_t diagnostics;
+      uint64_t counts[3];
+      if (ntn_feedback_diagnostics(&diagnostics, harq_confidence ? 2 : success ? 0 : 1, counts))
+        LOG_I(NR_MAC, "NTN-FEEDBACK PUCCH01 ack=%llu nack=%llu rejected=%llu\n",
+              (unsigned long long)counts[0], (unsigned long long)counts[1], (unsigned long long)counts[2]);
       // TCI state switch occurs at the first slot that is after slot n_+ T_HARQ + 3N_sf_slot (8.10.3 of 38.133)
       if (success && harq->start_tci_timer) {
         int slots = 3 * nrmac->frame_structure.numb_slots_frame / 10;
@@ -1044,6 +1050,11 @@ void handle_nr_uci_pucch_2_3_4(module_id_t mod_id, frame_t frame, slot_t slot, c
       LOG_D(NR_MAC,"%4d.%2d bit %d pid %d ack/nack %d\n",frame, slot, harq_bit, pid, acknack);
       // TCI state switch occurs at the first slot that is after slot n_+ T_HARQ + 3N_sf_slot (8.10.3 of 38.133)
       bool success = uci_234->harq.harq_crc != 1 && acknack;
+      static ntn_feedback_diagnostics_t diagnostics;
+      uint64_t counts[3];
+      if (ntn_feedback_diagnostics(&diagnostics, uci_234->harq.harq_crc == 1 ? 2 : success ? 0 : 1, counts))
+        LOG_I(NR_MAC, "NTN-FEEDBACK PUCCH234 ack=%llu nack=%llu rejected=%llu\n",
+              (unsigned long long)counts[0], (unsigned long long)counts[1], (unsigned long long)counts[2]);
       if (success && harq->start_tci_timer) {
         int slots = 3 * nrmac->frame_structure.numb_slots_frame / 10;
         nr_timer_setup(&sched_ctrl->tci_beam_switch, slots, 1);
