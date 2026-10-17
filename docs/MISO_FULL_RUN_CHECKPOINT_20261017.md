@@ -76,3 +76,15 @@ wsl -d Ubuntu-22.04 -u root -- python3 /mnt/d/synching_study/jingwenpeng/2026aut
 执行标准scripts/wsl_lab.sh build（内部scripts/build.sh）、source scripts/env_subarray4.sh后bash scripts/test.sh、bash scripts/test_fidelity.sh均退出0。完整7.68Msps回归双向4097时刻、四种时钟速率、静音边界通过ASan/UBSan。日志为运行副本.runtime/fidelity-four-sample-regression.log和fidelity-four-sample-full-regression.log；对照基准保存在源仓库.runtime/fidelity-four-sample-benchmark.log。
 
 2026-10-17：fullpass-1792221840958142385 已到361秒，strict passed=false。ping3248/2750，末498个未收，最大RTT459005.848ms；UL98596/DL84909bit/s。PBCH200次首次前置IQ356.99955符合旧尾部位置，但IQ300开始MCS降到0、DL约0.2Mbps并持续积压，故不能按仅尾部失败验收。检查点已包含最终报告，无需重跑收集。代码检查确认配置缺失pusch_AntennaPorts（上游默认1），PUCCH硬编码numSpatialStreamIndices=1，PHY确实仅使用该数目的接收IQ。正补齐NO_BEAM_MODE下PUCCH接收端口及生成配置的PUSCH端口；尚未证明这是全部业务故障根因。未改尾部、负载、MCS或物理信道。WSL无rg，已用Windows rg读取UNC源码。首次build尚未纳入未跟踪overlay，暂存新文件后重新执行标准build。
+
+2026-10-17 当前续跑：修复提交4854a30已在zky-miso本地完成，未push。标准构建、trace parser/实际IQ回归、完整7.68Msps回归、PUCCH九组测试、静态/动态短业务及公式审计通过。第一次完整启动fullpass-1792234550406584446因网络资源冲突在modem前失败，已保留最终报告。实时只读核对网络和modem均无残留后重试；当前fullpass-1792234702783642530，PID2338，会话87977，记录器同一WSL包装器持续运行，每15秒保存。当前入口.runtime/fidelity-checkpoints/active.json。尚未完成新361秒验收，不要重新生成QD数据，不要重复启动新业务。
+
+## Token余额交接：保留正在运行的测试
+
+实现提交4854a30；完整业务标签`fullpass-1792234702783642530`，WSL会话87977，full_pass PID2338。当前入口`.runtime/fidelity-checkpoints/active.json`，每15秒原子更新latest.json并追加history.jsonl；结束自动收集full_pass_final.json及failure_locations.json。父包装器`.runtime/run_receive_ports_checkpointed.py`持续等待完整业务与记录器结束，不要另起一套测试。
+
+最近检查IQ约23秒，ping1–173连续，最新RTT984.653ms，PBCH0。gNB DL MCS9、goodput1.03Mbps、PUCCH DTX累计10；UL MCS9、goodput1.23Mbps、DTX0。这里是中间结果，尚未到原问题IQ300秒，更不能宣称361秒验收通过。后续以latest.json和原进程实际存活状态为准。
+
+恢复顺序：读取active.json和其checkpoint_path；检查PID启动标识是否匹配；如果仍在运行，只观察既有会话/日志；如果已完成，直接审计最终报告；若无最终报告且进程消失，先诊断中断，保留历史。不要重做百万QD参考、构建或已通过的IQ回归。协议栈没有中途恢复功能，重启不能伪装为无缝续跑。
+
+运行控制日志`.runtime/fidelity-receive-ports-business.log`，记录器日志`.runtime/fidelity-receive-ports-checkpoint.log`；旧启动失败日志另存fidelity-receive-ports-business-start-failed.log，失败标签fullpass-1792234550406584446已有单独检查点。原361秒失败轮次fullpass-1792221840958142385完整保留。没有push，没有停止当前测试。

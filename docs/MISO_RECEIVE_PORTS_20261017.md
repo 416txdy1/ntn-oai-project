@@ -31,3 +31,15 @@
 百万QD参考、1%精度报告与原尾部数据直接复用，没有重新生成。
 
 补充：动态smoke-1-1792234325858162053及公式审计通过，ping10/10，UL0/130、DL0/131，PBCH0；整体验证进程退出0。动态UL接收83.9Kbit/s（17.95秒统计窗口），DL101Kbit/s，UL低于100K发送目标，不能仅凭内部丢包为0断言没有排队；长程仍须验算。阶段修复将本地提交，随后进行新361秒验收。
+
+2026-10-17 当前续跑：修复提交4854a30已在zky-miso本地完成，未push。标准构建、trace parser/实际IQ回归、完整7.68Msps回归、PUCCH九组测试、静态/动态短业务及公式审计通过。第一次完整启动fullpass-1792234550406584446因网络资源冲突在modem前失败，已保留最终报告。实时只读核对网络和modem均无残留后重试；当前fullpass-1792234702783642530，PID2338，会话87977，记录器同一WSL包装器持续运行，每15秒保存。当前入口.runtime/fidelity-checkpoints/active.json。尚未完成新361秒验收，不要重新生成QD数据，不要重复启动新业务。
+
+## Token余额交接：保留正在运行的测试
+
+实现提交4854a30；完整业务标签`fullpass-1792234702783642530`，WSL会话87977，full_pass PID2338。当前入口`.runtime/fidelity-checkpoints/active.json`，每15秒原子更新latest.json并追加history.jsonl；结束自动收集full_pass_final.json及failure_locations.json。父包装器`.runtime/run_receive_ports_checkpointed.py`持续等待完整业务与记录器结束，不要另起一套测试。
+
+最近检查IQ约23秒，ping1–173连续，最新RTT984.653ms，PBCH0。gNB DL MCS9、goodput1.03Mbps、PUCCH DTX累计10；UL MCS9、goodput1.23Mbps、DTX0。这里是中间结果，尚未到原问题IQ300秒，更不能宣称361秒验收通过。后续以latest.json和原进程实际存活状态为准。
+
+恢复顺序：读取active.json和其checkpoint_path；检查PID启动标识是否匹配；如果仍在运行，只观察既有会话/日志；如果已完成，直接审计最终报告；若无最终报告且进程消失，先诊断中断，保留历史。不要重做百万QD参考、构建或已通过的IQ回归。协议栈没有中途恢复功能，重启不能伪装为无缝续跑。
+
+运行控制日志`.runtime/fidelity-receive-ports-business.log`，记录器日志`.runtime/fidelity-receive-ports-checkpoint.log`；旧启动失败日志另存fidelity-receive-ports-business-start-failed.log，失败标签fullpass-1792234550406584446已有单独检查点。原361秒失败轮次fullpass-1792221840958142385完整保留。没有push，没有停止当前测试。
