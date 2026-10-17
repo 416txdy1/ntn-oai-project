@@ -1,0 +1,58 @@
+# 4×1 完整业务续检记录（2026-10-17）
+
+## 下次首先做什么
+
+**不要重新运行生成、构建、IQ回归或启动新的 full_pass。先读取当前检查点，确认现有进程或最终报告。** 用户明确要求保留已运行结果，避免因会话 token 用尽而重头测试。
+
+- 分支：zky-miso；运行实现提交：a4bea87，解析与完整精度记录提交：c074194；均未 push。
+- 正在运行：fullpass-1792204181467086862。
+- WSL：Ubuntu-22.04；运行副本：/home/duyaya/OAI/self-contained-test。
+- 完整业务工具会话：34050；full_pass PID：2354，进程启动 ticks：122547。后续必须核对启动标识，不能只凭旧PID操作进程。
+- 检查点记录器工具会话：74850；脚本：.runtime/checkpoint_full_business.py。仅观察本轮已存在的业务，每15秒保存，结束后自动收尾；不会启动或重启实验。
+- 当前完整业务未完成，不能宣称只剩原尾部失败。
+
+PowerShell 中先执行：
+
+```powershell
+Get-Content .runtime/fidelity-checkpoints/fullpass-1792204181467086862/latest.json
+```
+
+若 state=running，再查看原会话34050的输出，或执行以下只读命令核对实际进度：
+
+```powershell
+wsl -d Ubuntu-22.04 -u root -- python3 /mnt/d/synching_study/jingwenpeng/2026autumn/ntn-oai-project/.runtime/inspect_current_full.py
+```
+
+若 state=finished，直接读取同目录 full_pass_final.json 和 failure_locations.json，并检查运行副本的最终报告及公式审计，不要从头跑。若进程已消失但没有最终报告，保留检查点并诊断中断原因；OAI协议栈目前不支持从任意IQ位置恢复内存状态，不能把分段重启拼接成完整业务通过。
+
+## 已完成，无需无故重跑
+
+- 完整密集信道已生成：DL162049快照、UL153559快照，含双向原尾部4快照。
+- IQ0–357秒，4.5MHz频带，1%门限：DL组合界0.949024%，UL0.944053%，通过。
+- 实际QD参考：DL1299767点，其中1137722个非输出节点；UL1231839点，其中1078284个非输出节点。
+- 完整IQ回归：双向4097分层点、四种时间速率、静音边界、ASan/UBSan通过。实际7.68Msps下DL最大误差2.93303228e-11、UL1.6512793e-11。
+- 标准构建、4端口原轨迹 scripts/test.sh、完整密集信道 scripts/test_fidelity.sh 均已通过。
+- 双向尾部4快照的times、delays、coefficients、gain已与原 examples/fdd-miso4-subarray 逐字节比较一致。
+- 测试精确命令、前次失败及修改原因见 MISO_FIDELITY_20261016.md。
+
+## 本轮已运行部分（记录时点，后续以latest.json为准）
+
+2026-10-17 10:46北京时间：gNB最后IQ69.999秒，UE69.999110秒；业务约IQ4秒建立。ping已连续收到1–887，中间无缺号；最近10次RTT约1.3–1.7秒，累计最大5.527秒；双方PBCH失败0。当前统计只包含已收到回复，不能替代最终发送/接收与UDP结算。
+
+完整轨迹目标为最后日志IQ至少360.9秒，双向各100Kbit/s，保持原严格 full_pass 判定。只有原IQ357–361秒末尾连接失败可作为用户允许的已知问题；不能豁免更早的失步、PDU失败或持续积压。
+
+## 已落盘证据
+
+目录：.runtime/fidelity-checkpoints/fullpass-1792204181467086862/
+
+- latest.json：原子更新的最新业务状态、IQ范围、连续序号、RTT及PBCH统计。
+- history.jsonl：每15秒追加的去敏历史记录。
+- identity.json：运行标签、PID启动标识、实现提交、运行源码SHA256。
+- fidelity-vector-regression.log：已通过的原轨迹回归日志。
+- fidelity-vector-full-regression.log：已通过的完整信道回归日志。
+- downlink/uplink的manifest、fidelity_report、runtime_fidelity_report：已通过精度验收的绑定证据。
+- full_pass_final.json、failure_locations.json：业务结束后由记录器收集；运行中尚不存在属正常。
+
+原始modem日志仍只留在运行副本 local_ntn/，不得提交或发布。检查点与大数据留在忽略目录.runtime/。仓库其他人的三个文档改动继续保护。
+
+当前业务进程保持运行；请保留机器、WSL和测试进程。会话换轮本身不要求重跑，但机器/WSL停止会丢失协议栈内存状态；已有数值回归、生成缓存和已落盘观测仍然有效。
