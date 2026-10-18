@@ -11,6 +11,7 @@ case "${OAI_SPATIAL_MODE:-siso}" in
 esac
 python3 scripts/test_full_pass.py
 python3 scripts/test_iq_udp.py
+python3 scripts/test_iq_business_audit.py
 python3 scripts/test_spatial_audit.py
 python3 local_ntn/test_feedback_diagnostics.py
 python3 scripts/test_monotonic_ping.py

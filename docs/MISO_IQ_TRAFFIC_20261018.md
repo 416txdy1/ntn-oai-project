@@ -31,3 +31,6 @@
 2026-10-18完整IQ口径实验fullpass-1792285084820144219已经结束：361秒/3444.866墙钟秒，UDP每向3718包，平均99979.832bit/IQ秒（不足一个1200字节报文的量化差）。UL缺52包均从356.999日志时钟起；DL除同样52包外，还丢首批0..9号（4.999秒）。ping3270/3311，连续收到1..3270，最大RTT7.279秒，无原数百秒积压；PBCH仍200次、首次前置356.99955。首批缺包仍超出尾部许可，因此不能验收或pull。
 新增有界双向UDP HELLO/ACK，双方实际往返成功后才建立业务IQ起点；绑定socket不是用户面就绪。握手独立记录，业务包不重传，旧失败不改判。首版握手分支误放发送循环导致localhost测试失败，已移到接收循环，3项UDP及7项full_pass测试通过。另保存ping原始发送monotonic时间及IQ观测时间线，用于末尾缺包定位。标准回归执行中。
 握手修复标准回归：运行副本source scripts/env_subarray4.sh && bash scripts/test.sh退出0，日志.runtime/iq-handshake-regression.log；新增时间记录后full_pass 7项与monotonic_ping 3项通过。
+
+握手修复提交0abef85；新连续验收fullpass-1792294964392103430，full_pass PID2651，独立监督PID1343，入口active.json，日志.runtime/fidelity-iq-handshake-business.log。已进入业务，正在等待361秒结束；不重复启动。
+新增独立audit_iq_business.py，保持strict passed原值，独立生成accepted_with_known_tail。检查双向握手、发包预算、完整IQ覆盖、逐序号早期缺包、ping发送时间映射和PBCH首故障位置。尾段以357秒及gNB日志提前约1ms的观测边界判定，明示记录分辨率，不宣称逐包精确物理IQ。合成夹具覆盖仅尾段可接受、首10包缺失拒绝、提前ping缺失拒绝，测试通过；没有改旧实验结果。
