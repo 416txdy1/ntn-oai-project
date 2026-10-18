@@ -10,6 +10,7 @@ import struct
 import time
 
 HEADER = struct.Struct('!16sQd')
+CONTROL = struct.Struct('!16sB')
 PAYLOAD_BYTES = 1200
 RATE = 100000
 
@@ -62,6 +63,7 @@ def main() -> int:
     if len(token) != 16:
         parser.error('token must contain 16 bytes')
     state = {'sent': [], 'received': [], 'duplicates': 0, 'invalid': 0,
+             'peer_ready': False, 'hello_sent': 0, 'hello_received': 0, 'ack_received': 0,
              'start_iq': 0., 'last_iq': 0., 'sending_wall_seconds': 0.}
     stop_at = None
 
@@ -79,6 +81,7 @@ def main() -> int:
     started = None
     last_save = 0.
     previous = None
+    next_hello = 0.
     write_json(args.report, {**state, 'ready': True, 'complete': False})
     try:
         while stop_at is None or time.monotonic() - stop_at < 5:
@@ -90,7 +93,15 @@ def main() -> int:
             if previous is not None and current < previous:
                 raise ValueError('IQ clock moved backwards')
             previous = current
+            # socket 绑定仅代表本地就绪；通过双向往返确认实际用户面可达。
+            # 握手单独计数，不伪装成业务包成功，也不重传已发送的业务包。
+            if not clock.get('running') and stop_at is None and now >= next_hello:
+                sock.sendto(CONTROL.pack(token, 1), (args.peer, args.port))
+                state['hello_sent'] += 1
+                next_hello = now + 1
             if clock.get('running') and stop_at is None:
+                if not state['peer_ready']:
+                    raise ValueError('traffic started before bidirectional handshake')
                 if started is None:
                     started = now
                     state['start_iq'] = start
@@ -113,6 +124,17 @@ def main() -> int:
                         packet, source = sock.recvfrom(65535)
                     except BlockingIOError:
                         break
+                    if len(packet) == CONTROL.size and source == (args.peer, args.port):
+                        identity, kind = CONTROL.unpack(packet)
+                        if identity == token and kind == 1:
+                            state['hello_received'] += 1
+                            sock.sendto(CONTROL.pack(token, 2), source)
+                        elif identity == token and kind == 2:
+                            state['ack_received'] += 1
+                            state['peer_ready'] = True
+                        else:
+                            state['invalid'] += 1
+                        continue
                     if len(packet) != PAYLOAD_BYTES or source != (args.peer, args.port):
                         state['invalid'] += 1
                         continue

@@ -27,3 +27,7 @@
 2026-10-18改用独立会话启动后台包装器（`start_new_session=True`，标准输入关闭，输出写文件）；实际验证启动命令退出后进程仍存活，PID与SID均为1042。这样可脱离交互命令生命周期，但不能抵抗Windows/WSL关机；协议栈不支持从中间IQ恢复。只重跑必须连续的业务，不重做已完成的精度和IQ回归。
 
 新启动记录`.runtime/iq-clock-detached-launch.json`；监督日志`.runtime/iq-clock-detached-supervisor.log`；业务日志`.runtime/fidelity-iq-clock-business-20261018.log`；记录器日志`.runtime/fidelity-iq-clock-checkpoint-20261018.log`。新标签产生后写入`.runtime/fidelity-checkpoints/active.json`，每15秒保存状态及逐包副本。恢复时先核对进程身份和最终报告，不重复启动。成功验收前仍不pull；任何情况下不push。
+
+2026-10-18完整IQ口径实验fullpass-1792285084820144219已经结束：361秒/3444.866墙钟秒，UDP每向3718包，平均99979.832bit/IQ秒（不足一个1200字节报文的量化差）。UL缺52包均从356.999日志时钟起；DL除同样52包外，还丢首批0..9号（4.999秒）。ping3270/3311，连续收到1..3270，最大RTT7.279秒，无原数百秒积压；PBCH仍200次、首次前置356.99955。首批缺包仍超出尾部许可，因此不能验收或pull。
+新增有界双向UDP HELLO/ACK，双方实际往返成功后才建立业务IQ起点；绑定socket不是用户面就绪。握手独立记录，业务包不重传，旧失败不改判。首版握手分支误放发送循环导致localhost测试失败，已移到接收循环，3项UDP及7项full_pass测试通过。另保存ping原始发送monotonic时间及IQ观测时间线，用于末尾缺包定位。标准回归执行中。
+握手修复标准回归：运行副本source scripts/env_subarray4.sh && bash scripts/test.sh退出0，日志.runtime/iq-handshake-regression.log；新增时间记录后full_pass 7项与monotonic_ping 3项通过。

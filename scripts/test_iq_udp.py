@@ -56,7 +56,8 @@ class IqUdpTests(unittest.TestCase):
                     processes.append(subprocess.Popen([sys.executable, str(Path(__file__).with_name('iq_udp.py')),
                         '--bind', f'127.0.0.{index}', '--peer', f'127.0.0.{3-index}', '--port', str(port),
                         '--clock', str(clock), '--report', str(path), '--token', '12' * 16]))
-                wait_for(lambda states: all(s['ready'] for s in states))
+                wait_for(lambda states: all(s['peer_ready'] for s in states))
+                self.assertTrue(all(len(s['sent']) == 0 for s in read()))
                 write_json(clock, {'start': 10, 'current': 11, 'running': True})
                 wait_for(lambda states: all(len(s['sent']) == len(s['received']) == 10 for s in states))
                 time.sleep(1.2)

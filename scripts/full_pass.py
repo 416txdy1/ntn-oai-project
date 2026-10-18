@@ -140,14 +140,18 @@ def main():
                 clients.append(spawn(role + '-iq-udp', prefix + ['python3', str(ROOT / 'scripts/iq_udp.py'),
                     '--bind', bind, '--peer', peer, '--port', '5203', '--clock', str(clock_path),
                     '--report', str(output / (role + '-iq-udp.json')), '--token', token]))
-            ready_deadline = time.monotonic() + 10
-            while not all((output / (role + '-iq-udp.json')).exists() for role in ('ue', 'dn')):
+            ready_deadline = time.monotonic() + 30
+            while not all((output / (role + '-iq-udp.json')).exists() and
+                          json.loads((output / (role + '-iq-udp.json')).read_text()).get('peer_ready')
+                          for role in ('ue', 'dn')):
                 if time.monotonic() > ready_deadline or any(p.poll() is not None for p in clients):
-                    raise RuntimeError('IQ UDP startup failed')
+                    raise RuntimeError('IQ UDP bidirectional handshake failed')
                 time.sleep(.05)
             # 以双方绑定完成后的时钟作为统一业务起点，不补发启动等待期间的流量。
             iq_start = min(numeric_state(BASE / f'{kind}-{label}.log')[0][-1][0] for kind in ('gnb', 'ue'))
             report['iq_udp_start_s'] = iq_start
+            report['iq_udp_handshake'] = {role: {key: json.loads((output / (role + '-iq-udp.json')).read_text())[key]
+                for key in ('peer_ready', 'hello_sent', 'hello_received', 'ack_received')} for role in ('ue', 'dn')}
         print(json.dumps({'label': label, 'state': 'traffic_started', 'traffic_start_iq_s': report['traffic_start_iq_s']}), flush=True)
         last_progress = time.monotonic()
         previous = -1
@@ -166,6 +170,8 @@ def main():
             if progress > previous:
                 previous = progress
                 last_progress = now
+                with (output / 'iq-observations.jsonl').open('a') as timeline:
+                    timeline.write(json.dumps({'monotonic_s': now, 'iq_s': values}) + '\n')
             if now >= next_message:
                 ping_text = (output / 'ping.log').read_text(errors='replace')
                 print(json.dumps({'wall_s': round(now - started, 1), 'iq_s': values, 'ping_replies': ping_text.count('bytes from')}), flush=True)
