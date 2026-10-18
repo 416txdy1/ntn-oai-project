@@ -17,4 +17,13 @@
 真实localhost双向UDP测试验证：1 IQ秒各发收10包，停住1.2墙钟秒无额外发包，推进至2.4 IQ秒各发收25包，结束报告完整且零缺包，验算100000 bit/IQ秒。额外验证非法/倒退时钟及末尾缺包统计。
 
 尚未完成新口径361秒端到端验收。不会以单元测试代替业务验收；仍保留原357–361秒尾部问题，新的早期接入或数据故障不可豁免。精度数据和信道生成不变，百万参考直接复用。
-`n标准运行副本执行 source scripts/env_subarray4.sh && bash scripts/test.sh 退出0；日志.runtime/iq-clock-regression.log。包含trace parser、实际IQ、空间/网络配置、C reader及ASan/UBSan适配器回归，UL723/723点最大误差1.51165024e-11。
+
+标准运行副本执行 source scripts/env_subarray4.sh && bash scripts/test.sh 退出0；日志.runtime/iq-clock-regression.log。包含trace parser、实际IQ、空间/网络配置、C reader及ASan/UBSan适配器回归，UL723/723点最大误差1.51165024e-11。
+
+## 中断保留与续查
+
+首次IQ口径实验`fullpass-1792253925496608553`在约IQ9秒中断：恢复检查确认PID2615已消失，没有最终报告。检查点已明确标记`interrupted_without_final_report`，而非仍运行或通过。双方各发送52包，DN收到52包、UE收到42包；最后一批是否还在途无法由不完整结果判断。原日志及逐包JSON保留在`.runtime/fidelity-checkpoints/fullpass-1792253925496608553/`。
+
+2026-10-18改用独立会话启动后台包装器（`start_new_session=True`，标准输入关闭，输出写文件）；实际验证启动命令退出后进程仍存活，PID与SID均为1042。这样可脱离交互命令生命周期，但不能抵抗Windows/WSL关机；协议栈不支持从中间IQ恢复。只重跑必须连续的业务，不重做已完成的精度和IQ回归。
+
+新启动记录`.runtime/iq-clock-detached-launch.json`；监督日志`.runtime/iq-clock-detached-supervisor.log`；业务日志`.runtime/fidelity-iq-clock-business-20261018.log`；记录器日志`.runtime/fidelity-iq-clock-checkpoint-20261018.log`。新标签产生后写入`.runtime/fidelity-checkpoints/active.json`，每15秒保存状态及逐包副本。恢复时先核对进程身份和最终报告，不重复启动。成功验收前仍不pull；任何情况下不push。
