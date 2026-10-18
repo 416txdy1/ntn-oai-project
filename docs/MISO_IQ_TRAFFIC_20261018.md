@@ -34,3 +34,5 @@
 
 握手修复提交0abef85；新连续验收fullpass-1792294964392103430，full_pass PID2651，独立监督PID1343，入口active.json，日志.runtime/fidelity-iq-handshake-business.log。已进入业务，正在等待361秒结束；不重复启动。
 新增独立audit_iq_business.py，保持strict passed原值，独立生成accepted_with_known_tail。检查双向握手、发包预算、完整IQ覆盖、逐序号早期缺包、ping发送时间映射和PBCH首故障位置。尾段以357秒及gNB日志提前约1ms的观测边界判定，明示记录分辨率，不宣称逐包精确物理IQ。合成夹具覆盖仅尾段可接受、首10包缺失拒绝、提前ping缺失拒绝，测试通过；没有改旧实验结果。
+
+2026-10-18按用户更新指令执行git fetch origin，未pull/merge/rebase/push。origin/zky=70a38b5、origin/main=cb60f03，当前分支已包含其历史；新远端origin/codex/ntn-quadriga-handover=65bc517。只读检查其验收文档、full_pass差异、接收跟踪器与TA反馈代码：新隔离profile启用导频跟踪/TX预测和CRC成功四分之一增益TA反馈；full_pass使用实际观测采样率。远端620秒验收采用100K墙钟负载、1%业务丢包及5秒及时性门限，不能替代本任务100K/IQ秒、仅尾段失败的验收，也不能替代本任务1%信道频响精度认证。双方共同改动13个文件（含simulator.cpp、启动/预检查、full_pass/test.sh等），不建议覆盖式整合；未执行合并或修改远端。
