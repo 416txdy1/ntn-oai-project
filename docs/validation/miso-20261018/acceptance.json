@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "label": "fullpass-1792294964392103430",
+  "runtime_commit": "0abef85",
+  "user_accepted_main_scope": true,
+  "decision_date": "2026-10-18",
+  "decision": "单列为尾界在途不确定项，接受主体修复（建议）",
+  "strict_full_pass": false,
+  "automatic_tail_audit_passed": false,
+  "automatic_audit_failures": [
+    "ping loss before allowed tail: 4324",
+    "ping loss before allowed tail: 4325"
+  ],
+  "uncertain_ping_sequences": [
+    4324,
+    4325
+  ],
+  "uncertainty": "发送时刻距尾段观测边界1.195秒/0.181秒；正常邻近RTT约1.45至2.09秒，不能精确归因，不改写为成功或确定尾段丢失。",
+  "coverage": {
+    "trace_seconds": 361,
+    "traffic_start_iq_s": 4.999,
+    "traffic_end_iq_s": {
+      "gnb": 360.999,
+      "ue": 360.99906731770835
+    },
+    "wall_seconds": 4529.560910618,
+    "iq_seconds_per_wall_second": 0.07990667701914943
+  },
+  "ping": {
+    "sent": 4376,
+    "received": 4323,
+    "rtt_ms": {
+      "min": 865.542714,
+      "mean": 2073.8523789299093,
+      "max": 9198.141545
+    }
+  },
+  "udp": {
+    "uplink": {
+      "sent_packets": 3708,
+      "packets": 3656,
+      "lost_packets": 52,
+      "early_missing_sequences": [],
+      "sent_bits_per_iq_second": 99991.01123595505,
+      "bits_per_second": 7877.900526256458,
+      "max_one_way_wall_seconds": 4.247689887999968,
+      "first_missing_logged_iq_s": 356.999
+    },
+    "downlink": {
+      "sent_packets": 3708,
+      "packets": 3656,
+      "lost_packets": 52,
+      "early_missing_sequences": [],
+      "sent_bits_per_iq_second": 99991.01123595505,
+      "bits_per_second": 7877.895732090916,
+      "max_one_way_wall_seconds": 8.219985317999999,
+      "first_missing_logged_iq_s": 356.999
+    }
+  },
+  "fidelity": {
+    "downlink": {
+      "bandwidth_hz": 4500000.0,
+      "sample_rate_hz": 7680000.0,
+      "tolerance": 0.01,
+      "temporal_global_nrmse": 0.0023413175052423747,
+      "temporal_worst_nrmse": 0.005783872875656398,
+      "fir_worst_bound": 0.007214421723019192,
+      "joint_temporal_fir_bound": 0.009445658643805878,
+      "spatial_continuous_band_bound": 4.416512988225606e-05,
+      "combined_bound": 0.00949024094242896,
+      "checked_reference_snapshots": 1299767.0,
+      "non_output_reference_snapshots": 1137722.0,
+      "validated_time_start_s": 7882,
+      "validated_time_end_s": 8239,
+      "bundle_manifest_sha256": "d9523a0f7e54f31f49a7746d137842d7a0e32dd00600c6d299fb037d6a6164a5",
+      "scope": "prefix_before_unchanged_legacy_tail",
+      "passed": true
+    },
+    "uplink": {
+      "bandwidth_hz": 4500000.0,
+      "sample_rate_hz": 7680000.0,
+      "tolerance": 0.01,
+      "temporal_global_nrmse": 0.0023396404380857244,
+      "temporal_worst_nrmse": 0.007951124082271048,
+      "fir_worst_bound": 0.00788985423998247,
+      "joint_temporal_fir_bound": 0.009399387675161585,
+      "spatial_continuous_band_bound": 4.076385026152548e-05,
+      "combined_bound": 0.00944053468065485,
+      "checked_reference_snapshots": 1231839.0,
+      "non_output_reference_snapshots": 1078284.0,
+      "validated_time_start_s": 7882,
+      "validated_time_end_s": 8239,
+      "bundle_manifest_sha256": "c52cb38be4792e76095d345ec0bcac3d2d9cb9c5464509c543d0b628964439ba",
+      "scope": "prefix_before_unchanged_legacy_tail",
+      "passed": true
+    }
+  },
+  "evidence_sha256": {
+    "full_pass_final.json": "65edad2eb8810b4bd5aaed87cdb4d5b9af1c8285a1e536a9c4631ea02d488876",
+    "business_acceptance.json": "bc32ac9e12238829fa435efe0351efb6090877de1910d8f7cbd522847b203d69",
+    "failure_locations.json": "fa5b2da4b1f18eb7c2a4cbc045ee83cb738fcf78cad56d7fcba7de53391f0f18",
+    "ue-iq-udp.json": "b2b8a5307da4e68b3ae51c01cef40bb9d4a245f086542cee0c933e8b1b94bf32",
+    "dn-iq-udp.json": "4ad685fa437d565da100e88ae5e0111a2a4aead608cc4d907e91f650713d951f"
+  },
+  "remote_action": {
+    "fetch": "completed",
+    "merge": false,
+    "rebase": false,
+    "push": false,
+    "reviewed_branch": "origin/codex/ntn-quadriga-handover",
+    "reviewed_commit": "65bc517a0ec5bfb4e9e2f665876ea5d188cac1a5"
+  }
+}
