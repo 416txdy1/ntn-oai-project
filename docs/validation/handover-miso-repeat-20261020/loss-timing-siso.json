@@ -1,0 +1,93 @@
+{
+  "run_id": "review-full-20261018",
+  "passed": true,
+  "wall_seconds": 1171.80173886,
+  "directions": {
+    "uplink": {
+      "sent": 14317,
+      "received_unique": 14317,
+      "duplicate_receives": 0,
+      "missing_sequences": [],
+      "late_received_sequences": [],
+      "failure_fraction": 0.0,
+      "offered_wall_bps": 99863.23263777033,
+      "receiver_ready_before_first_send_ms": 68.792428,
+      "missing_all_initial_prefix": true,
+      "missing": []
+    },
+    "downlink": {
+      "sent": 14315,
+      "received_unique": 14311,
+      "duplicate_receives": 0,
+      "missing_sequences": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "late_received_sequences": [],
+      "failure_fraction": 0.00027942717429269996,
+      "offered_wall_bps": 99860.4591838504,
+      "receiver_ready_before_first_send_ms": 69.27254,
+      "missing_all_initial_prefix": true,
+      "missing": [
+        {
+          "sequence": 1,
+          "wall_since_first_send_s": 0.0,
+          "iq_s_interpolated": 6.470345852642007,
+          "iq_bounds_s": [
+            6.407540625,
+            6.50754375
+          ],
+          "stk_s_interpolated": 8206.470345852642,
+          "stk_bounds_s": [
+            8206.407540625,
+            8206.50754375
+          ]
+        },
+        {
+          "sequence": 2,
+          "wall_since_first_send_s": 0.080127387,
+          "iq_s_interpolated": 6.509359154079756,
+          "iq_bounds_s": [
+            6.50754375,
+            6.607546875
+          ],
+          "stk_s_interpolated": 8206.509359154079,
+          "stk_bounds_s": [
+            8206.50754375,
+            8206.607546875
+          ]
+        },
+        {
+          "sequence": 3,
+          "wall_since_first_send_s": 0.160301082,
+          "iq_s_interpolated": 6.552603495528711,
+          "iq_bounds_s": [
+            6.50754375,
+            6.607546875
+          ],
+          "stk_s_interpolated": 8206.55260349553,
+          "stk_bounds_s": [
+            8206.50754375,
+            8206.607546875
+          ]
+        },
+        {
+          "sequence": 4,
+          "wall_since_first_send_s": 0.240411364,
+          "iq_s_interpolated": 6.595813633072951,
+          "iq_bounds_s": [
+            6.50754375,
+            6.607546875
+          ],
+          "stk_s_interpolated": 8206.595813633074,
+          "stk_bounds_s": [
+            8206.50754375,
+            8206.607546875
+          ]
+        }
+      ]
+    }
+  }
+}

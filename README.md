@@ -1,3 +1,5 @@
+> **合并版 handover + MISO：** 当前配置与运行请使用[手动配置指南](docs/HANDOVER_MISO_MANUAL.md)。下方旧 zky 状态与命令保留为历史/兼容入口。
+
 # NTN OAI：单仓库 STK + QuaDRiGa 回放调试
 
 本整合分支以完整zky为基底，新增隔离伪卫星切换与持续业务验收。请先阅读[整合运行指南](docs/INTEGRATED_HANDOVER.md)及[最终测试证据](docs/validation/2026-10-16/index.json)，使用已验证的显式参数。以下原zky入口与资料继续保留。

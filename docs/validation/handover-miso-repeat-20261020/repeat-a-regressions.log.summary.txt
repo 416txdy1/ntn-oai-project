@@ -1,0 +1,23 @@
+PASS: sample clock, Hermite derivative, power-to-IQ and outage contracts
+PASS legacy independent-field interpolation, mode selection and rejection
+PASS: trace physical bounds, finite fields, flags and valid input
+PASS actual rxAddInput phase and four-port rotation cache, max error 0
+PASS actual rxAddInput: invisible and exhausted signal mute preserve finite background noise
+PASS actual rxAddInput: 10dB loss energy ratio=0.100000000; outage=0; noise ratio=0.038400000; delay and Doppler changed
+PASS preserved legacy SAT_LEO_STK IQ visibility gate
+PASS actual rxAddInput: invisible and exhausted signal mute preserve finite background noise
+PASS actual rxAddInput: 10dB loss energy ratio=0.099999994; outage=0; noise ratio=0.038400000; delay and Doppler changed
+PASS actual QD rxAddInput DL: history=312 current-RMS noise applied once, finite tail, exhausted mute/background
+PASS actual QD rxAddInput UL: history=403 current-RMS noise applied once, finite tail, exhausted mute/background
+PASS actual spatial rxAddInput: 2 Tx x 1 Rx, STK gain + QD convolution
+PASS actual spatial rxAddInput: 1 Tx x 2 Rx, STK gain + QD convolution
+PASS actual spatial rxAddInput: 4 Tx x 1 Rx, STK gain + QD convolution
+PASS actual spatial rxAddInput: 1 Tx x 4 Rx, STK gain + QD convolution
+PASS actual spatial rxAddInput: 4 Tx x 1 Rx, STK gain + QD convolution
+PASS actual spatial rxAddInput: 1 Tx x 4 Rx, STK gain + QD convolution
+PASS actual STKCLOCK: 40 monotonic/IQ/STK anchors; schedule identity and phase
+PASS: config generation, UE position guard, static/dynamic velocity, both lab PLMNs, missing trace and invalid rates; template unchanged
+PASS: explicit trace override and comment magic with missing default trace
+PASS: dynamic validator returns failure when ping fails
+PASS: init_lab import has no CLI or credential side effects
+PASS: test_generated_files_stay_in_run, bounded initial lead and unchanged epoch/template
