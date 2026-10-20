@@ -10,6 +10,8 @@
 #include "radio/COMMON/common_lib.h"
 
 void rxAddInput(c16_t **input_sig, cf_t *after_channel_sig, int rxAnt, channel_desc_t *channelDesc, int nbSamples);
+void rxAddInputs(c16_t **input_sig, cf_t **outputs, channel_desc_t *channelDesc, int nbSamples);
+bool qd_channel_convolve_all(channel_desc_t *channel, c16_t **input, int samples, struct complexd *output);
 void update_channel_model(channel_desc_t *channelDesc, int nbSamples, uint64_t TS);
 
 /*
@@ -25,6 +27,7 @@ void stk_trace_iq_parameters(channel_desc_t *channel, c16_t **input, int input_o
 bool qd_channel_requested(void);
 void update_channel_model_from_quadriga(channel_desc_t *channel, uint64_t timestamp);
 size_t qd_channel_history_length(channel_desc_t *channel);
+size_t qd_channel_lookahead_length(channel_desc_t *channel);
 bool qd_channel_convolve(channel_desc_t *channel,
                          c16_t **input,
                          int rx_antenna,

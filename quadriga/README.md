@@ -2,6 +2,8 @@
 
 QuaDRiGa 源码由 vendor/quadriga-source.tar.gz 提供；运行 python3 scripts/prepare_sources.py 后可用 quadriga/matlab/export_example_fdd.m 重新生成示例。主调试入口见 ../local_ntn/MANUAL_RUN.md。以下为模块说明及历史记录。
 
+当前默认天线为卫星 16×16（0.5λ 间距）与地面全向，逐快照相干合成为一个射频端口；新示例在 examples/fdd-pass-array。完整说明、历史 omni 对照方法及与 STK MVDR 的差异见 [天线对齐](../docs/ANTENNA_ALIGNMENT_20261014.md)。
+
 # QuaDRiGa 离线信道接口（QDCHANNEL1）
 
 本目录定义 STK、QuaDRiGa 与 OAI RFsim 之间的离线数据边界，并提供 MATLAB/Octave 离线导出器。QDCHANNEL1 已在外部 OAI 源码的 RFsim IQ 路径中完成 SISO 稀疏多径接入，详见 [集成说明](docs/step04_rfsim_integration.md) 和 [2026-09-28 复核报告](docs/recheck_20260928.md)。完整 gNB/UE/5GC 联调尚未完成。
@@ -86,7 +88,8 @@ JSON Schema 位于 `schema/channel_bundle_v1.schema.json`。标准库校验器�
 STKTRACE2 ECEF 轨迹
   -> 以首个 UE 点为参考的局部 ENU 轨迹
   -> 对齐的 QuaDRiGa Tx/Rx 双移动轨迹
-  -> qd_layout.get_channels()
+  -> 卫星 256 阵元 + 地面 omni、VVLH 近似姿态
+  -> qd_layout.get_channels() + 逐快照 LOS 相干波束合成
   -> 去公共相位、路径功率归一化、相对时延、零均值残余增益
   -> QDCHANNEL1 bundle
 ```

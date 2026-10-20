@@ -81,10 +81,17 @@ struct Buffer { Channel *channel_model; uint nbAnt; std::queue<rfsim_packet_t *>
 struct rfsimulator_state_t {};
 #define AssertFatal(cond, ...) assert(cond)
 static size_t qd_channel_history_length(Channel *c) { return c->history; }
+static size_t test_lookahead=0;
+static int observed_lookahead=0;
+static size_t qd_channel_lookahead_length(Channel *) { return test_lookahead; }
 static float get_rx_gain_db(rfsimulator_state_t *, int, int) { return 0; }
 static std::vector<int> beam_map_to_beams(uint64_t) { return {0}; }
 static void rxAddInput(c16_t **input, cf_t *out, int, Channel *ch, int n) {
   memcpy(out,input[0]+ch->history-1,n*sizeof(*out));
+  if(test_lookahead) observed_lookahead=input[0][ch->history-1+n+test_lookahead-1].r;
+}
+static void rxAddInputs(c16_t **input, cf_t **out, Channel *ch, int n) {
+  rxAddInput(input,out[0],0,ch,n);
 }
 ''' + combine + r'''
 static void collect(rfsimulator_state_t *t, Buffer *ptr, openair0_timestamp_t timestamp,
@@ -105,10 +112,16 @@ int main() {
       const int expected=wanted>=0 && wanted<128 ? wanted+1 : 0;
       assert(out[i].r==expected);assert(out[i].i==-expected);
     }
+    if(test_lookahead) {
+      const int64_t last=ts-int64_t(offset)+16+test_lookahead-1;
+      assert(observed_lookahead==(last>=0 && last<128 ? last+1 : 0));
+    }
   };
   check(2,0,4);check(2,4,4);check(8,0,4);check(8,6,4);check(8,1,4);
   check(0,200000,33886);check(200010,200000,33886);
   check(128,0,4);check(140,0,4);
+  test_lookahead=5;
+  check(2,6,4);check(20,6,4);check(128,6,4);check(140,6,4);
   assert(b.received_packets.size()==1);
   puts("PASS actual RFsim collection: startup padding, changing bulk offset, long history, tail");
 }

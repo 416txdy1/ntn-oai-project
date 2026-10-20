@@ -57,6 +57,47 @@ def _read_exact(stream: Any, size: int, label: str) -> bytes:
     return data
 
 
+def is_snapshot_count(value: Any) -> bool:
+    """MATLAB 大计数可能采用科学计数法；只接受可精确表示的非负整数。"""
+    return (not isinstance(value, bool) and isinstance(value, (int, float))
+            and math.isfinite(value) and 0 <= value <= 2**53 - 1 and value == int(value))
+
+
+def _validate_fidelity(report: dict, antenna: dict, times: tuple[float, ...]) -> None:
+    """声明精度时检查数值预算；没有报告的旧数据不视为 1% 合格。"""
+    _require(isinstance(report, dict), "fidelity 必须为对象")
+    for key in ("tolerance", "bandwidth_hz", "temporal_worst_nrmse", "temporal_global_nrmse",
+                "spatial_continuous_band_bound", "combined_bound_at_reference_times",
+                "minimum_interval_s", "maximum_interval_s"):
+        value = report.get(key)
+        _require(isinstance(value, (int, float)) and not isinstance(value, bool)
+                 and math.isfinite(value) and value >= 0, f"fidelity.{key} 非法")
+    _require(report["tolerance"] == 0.01 and report["bandwidth_hz"] == 4.5e6,
+             "fidelity 必须使用 4.5 MHz 和 1% 门限")
+    temporal = report["temporal_worst_nrmse"]
+    spatial = report["spatial_continuous_band_bound"]
+    _require(report["temporal_global_nrmse"] <= temporal, "fidelity 全局误差大于最差误差")
+    combined = temporal*(1+spatial)+spatial
+    _require(math.isclose(report["combined_bound_at_reference_times"], combined, rel_tol=1e-9, abs_tol=1e-12)
+             and combined <= 0.01, "fidelity 组合误差超标或计算不一致")
+    _require(antenna.get("wideband_error_bound") == spatial
+             and antenna.get("validated_bandwidth_hz") == report["bandwidth_hz"], "fidelity 子阵误差记录不一致")
+    output = report.get("output_snapshots")
+    references = report.get("reference_snapshots")
+    _require(is_snapshot_count(output) and output == len(times) and is_snapshot_count(references)
+             and references > output, "fidelity 必须包含独立于输出节点的参考点")
+    intervals = [b-a for a, b in zip(times, times[1:])]
+    _require(math.isclose(report["minimum_interval_s"], min(intervals), rel_tol=1e-9, abs_tol=1e-12)
+             and math.isclose(report["maximum_interval_s"], max(intervals), rel_tol=1e-9, abs_tol=1e-12),
+             "fidelity 时间间隔与 bundle 不一致")
+    if "scope" in report:
+        _require(report["scope"] == "prefix_before_unchanged_legacy_tail", "fidelity 认证范围非法")
+        start, end = report.get("validated_time_start_s"), report.get("validated_time_end_s")
+        _require(start == times[0] and end in times and end > start, "fidelity 认证时间范围不一致")
+        _require(report.get("unchanged_tail_snapshots") == sum(t > end for t in times),
+                 "fidelity 未认证尾部数量不一致")
+
+
 def validate_bundle(root: Path) -> dict[str, Any]:
     root = Path(root)
     manifest_path = root / "manifest.json"
@@ -96,6 +137,9 @@ def validate_bundle(root: Path) -> dict[str, Any]:
         "quadriga_coefficients": "unit_snapshot_link_power",
         "quadriga_large_scale_gain": "zero_mean_residual_db",
     }
+    spatial = composition.get("quadriga_coefficients") == "unit_snapshot_mean_link_power"
+    if spatial:
+        expected_composition["quadriga_coefficients"] = "unit_snapshot_mean_link_power"
     _require(composition == expected_composition, "composition 与 QDCHANNEL1 v1 约定不一致")
 
     provenance = manifest.get("provenance", {})
@@ -104,6 +148,49 @@ def validate_bundle(root: Path) -> dict[str, Any]:
     _positive_int(provenance.get("random_seed"), "random_seed", 0)
     trace_hash = provenance.get("stk_trace_sha256", "")
     _require(isinstance(trace_hash, str) and len(trace_hash) == 64 and all(c in "0123456789abcdef" for c in trace_hash), "STK trace SHA256 非法")
+
+    # 天线信息使用可选 sidecar，保持严格的 QDCHANNEL1 v1 manifest 不变。
+    antenna_path = root / "antenna.json"
+    if antenna_path.exists():
+        antenna = json.loads(antenna_path.read_text(encoding="utf-8"))
+        _require(antenna.get("format") == "NTN_ANTENNA1", "antenna.format 非法")
+        _require(antenna.get("manifest_sha256") == _sha256(manifest_path), "antenna manifest SHA256 不匹配")
+        _require(antenna.get("stk_trace_sha256") == trace_hash, "antenna STK trace SHA256 不匹配")
+        _require(antenna.get("link_direction") == radio["link_direction"], "antenna 方向不匹配")
+        _require(antenna.get("center_frequency_hz") == center_frequency, "antenna 频率不匹配")
+        _require(antenna.get("profile") in {"omni", "satellite_16x16_ground_omni", "satellite_2port_ground_omni", "satellite_4port_ground_omni", "satellite_16x16_4port_ground_omni"}, "antenna profile 非法")
+        satellite = _positive_int(antenna.get("satellite_rf_ports"), "antenna satellite_rf_ports")
+        ground = _positive_int(antenna.get("ground_rf_ports"), "antenna ground_rf_ports")
+        expected = (ground, satellite) if radio["link_direction"] == "downlink" else (satellite, ground)
+        _require((rx_antennas, tx_antennas) == expected, "antenna RF 端口维度不一致")
+        if antenna["profile"] in {"satellite_2port_ground_omni", "satellite_4port_ground_omni"}:
+            ports = 2 if "2port" in antenna["profile"] else 4
+            _require(satellite == ports and ground == 1 and spatial, "多端口需要匹配维度与空间归一化")
+        elif antenna["profile"] == "satellite_16x16_4port_ground_omni":
+            _require(satellite == 4 and ground == 1 and spatial, "四子阵需要匹配维度与空间归一化")
+            _require(antenna.get("satellite_rows") == antenna.get("satellite_columns") == 16
+                     and antenna.get("subarray_rows") == antenna.get("subarray_columns") == 8
+                     and antenna.get("spacing_wavelengths") == 0.5, "子阵几何错误")
+            reference = antenna.get("array_reference_frequency_hz")
+            _require(isinstance(reference, (int, float)) and math.isfinite(reference) and reference > 0,
+                     "子阵参考频率非法")
+            _require(math.isclose(antenna.get("element_spacing_m", -1), 299792458 / reference / 2, rel_tol=1e-10)
+                     and math.isclose(antenna.get("spacing_wavelengths_at_carrier", -1), center_frequency / reference / 2, rel_tol=1e-10),
+                     "子阵物理间距与载频不一致")
+            expected_map = [1 + int(i % 16 >= 8) + 2 * int(i // 16 >= 8) for i in range(256)]
+            _require(antenna.get("element_port_map") == expected_map and antenna.get("element_index_base") == 1,
+                     "子阵映射必须覆盖 256 阵元且每端口 64 个")
+            _require(antenna.get("subarray_weight_norm2") == 1, "子阵权重必须单位功率")
+            span = antenna.get("max_subarray_delay_span_s")
+            _require(isinstance(span, (int, float)) and math.isfinite(span) and span >= 0, "子阵时延跨度非法")
+            _require(antenna.get("delay_reduction") == "uniform_subarray_mean_narrowband", "子阵时延近似未声明")
+            _require(antenna.get("absolute_array_gain_source") == "not_calibrated_STK_reference", "子阵绝对增益尚未校准")
+        else:
+            _require(satellite == ground == 1, "原有 profile 仅支持单波束端口")
+        if antenna["profile"] == "satellite_16x16_ground_omni":
+            _require(antenna.get("satellite_rows") == 16 and antenna.get("satellite_columns") == 16
+                     and antenna.get("spacing_wavelengths") == 0.5, "antenna 必须是 16x16、0.5λ 阵列")
+            _require(antenna.get("absolute_array_gain_source") == "STKTRACE2", "antenna 绝对增益来源错误")
 
     expected_counts = {
         "times": snapshots,
@@ -131,10 +218,15 @@ def validate_bundle(root: Path) -> dict[str, Any]:
     _require(all(math.isfinite(value) for value in times), "times 包含非有限值")
     _require(all(left < right for left, right in zip(times, times[1:])), "times 必须严格递增")
 
-    coefficient_format = struct.Struct(f"<{paths * 2}f")
-    delay_format = struct.Struct(f"<{paths}d")
+    if antenna_path.exists() and "fidelity" in antenna:
+        _validate_fidelity(antenna["fidelity"], antenna, times)
+
+    group_links = rx_antennas * tx_antennas if spatial else 1
+    group_paths = paths * group_links
+    coefficient_format = struct.Struct(f"<{group_paths * 2}f")
+    delay_format = struct.Struct(f"<{group_paths}d")
     with resolved_files["coefficients"].open("rb") as coefficients, resolved_files["delays"].open("rb") as delays:
-        for link_index in range(links):
+        for link_index in range(0, links, group_links):
             coefficient_values = coefficient_format.unpack(
                 _read_exact(coefficients, coefficient_format.size, f"coefficients link {link_index}")
             )
@@ -145,10 +237,10 @@ def validate_bundle(root: Path) -> dict[str, Any]:
             _require(all(math.isfinite(value) and value >= 0 for value in delay_values), "delays 必须有限且非负")
             powers = [
                 coefficient_values[2 * path] ** 2 + coefficient_values[2 * path + 1] ** 2
-                for path in range(paths)
+                for path in range(group_paths)
             ]
             total_power = sum(powers)
-            _require(math.isclose(total_power, 1.0, rel_tol=1e-5, abs_tol=1e-6), f"link {link_index} 路径功率未归一化")
+            _require(math.isclose(total_power / group_links, 1.0, rel_tol=1e-5, abs_tol=1e-6), f"link {link_index} 路径功率未归一化")
             active_delays = [delay_values[index] for index, power in enumerate(powers) if power > 1e-12]
             _require(active_delays and min(active_delays) <= 1e-12, f"link {link_index} 缺少零参考时延")
 

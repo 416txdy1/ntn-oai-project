@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <common/utils/LOG/log.h>
 #include <openair1/SIMULATION/TOOLS/sim.h>
 #include "openair2/LAYER2/NR_MAC_gNB/mac_config.h"
@@ -417,8 +418,23 @@ void update_channel_model(channel_desc_t *channelDesc, int nbSamples, uint64_t T
   either we regenerate the channel (call again random_channel(desc,0)), or we keep it over subframes
   legacy: we regenerate each sub frame in UL, and each frame only in DL
 */
-void rxAddInput(c16_t **input_sig, cf_t *after_channel_sig, int rxAnt, channel_desc_t *channelDesc, int nbSamples)
+/* 可关闭的墙钟耗时观测，不改变采样时钟、信道或噪声随机序列。 */
+static uint64_t qd_profile_ns(void)
 {
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  return (uint64_t)now.tv_sec * 1000000000ULL + now.tv_nsec;
+}
+
+static void rxAddInputImpl(c16_t **input_sig, cf_t *after_channel_sig, int rxAnt, channel_desc_t *channelDesc, int nbSamples, const struct complexd *prepared)
+{
+  static _Thread_local int profile_enabled = -1;
+  static _Thread_local uint64_t calls, samples, setup_ns, fir_ns, post_ns;
+  if (profile_enabled < 0) {
+    const char *value = getenv("OAI_QD_PROFILE");
+    profile_enabled = value && !strcmp(value, "1");
+  }
+  const uint64_t begin_ns = profile_enabled ? qd_profile_ns() : 0;
   // channelDesc->path_loss_dB should contain the total path gain
   // so, in actual RF: tx gain + path loss + rx gain (+antenna gain, ...)
   // UE and NB gain control to be added
@@ -431,24 +447,50 @@ void rxAddInput(c16_t **input_sig, cf_t *after_channel_sig, int rxAnt, channel_d
   AssertFatal(input_history >= 1 && input_history <= INT_MAX, "Invalid RFsim input history length %zu\n", input_history);
   const int input_offset = (int)input_history - 1;
   stk_trace_iq_parameters(channelDesc, input_sig, input_offset, nbSamples, &pathLossLinear, &noise_per_sample);
+  const uint64_t prepared_ns = profile_enabled ? qd_profile_ns() : 0;
   struct complexd *qd_output = NULL;
-  bool qd_applied = false;
-  if (qd_channel_requested()) {
+  bool qd_applied = prepared != NULL;
+  if (!prepared && qd_channel_requested()) {
     qd_output = calloc((size_t)nbSamples, sizeof(*qd_output));
     AssertFatal(qd_output != NULL, "Cannot allocate QDCHANNEL1 convolution output\n");
     qd_applied = qd_channel_convolve(channelDesc, input_sig, rxAnt, nbSamples, qd_output);
     AssertFatal(qd_applied, "QDCHANNEL1 was requested but not applied\n");
   }
+  const uint64_t convolved_ns = profile_enabled ? qd_profile_ns() : 0;
   const int nbTx = channelDesc->nb_tx;
   double Doppler_phase_cur = channelDesc->Doppler_phase_cur[rxAnt];
   Doppler_phase_cur -= 2 * M_PI * round(Doppler_phase_cur / (2 * M_PI));
+
+  /* 四接收端口共享同一块的多普勒旋转。仅在完整键精确相等时复用；
+   * 仍按原顺序逐样本累加 double 相位并调用 sin/cos，不递推近似。 */
+  enum { QD_PHASE_CACHE_SAMPLES = 16384 };
+  static _Thread_local struct {
+    int count;
+    double start, increment;
+    double cosine[QD_PHASE_CACHE_SAMPLES], sine[QD_PHASE_CACHE_SAMPLES];
+  } rotation_cache;
+  const bool cache_rotation = channelDesc->nb_rx > 1 && nbSamples > 0
+      && nbSamples <= QD_PHASE_CACHE_SAMPLES;
+  if (cache_rotation && (rotation_cache.count != nbSamples
+      || rotation_cache.start != Doppler_phase_cur
+      || rotation_cache.increment != channelDesc->Doppler_phase_inc)) {
+    double phase = Doppler_phase_cur;
+    for (int i = 0; i < nbSamples; i++) {
+      rotation_cache.cosine[i] = cos(phase);
+      rotation_cache.sine[i] = sin(phase);
+      phase += channelDesc->Doppler_phase_inc;
+    }
+    rotation_cache.start = Doppler_phase_cur;
+    rotation_cache.increment = channelDesc->Doppler_phase_inc;
+    rotation_cache.count = nbSamples;
+  }
 
   for (int i = 0; i < nbSamples; i++) {
     cf_t *out_ptr = after_channel_sig + i;
     struct complexd rx_tmp = {0};
 
     if (qd_applied) {
-      rx_tmp = qd_output[i];
+      rx_tmp = prepared ? prepared[i] : qd_output[i];
     } else {
       for (int txAnt = 0; txAnt < nbTx; txAnt++) {
         const struct complexd *channelModel = channelDesc->ch[rxAnt + (txAnt * channelDesc->nb_rx)];
@@ -464,14 +506,13 @@ void rxAddInput(c16_t **input_sig, cf_t *after_channel_sig, int rxAnt, channel_d
     }
 
     if (channelDesc->Doppler_phase_inc != 0.0 || Doppler_phase_cur != 0.0) {
-#ifdef CMPLX
-      double complex in = CMPLX(rx_tmp.r, rx_tmp.i);
-#else
-      double complex in = rx_tmp.r + rx_tmp.i * I;
-#endif
-      double complex out = in * cexp(Doppler_phase_cur * I);
-      rx_tmp.r = creal(out);
-      rx_tmp.i = cimag(out);
+      /* exp(j*phase)=cos(phase)+j*sin(phase)，直接做实数旋转。
+       * 保留原逐样本相位累加和噪声调用顺序，不使用递推近似。 */
+      const double cosine = cache_rotation ? rotation_cache.cosine[i] : cos(Doppler_phase_cur);
+      const double sine = cache_rotation ? rotation_cache.sine[i] : sin(Doppler_phase_cur);
+      const double real = rx_tmp.r, imag = rx_tmp.i;
+      rx_tmp.r = real * cosine - imag * sine;
+      rx_tmp.i = imag * cosine + real * sine;
       Doppler_phase_cur += channelDesc->Doppler_phase_inc;
     }
 
@@ -482,6 +523,17 @@ void rxAddInput(c16_t **input_sig, cf_t *after_channel_sig, int rxAnt, channel_d
 
   free(qd_output);
   channelDesc->Doppler_phase_cur[rxAnt] = Doppler_phase_cur;
+  if (profile_enabled) {
+    setup_ns += prepared_ns - begin_ns;
+    fir_ns += convolved_ns - prepared_ns;
+    post_ns += qd_profile_ns() - convolved_ns;
+    samples += nbSamples;
+    if (++calls % 4000 == 0)
+      LOG_I(HW, "QDPROFILE calls %llu samples %llu setupNs %llu firNs %llu postNs %llu\n",
+            (unsigned long long)calls, (unsigned long long)samples,
+            (unsigned long long)setup_ns, (unsigned long long)fir_ns, (unsigned long long)post_ns);
+  }
+
 
   // Cast to a wrong type for compatibility !
   LOG_D(HW,
@@ -490,4 +542,34 @@ void rxAddInput(c16_t **input_sig, cf_t *after_channel_sig, int rxAnt, channel_d
         10 * log10((double)signal_energy((int32_t *)after_channel_sig, nbSamples)),
         channelDesc->path_loss_dB,
         10 * log10(noise_per_sample));
+}
+
+void rxAddInput(c16_t **input_sig, cf_t *after_channel_sig, int rxAnt, channel_desc_t *channelDesc, int nbSamples)
+{
+  rxAddInputImpl(input_sig,after_channel_sig,rxAnt,channelDesc,nbSamples,NULL);
+}
+
+void rxAddInputs(c16_t **input_sig, cf_t **outputs, channel_desc_t *channelDesc, int nbSamples)
+{
+  if (!qd_channel_requested() || channelDesc->nb_rx==1) {
+    for (int rx=0;rx<channelDesc->nb_rx;rx++) rxAddInput(input_sig,outputs[rx],rx,channelDesc,nbSamples);
+    return;
+  }
+  AssertFatal(nbSamples>=0 && channelDesc->nb_rx>0 && (size_t)nbSamples<=SIZE_MAX/sizeof(struct complexd)/channelDesc->nb_rx,
+              "Invalid QD batch allocation\n");
+  struct complexd *batch=calloc((size_t)(nbSamples?nbSamples:1)*channelDesc->nb_rx,sizeof(*batch));
+  AssertFatal(batch!=NULL,"Cannot allocate QD batch output\n");
+  const char *profile=getenv("OAI_QD_PROFILE");
+  const bool enabled=profile && !strcmp(profile,"1");
+  const uint64_t start=enabled?qd_profile_ns():0;
+  AssertFatal(qd_channel_convolve_all(channelDesc,input_sig,nbSamples,batch),"QD batch convolution unavailable\n");
+  static _Thread_local uint64_t calls, total_ns;
+  if (enabled) {
+    total_ns+=qd_profile_ns()-start;
+    if (++calls%4000==0) LOG_I(HW,"QDBATCH calls %llu firNs %llu\n",(unsigned long long)calls,(unsigned long long)total_ns);
+  }
+  /* 噪声仍在主线程按原 Rx/样本顺序产生，保持随机序列。 */
+  for (int rx=0;rx<channelDesc->nb_rx;rx++)
+    rxAddInputImpl(input_sig,outputs[rx],rx,channelDesc,nbSamples,batch+(size_t)rx*nbSamples);
+  free(batch);
 }

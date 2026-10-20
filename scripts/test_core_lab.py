@@ -121,12 +121,37 @@ class CoreTests(unittest.TestCase):
         CoreLab(replace(self.c,run_id='run2')).validate(marker)
         for field,value in [('workspace','/foreign'),('project','oai'),('config_hash','bad')]:
             with self.assertRaises(ValueError):lab.validate(dict(marker,**{field:value}))
-        with patch.object(lab,'preflight',return_value=([],[])),patch.object(lab,'inventory',return_value=([],[])):
+        with patch.object(lab,'preflight',return_value=([],[])),patch.object(lab,'inventory',return_value=([],[])),patch.object(lab,'wait_ready') as ready:
             lab.up()
+            ready.assert_called_once_with()
         self.assertIn(['docker','compose','--project-name',self.c.core_project,'--file',str(self.c.private_dir/'core/compose.yaml'),'up','-d'],calls)
         (self.c.private_dir/'core/conf/config.yaml').write_text('changed')
         with self.assertRaises(ValueError):lab.down()
         self.assertFalse(any('down' in cmd for cmd in calls))
+
+    def test_ready_waits_for_every_owned_service(self):
+        lab=CoreLab(self.c)
+        pending=[{'Name':'/amf','State':{'Running':True,'Health':{'Status':'starting'}}},
+                 {'Name':'/db','State':{'Running':True,'Health':{'Status':'healthy'}}}]
+        ready=[dict(item,State={'Running':True,'Health':{'Status':'healthy'}}) for item in pending]
+        with patch.object(lab,'names',return_value={'amf','db'}), patch.object(lab,'own_container',return_value=True), \
+             patch.object(lab,'preflight',side_effect=[(pending,[]),(ready,[])]), patch('core_lab.time.sleep') as sleep:
+            lab.wait_ready()
+            sleep.assert_called_once()
+
+    def test_readiness_rejects_missing_stopped_unhealthy_and_foreign(self):
+        lab=CoreLab(self.c)
+        for state,owned in [({},True),({'Running':False},True),
+                            ({'Running':True,'Health':{'Status':'unhealthy'}},True),
+                            ({'Running':True,'Health':{'Status':'healthy'}},False)]:
+            with patch.object(lab,'names',return_value={'amf'}), patch.object(lab,'own_container',return_value=owned), \
+                 patch.object(lab,'preflight',return_value=([{'Name':'/amf','State':state}],[])):
+                with self.assertRaises(TimeoutError):lab.wait_ready(0)
+        with patch.object(lab,'names',return_value={'amf','db'}), patch.object(lab,'own_container',return_value=True), \
+             patch.object(lab,'preflight',return_value=([{'Name':'/amf','State':{'Running':True}}],[])):
+            with self.assertRaises(TimeoutError):lab.wait_ready(0)
+        for timeout in (-1,float('nan'),float('inf')):
+            with self.assertRaises(ValueError):lab.wait_ready(timeout)
 
     def test_overlapping_foreign_network_refused(self):
         self.render()

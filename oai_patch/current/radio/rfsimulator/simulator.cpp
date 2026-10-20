@@ -35,6 +35,7 @@ extern "C" {
 #include <common/utils/load_module_shlib.h>
 #include <openair1/SIMULATION/TOOLS/sim.h>
 #include "rfsimulator.h"
+#include "qd_channel_reader.h"
 extern int get_currentchannels_type(const char *buf,
                                     int debug,
                                     webdatadef_t *tdata,
@@ -188,6 +189,8 @@ typedef struct {
   int rx_num_channels;
   int tx_num_channels;
   double sample_rate;
+  double qd_tx_energy[256];
+  uint64_t qd_tx_samples;
   double rx_freq;
   double tx_bw;
   int channelmod;
@@ -565,7 +568,17 @@ static void rfsimulator_readconfig(rfsimulator_state_t *rfsimulator)
       break;
     } else if (strcmp(rfsimuParam[p].strlistptr[i], "chanmod") == 0) {
       init_channelmod();
-      load_channellist(rfsimulator->tx_num_channels,
+      int remote_tx = rfsimulator->tx_num_channels;
+      if (qd_channel_requested()) {
+        qd_channel_t bundle = {};
+        char error[512] = {};
+        AssertFatal(qd_channel_load(getenv("OAI_QD_CHANNEL"), NULL, &bundle, error, sizeof(error)), "%s\n", error);
+        AssertFatal(bundle.tx_antennas <= 255 && bundle.rx_antennas == (size_t)rfsimulator->rx_num_channels,
+                    "QDCHANNEL1 dimensions do not match local Rx configuration\n");
+        remote_tx = bundle.tx_antennas;
+        qd_channel_free(&bundle);
+      }
+      load_channellist(remote_tx,
                        rfsimulator->rx_num_channels,
                        rfsimulator->sample_rate,
                        rfsimulator->rx_freq,
@@ -961,6 +974,21 @@ static int rfsimulator_write_internal(rfsimulator_state_t *t,
 {
   mutexlock(t->Sockmutex);
   LOG_D(HW, "Sending %d samples at time: %ld, nbAnt %d\n", nsamps, timestamp, nbAnt);
+  // 累计整个 IQ 时间窗，而非只观察秒边界的空闲子帧。
+  if (qd_channel_requested() && nbAnt > 1) {
+    AssertFatal(nbAnt <= 256, "Too many QD Tx ports\n");
+    for (int ant = 0; ant < nbAnt; ant++)
+      t->qd_tx_energy[ant] += (double)signal_energy(static_cast<int32_t *>(samplesVoid[0][ant]), nsamps) * nsamps;
+    t->qd_tx_samples += nsamps;
+    if (timestamp / (uint64_t)t->sample_rate != (timestamp + nsamps) / (uint64_t)t->sample_rate) {
+      for (int ant = 0; ant < nbAnt; ant++) {
+        LOG_I(HW, "QDCHANNEL1 Tx port %d IQ=%lu mean_energy=%.3f\n", ant, (uint64_t)timestamp,
+              t->qd_tx_energy[ant] / t->qd_tx_samples);
+        t->qd_tx_energy[ant] = 0;
+      }
+      t->qd_tx_samples = 0;
+    }
+  }
 
   for (int i = 0; i < MAX_FD_RFSIMU; i++) {
     buffer_t *b = &t->buf[i];
@@ -1304,10 +1332,15 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
           memset(temp_array, 0, sizeof(temp_array));
           channel_modelling = true;
         }
+        AssertFatal(ptr->nbAnt == ptr->channel_model->nb_tx && nbAnt == ptr->channel_model->nb_rx,
+                    "RFsim wire/local antenna counts differ from channel dimensions\n");
         const uint64_t channel_offset = ptr->channel_model->channel_offset;
         const size_t channel_history = qd_channel_history_length(ptr->channel_model);
         AssertFatal(channel_history >= 1, "RFsim channel history must not be empty\n");
-        std::vector<std::vector<c16_t>> ant_buffers(ptr->nbAnt, std::vector<c16_t>(nsamps + channel_history - 1, {0, 0}));
+        const size_t channel_lookahead = qd_channel_lookahead_length(ptr->channel_model);
+        // 已等待收到 timestamp+nsamps；正传播时延保证这些前看样本已经到达。
+        AssertFatal(channel_offset >= channel_lookahead, "QD symmetric FIR needs sufficient bulk-delay buffer\n");
+        std::vector<std::vector<c16_t>> ant_buffers(ptr->nbAnt, std::vector<c16_t>(nsamps + channel_history - 1 + channel_lookahead, {0, 0}));
         c16_t *input[ant_buffers.size()];
         for (uint aatx = 0; aatx < ant_buffers.size(); aatx++) {
           input[aatx] = ant_buffers[aatx].data();
@@ -1318,7 +1351,7 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
         AssertFatal(timestamp >= 0 && channel_offset <= INT64_MAX - (channel_history - 1),
                     "Invalid RFsim collection timestamp or history offset\n");
         const uint64_t needed_history = channel_offset + channel_history - 1;
-        const size_t input_count = nsamps + channel_history - 1;
+        const size_t input_count = nsamps + channel_history - 1 + channel_lookahead;
         const uint64_t now = static_cast<uint64_t>(timestamp);
         const size_t leading_zeros = now < needed_history
             ? std::min<uint64_t>(input_count, needed_history - now) : 0;
@@ -1335,9 +1368,9 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
         for (uint aatx = 0; aatx < ant_buffers.size(); aatx++)
           input[aatx] = ant_buffers[aatx].data();
 
-        for (int aarx = 0; aarx < nbAnt; aarx++) {
-          rxAddInput(input, temp_array[aarx], aarx, ptr->channel_model, nsamps);
-        }
+        cf_t *rx_outputs[nbAnt];
+        for (int aarx=0;aarx<nbAnt;aarx++) rx_outputs[aarx]=temp_array[aarx];
+        rxAddInputs(input,rx_outputs,ptr->channel_model,nsamps);
       } else {
         if (is_first_beam && is_first_peer && (ptr->nbAnt == 1 && nbAnt == 1)) {
           // optimization: The buffer is uninitialized so samples can be written directly in the buffer

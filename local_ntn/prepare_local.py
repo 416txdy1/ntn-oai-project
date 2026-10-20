@@ -9,6 +9,7 @@ from ntn_timing_budget import cell_koffset_ms, timing_budget
 from preflight import read_trace
 from network_config import configure
 from runtime_config import resolve_runtime
+from spatial_config import spatial_mode, spatial_ports, configure_miso
 
 
 def generate(config, rate, initial_lead_rfsim=0):
@@ -73,6 +74,8 @@ def generate(config, rate, initial_lead_rfsim=0):
         if n!=1:raise RuntimeError(f'{name}: {n} occurrences')
     # 初始时延由双段几何计算；动态回放可超过 20 ms，由运行时更新偏移。
     config.run_dir.mkdir(parents=True, exist_ok=True)
+    if spatial_mode(os.environ):
+        conf = configure_miso(conf, spatial_ports(os.environ))
     out=config.gnb_config;out.write_text(configure(conf, config.to_env()))
     config.initial_delay_file.write_text(f'{(rf+rs)/c*1000:.9f}\n')
     print('Generated',out,'rate',rate,'initial delay ms',(rf+rs)/c*1000)

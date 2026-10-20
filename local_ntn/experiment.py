@@ -87,6 +87,8 @@ def build_manifest(config, rate, environment):
             'pusch_failure_threshold_override':pusch_failure_threshold(config.profile, environment),
             'pdcp_reordering_ms_override':pdcp_reordering_ms(config.profile, environment),
             'oai_rngseed_requested':environment.get('OAI_RNGSEED'),
+            'qd_workers_requested':environment.get('OAI_QD_WORKERS', '1'),
+            'spatial_mode_requested':environment.get('OAI_SPATIAL_MODE', 'siso'),
             'timing_diag_start_iq_s':timing_diag_start_iq_s(config.profile, environment),
             'mac_ta_feedback_policy':ta_feedback_policy(config.profile, environment),
             'cell_koffset_ms_override':koffset, 'nominal_timing_budget':budget,

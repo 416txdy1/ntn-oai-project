@@ -22,3 +22,25 @@ integration.long_provenance=examples/handover/provenance.json
 integration.short_provenance=examples/handover/firsthandover/provenance.json
 integration.original_oai_reference=c4125d1c740181ab1f7da0e7dd1d04ed07c37670
 integration.original_5gc_reference=212f92fc6a2fb82b5df1e8f4ef20075e75acefb3
+example.channel_directory=examples/fdd-pass-array
+example.antenna_profile=satellite_16x16_ground_omni
+# No additional Git checkout is required for the supported RFsim mode; E2_AGENT is OFF.
+# Optional native multiport profile (2026-10-15)
+miso.channel_directory=examples/fdd-miso
+miso.antenna_profile=satellite_2port_ground_omni
+miso.environment=scripts/env_miso.sh
+miso4.channel_directory=examples/fdd-miso4
+miso4.antenna_profile=satellite_4port_ground_omni
+miso4.environment=scripts/env_miso4.sh
+subarray4.channel_directory=examples/fdd-miso4-subarray
+subarray4.antenna_profile=satellite_16x16_4port_ground_omni
+subarray4.environment=scripts/env_subarray4.sh
+subarray4.array_reference_frequency_hz=2488400000
+# Handover connection logic plus native four-port channel (2026-10-18)
+handover_miso.connection_source=65bc517a0ec5bfb4e9e2f665876ea5d188cac1a5
+handover_miso.channel_source=9a65bc73ed4346db9a3747f4dde4258f68d05fdd
+handover_miso.channel_directory=examples/handover-miso4
+handover_miso.environment=scripts/env_handover_miso4.sh
+handover_miso.antenna_profile=satellite_16x16_4port_ground_omni
+handover_miso.long_provenance=examples/handover-miso4/provenance.json
+handover_miso.short_provenance=examples/handover-miso4/firsthandover/provenance.json

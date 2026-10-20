@@ -76,7 +76,7 @@ class PreflightTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='qd launch ') as directory:
             root = Path(directory)
             here = Path(__file__).parent
-            for name in ('paths.py', 'run_local.sh', 'runtime_config.py', 'ntn_timing_budget.py'):
+            for name in ('paths.py', 'run_local.sh', 'runtime_config.py', 'ntn_timing_budget.py', 'spatial_config.py'):
                 shutil.copy2(here / name, root / name)
             build = root / 'chosen build'
             build.mkdir()
@@ -137,7 +137,7 @@ class ProfilePreflightTest(unittest.TestCase):
             root=Path(directory)
             scripts=root/'local_ntn'
             scripts.mkdir()
-            for name in ('runtime_config.py','run_local.sh','ntn_timing_budget.py'):
+            for name in ('runtime_config.py','run_local.sh','ntn_timing_budget.py','spatial_config.py'):
                 shutil.copy2(Path(__file__).parent/name,scripts/name)
             (scripts/'verify_network.py').write_text('')
             config=resolve_runtime(root,'legacy-handover','launcher',{})
@@ -182,7 +182,7 @@ class ProfilePreflightTest(unittest.TestCase):
             root=Path(directory)
             scripts=root/'local_ntn'
             scripts.mkdir()
-            for name in ('runtime_config.py','run_local.sh','network_owner.py','ntn_timing_budget.py'):
+            for name in ('runtime_config.py','run_local.sh','network_owner.py','ntn_timing_budget.py','spatial_config.py'):
                 shutil.copy2(Path(__file__).parent/name,scripts/name)
             shutil.copy2(Path(__file__).parent/'verify_network.py',scripts/'verify_impl.py')
             # Run the real verification CLI/resolver, mocking only privilege/kernel manager.
