@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>NTN · 低缓冲直播实验</title>
+<style>
+@font-face{font-family:NTNCJK;src:url('/font') format('opentype');font-display:swap}*{box-sizing:border-box}body{margin:0;background:#091320;color:#e4edf7;font:16px NTNCJK,system-ui,sans-serif}main{max-width:1180px;margin:26px auto;padding:0 26px}header{display:flex;justify-content:space-between;align-items:center}h1{font-size:27px;margin:0}small{color:#93a7bd}.badge{background:#113d3a;color:#82e7c4;padding:8px 13px;border-radius:20px}section{display:grid;grid-template-columns:2fr 1fr;gap:20px;margin:24px 0}video{width:100%;aspect-ratio:16/9;background:#000;border-radius:12px}aside,.card{background:#122236;padding:18px;border-radius:12px}aside p{margin:12px 0;color:#a6bbcf}strong{color:#f1f5fa}#metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.number{font-size:25px;margin:8px 0}.label{font-size:13px;color:#a6bbcf}pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;color:#9eb3c9}button{background:#4ad0ad;border:0;border-radius:8px;padding:12px 20px;color:#071b18;font-weight:700;cursor:pointer}#error{color:#ffb7a6}footer{color:#91a4ba;font-size:13px;line-height:1.8}
+</style>
+<style>button{font-family:inherit}</style>
+<style>
+.physical-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.physical-grid .value{font-size:24px;color:#ffc977}.physical-grid small{font-size:12px}.physical-grid div{background:#0b1b2c;padding:9px;border-radius:8px}aside p{margin:8px 0}#diagnostic{padding:12px 16px;border:1px solid #36516c;border-radius:10px;margin:14px 0;background:#122236}#diagnostic[data-tone=bad]{border-color:#e58772;background:#382321}#diagnostic[data-tone=warn]{border-color:#b88a52}#diagnostic[data-tone=good]{border-color:#408879}#diagnosticDetail,#trendNumbers{font-size:13px;margin-top:6px;color:#b7c9dc}.trend{margin-top:16px;background:#122236;padding:12px 16px;border-radius:12px}#channelChart{display:block;width:100%;height:228px}.trend p{font-size:12px;color:#a6bbcf;margin:5px 0}.network-strip{display:flex;gap:20px;align-items:center;margin:10px 0;font-size:14px}#ueIngress{color:#6fdad1;font-size:23px}details{margin-top:12px}#channelAge{font-size:11px}section{margin:16px 0}#audioMetrics .number{font-size:21px}@media(max-width:800px){section{grid-template-columns:1fr}#metrics,#audioMetrics{grid-template-columns:repeat(2,1fr)!important}}
+</style>
+<main><header><div><small>OAI NTN / STK / QuaDRiGa</small><h1>UE 低缓冲直播实验</h1></div><span class="badge" id="connection">等待连接</span></header>
+<section><div><video id="video" autoplay muted playsinline controls></video><p id="error"></p><button id="start">连接直播</button><div class="network-strip">UE媒体入流 <strong id="ueIngress">—</strong> kbit/s <small>Windows转发之前</small></div></div><aside><small>来自命令行同一数值日志 · 物理信道</small><p>卫星 <strong id="sat">—</strong></p><p>阶段 <strong id="phase">—</strong></p><p>IQ <strong id="iq">—</strong> · STK <strong id="stk">—</strong></p><div class="physical-grid"><div><small>输入DL C/N · dB</small><div class="value" id="dlCn">—</div></div><div><small>输入UL C/N · dB</small><div class="value" id="ulCn">—</div></div><div><small>下行传播时延 · ms</small><div class="value" id="propDelay">—</div></div><div><small>下行多普勒 · kHz</small><div class="value" id="doppler">—</div></div></div><p id="channelAge">等待物理日志</p><small>C/N是信道输入，不是UE实测SINR。媒体经 oaitun_ue1 到达UE；窗口显示链路当前采集值，画面可能因缓冲延后。</small></aside></section>
+<p id="experiment" style="display:none"></p>
+<div id="diagnostic" data-tone="neutral"><strong id="diagnosticTitle">等待指标</strong><div id="diagnosticDetail">采集物理信道、UE媒体入流与播放器状态后显示同期变化。</div><div id="trendNumbers"></div></div>
+<div id="metrics"><div class="card"><div class="label">接收码率 · kbit/s</div><div class="number" id="bitrate">—</div></div><div class="card"><div class="label">解码帧率 · fps</div><div class="number" id="fps">—</div></div><div class="card"><div class="label">接收缓冲均值 · ms</div><div class="number" id="buffer">—</div></div><div class="card"><div class="label">无新显示帧 · ms</div><div class="number" id="gap">—</div></div></div>
+<div id="audioMetrics" style="display:none;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px"><div class="card"><div class="label">音频接收 · kbit/s</div><div class="number" id="audioRate">—</div></div><div class="card"><div class="label">音频接收样本</div><div class="number" id="audioSamples">—</div></div><div class="card"><div class="label">累计音频补偿 · %</div><div class="number" id="audioConcealed">—</div></div><div class="card"><div class="label">音画偏差估计 · ms</div><div class="number" id="avOffset">—</div></div></div>
+<div class="trend"><strong>信道与直播趋势 · 最近90个IQ秒</strong><canvas id="channelChart" aria-label="输入下行载噪比、UE媒体入流、解码帧率的共同IQ时间轴曲线"></canvas><p>横轴：IQ秒。三行单位分别为 dB、kbit/s、fps；竖虚线标记卫星阶段变化。空缺表示未知，不填零。</p><p>按采集时刻近似对齐；接收缓冲不等于端到端延迟，不能精确还原当前视频帧经历的C/N。提示用于定位，因果结论以对照报告为准。</p></div>
+<details><summary>连接与音视频原始数值</summary><pre id="details"></pre></details><footer>测试视频按墙钟时间直播，卫星信道按IQ推进。低缓冲不等于零延迟；灰屏、冻结和连接断开分别记录。<br>请保持窗口可见。测试结束后播放器将自动关闭，结果和截图保存在本次实验目录。</footer></main>
+<script src="/dashboard.js"></script>
+<script>
+'use strict';
+const $=id=>document.getElementById(id), video=$('video');
+let pc=null,previous=null,lastFrame=null,rendered=0,frameEvents=[],session=null,audioEnabled=false,audioContext=null,audioGain=null,mediaUrl='http://192.168.71.135:8889/live/whep';
+const media=new MediaStream();
+const monitor=new NTNDashboard.Monitor();
+const emit=(event,data={})=>fetch('/metrics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event,browser_ms:performance.now(),...data})}).catch(()=>{});
+function frame(now,metadata){lastFrame=performance.now();rendered++;frameEvents.push({browser_ms:lastFrame,media_time:metadata.mediaTime,presented_frames:metadata.presentedFrames});video.requestVideoFrameCallback(frame);}
+video.requestVideoFrameCallback(frame);
+for(const event of ['playing','waiting','stalled','pause','ended','error'])video.addEventListener(event,()=>emit(event,{current_time:video.currentTime}));
+video.addEventListener('volumechange',()=>{if(audioGain)audioGain.gain.value=video.muted?0:video.volume;emit('volume_change',{muted:video.muted,volume:video.volume});});
+async function connect(){
+ if(pc)return;
+ $('start').disabled=true;
+ try{
+  pc=new RTCPeerConnection({iceServers:[],bundlePolicy:'max-bundle'});window.demoPC=pc;
+  pc.ontrack=e=>{if('jitterBufferTarget' in e.receiver){try{e.receiver.jitterBufferTarget=200;emit('buffer_target',{target_ms:200,kind:e.track.kind});}catch(_){}}media.addTrack(e.track);emit('track',{kind:e.track.kind,ready_state:e.track.readyState});if(video.srcObject!==media)video.srcObject=media;video.play().catch(e=>{$('start').disabled=false;$('start').onclick=()=>video.play();});};
+  pc.onconnectionstatechange=()=>{$('connection').textContent=pc.connectionState;emit('connection',{state:pc.connectionState});};
+  pc.addTransceiver('video',{direction:'recvonly'});
+  if(audioEnabled)pc.addTransceiver('audio',{direction:'recvonly'});
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise((resolve,reject)=>{if(pc.iceGatheringState==='complete')return resolve();const timer=setTimeout(()=>reject(new Error('ICE gather timeout')),10000);pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState==='complete'){clearTimeout(timer);resolve();}});});
+  const response=await fetch(mediaUrl,{method:'POST',headers:{'Content-Type':'application/sdp'},body:pc.localDescription.sdp});
+  if(!response.ok)throw new Error('WHEP HTTP '+response.status);
+  session=response.headers.get('Location');
+  await pc.setRemoteDescription({type:'answer',sdp:await response.text()});
+ }catch(error){$('error').textContent=error.message;emit('fatal',{message:error.message});}
+}
+$('start').onclick=connect;
+setInterval(async()=>{
+ try{
+  const begin=performance.now();const response=await fetch('/state',{cache:'no-store'});const state=await response.json();const end=performance.now();
+  $('sat').textContent=state.satellite||'—';$('phase').textContent=state.phase||'—';$('iq').textContent=state.iq_s?.toFixed(2)+' s';$('stk').textContent=state.stk_s?.toFixed(2)+' s';
+  if(state.replay_round){document.querySelector('h1').textContent=`切换重放 · 第${state.replay_round}/${state.replay_total}轮 · 已观测${state.replay_completed??state.replay_round-1}次`;}
+  if(state.experiment_condition){$('experiment').style.display='block';$('experiment').textContent='对照组：'+({fixed:'固定信道',normal:'正常卫星切换',intervention:'相同切换＋物理信道干预'}[state.experiment_condition]||state.experiment_condition)+' ｜输入DL C/N：'+(state.input_dl_cn_db?.toFixed(2)??'—')+' dB ｜UE中继前入流：'+(state.ue_ingress_kbps?.toFixed(1)??'—')+' kbit/s';}
+  if(state.replay_round)$('experiment').textContent=state.replay_note+'；请保持播放器打开，轮次之间会自动重启播放器。';
+  await emit('clock_pair',{browser_begin_ms:begin,browser_end_ms:end,server_monotonic_ns:state.server_monotonic_ns});
+  if(!pc){monitor.update(state,{decoded_fps:null,frame_gap_ms:null},{no_frames:true});return;}
+  const stats=await pc.getStats();let inbound=null,audio=null,playout=null,pair=null;
+  stats.forEach(x=>{if(x.type==='inbound-rtp'&&x.kind==='video')inbound=x;if(x.type==='inbound-rtp'&&x.kind==='audio')audio=x;if(x.type==='media-playout'&&x.kind==='audio')playout=x;if(x.type==='transport'&&x.selectedCandidatePairId)pair=stats.get(x.selectedCandidatePairId);});
+  if(audio?.playoutId)playout=stats.get(audio.playoutId)||playout;
+  if(!inbound){monitor.update(state,{decoded_fps:null,frame_gap_ms:null},{no_frames:true});return;}
+  const now=performance.now(), dt=previous?(now-previous.ms)/1000:0;
+  const bitrate=dt>0?8*(inbound.bytesReceived-previous.bytes)/dt/1000:0;
+  const fps=dt>0?(inbound.framesDecoded-previous.frames)/dt:0;
+  const emitted=(inbound.jitterBufferEmittedCount||0)-(previous?.emitted||0), delay=(inbound.jitterBufferDelay||0)-(previous?.delay||0);
+  const buffer=emitted>0?1000*delay/emitted:null;
+  const local=pair?stats.get(pair.localCandidateId):null, remote=pair?stats.get(pair.remoteCandidateId):null;
+  const row={bytes_received:inbound.bytesReceived,frames_decoded:inbound.framesDecoded,frames_dropped:inbound.framesDropped,
+   packets_lost:inbound.packetsLost,jitter_s:inbound.jitter,freeze_count:inbound.freezeCount,total_freeze_duration_s:inbound.totalFreezesDuration,
+   bitrate_kbps:bitrate,decoded_fps:fps,buffer_ms:buffer,rendered_frames:rendered,frame_gap_ms:lastFrame===null?null:now-lastFrame,
+   frames:frameEvents.splice(0),connection_state:pc.connectionState,
+   video_codec:stats.get(inbound.codecId)?.mimeType,
+   audio_codec:audio?stats.get(audio.codecId)?.mimeType:null,
+   audio_bitrate_kbps:dt>0&&audio?8*(audio.bytesReceived-(previous.audioBytes||0))/dt/1000:0,
+   audio_bytes_received:audio?.bytesReceived||0,audio_samples_received:audio?.totalSamplesReceived||0,
+   audio_decode_rate_hz:dt>0&&audio?(audio.totalSamplesReceived-(previous.audioSamples||0))/dt:0,
+   audio_concealed_samples:audio?.concealedSamples||0,audio_concealment_events:audio?.concealmentEvents||0,
+   audio_total_energy:audio?.totalAudioEnergy||0,audio_level:audio?.audioLevel||0,
+   audio_buffer_ms:audio&&(audio.jitterBufferEmittedCount-(previous?.audioEmitted||0))>0?1000*(audio.jitterBufferDelay-(previous?.audioDelay||0))/(audio.jitterBufferEmittedCount-(previous?.audioEmitted||0)):null,
+   audio_playout_samples:playout?.totalSamplesCount??null,audio_playout_synthesized_s:playout?.synthesizedSamplesDuration??null,
+   audio_track_live:media.getAudioTracks().some(t=>t.readyState==='live'&&t.enabled),audio_muted:video.muted,audio_volume:video.volume,
+   audio_output_mode:'html',
+   estimated_av_offset_ms:audio?.estimatedPlayoutTimestamp!==undefined&&inbound.estimatedPlayoutTimestamp!==undefined?audio.estimatedPlayoutTimestamp-inbound.estimatedPlayoutTimestamp:null,
+   candidate_pair:pair?{state:pair.state,local_address:local?.address,local_port:local?.port,remote_address:remote?.address,remote_port:remote?.port,protocol:remote?.protocol,rtt_s:pair.currentRoundTripTime}:null};
+  $('bitrate').textContent=bitrate.toFixed(0);$('fps').textContent=fps.toFixed(1);$('buffer').textContent=buffer===null?'—':buffer.toFixed(0);$('gap').textContent=row.frame_gap_ms===null?'—':row.frame_gap_ms.toFixed(0);
+  $('audioRate').textContent=row.audio_bitrate_kbps.toFixed(0);$('audioSamples').textContent=row.audio_samples_received.toLocaleString();$('audioConcealed').textContent=row.audio_samples_received?(100*row.audio_concealed_samples/row.audio_samples_received).toFixed(2):'—';$('avOffset').textContent=row.estimated_av_offset_ms===null?'—':row.estimated_av_offset_ms.toFixed(0);
+  $('details').textContent=JSON.stringify({connection:pc.connectionState,video:row.video_codec,audio:row.audio_codec,muted:row.audio_muted,decoded:inbound.framesDecoded,dropped:inbound.framesDropped,rtp_lost:inbound.packetsLost,freezes:inbound.freezeCount,audio_playout_samples:row.audio_playout_samples,selected_pair:row.candidate_pair},null,2);
+  $('channelChart').style.opacity='1';
+  const diagnostic=monitor.update(state,row,{paused:video.paused,hidden:document.visibilityState!=='visible',no_frames:!inbound.framesDecoded});
+  row.diagnostic_snapshot=diagnostic.snapshot;
+  if(diagnostic.changed)await emit('diagnostic_change',diagnostic.snapshot);
+  await emit('stats',row);
+  previous={ms:now,bytes:inbound.bytesReceived,frames:inbound.framesDecoded,emitted:inbound.jitterBufferEmittedCount||0,delay:inbound.jitterBufferDelay||0,audioBytes:audio?.bytesReceived||0,audioEmitted:audio?.jitterBufferEmittedCount||0,audioDelay:audio?.jitterBufferDelay||0,audioSamples:audio?.totalSamplesReceived||0};
+ }catch(e){for(const id of ['dlCn','ulCn','propDelay','doppler','ueIngress'])$(id).textContent='—';$('diagnosticTitle').textContent='指标采集暂停';$('diagnosticDetail').textContent='暂不解释画面原因；曲线保留的是历史数据。';$('channelAge').textContent='状态获取或指标处理失败';$('channelChart').style.opacity='0.5';emit('collector_error',{message:e.message});}
+},1000);
+window.addEventListener('beforeunload',()=>{if(pc)pc.close();});
+(async()=>{try{const state=await(await fetch('/state')).json();audioEnabled=!!state.audio_required;mediaUrl=state.media_url||mediaUrl;if(audioEnabled){video.removeAttribute('muted');video.defaultMuted=false;video.muted=false;video.volume=0.15;$('audioMetrics').style.display='grid';}await connect();}catch(e){emit('fatal',{message:e.message});}})();
+</script></html>

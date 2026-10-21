@@ -1,3 +1,7 @@
+# 有声直播测试版本
+
+本分支保留既有NTN/QuaDRiGa/伪切换平台，增加有声直播、多轮切换演示和实时指标。入口、媒体本地配置与环境要求见 [直播测试分支说明](ntn_live_demo/RELEASE.md)，最新验证见 [发布验收](ntn_live_demo/RELEASE_VALIDATION.md)。
+
 # NTN OAI：单仓库 STK + QuaDRiGa 回放调试
 
 本整合分支以完整zky为基底，新增隔离伪卫星切换与持续业务验收。请先阅读[整合运行指南](docs/INTEGRATED_HANDOVER.md)及[最终测试证据](docs/validation/2026-10-16/index.json)，使用已验证的显式参数。以下原zky入口与资料继续保留。
