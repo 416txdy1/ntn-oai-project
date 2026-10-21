@@ -24,3 +24,9 @@ local_ntn/stk_trace_seamless.csv text eol=lf
 
 # Completion and manifest hashes are independent of host text conventions.
 examples/handover/**/*.json text eol=lf
+examples/handover-miso4/**/*.json -text -whitespace
+# Preserve the saved STK scenario bytes, including non-code .c chain files.
+STK_LEO_Constellation_20260923_train_v2/** -text -whitespace
+# Generated JSON is hash-bound by antenna.json; preserve exported bytes on every OS.
+examples/fdd-pass-array/**/*.json -text -whitespace
+examples/fdd-miso*/**/*.json -text -whitespace

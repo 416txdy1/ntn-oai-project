@@ -116,11 +116,12 @@ def selected_runtime(case,profile,run_id,environment):
     expected='legacy-handover' if case=='legacy' else 'integrated-handover'
     if profile!=expected:raise ValueError('case/profile mismatch')
     env=dict(environment)
+    bundle_name = 'handover-miso4' if env.get('OAI_SPATIAL_MODE') == 'miso4-subarray' else 'handover'
     if case=='firsthandover':
         desired={'OAI_STK_TRACE':ROOT/'local_ntn/stk_trace_firsthandover.csv',
                  'OAI_STK_SCHEDULE':ROOT/'local_ntn/satellite_schedule_firsthandover.csv',
-                 'OAI_QD_DL_CHANNEL':ROOT/'examples/handover/firsthandover/downlink',
-                 'OAI_QD_UL_CHANNEL':ROOT/'examples/handover/firsthandover/uplink'}
+                 'OAI_QD_DL_CHANNEL':ROOT/'examples'/bundle_name/'firsthandover/downlink',
+                 'OAI_QD_UL_CHANNEL':ROOT/'examples'/bundle_name/'firsthandover/uplink'}
         for key,path in desired.items():
             if env.get(key) and Path(env[key]).resolve()!=path.resolve():
                 raise ValueError('inherited '+key+' conflicts with case')
@@ -581,6 +582,13 @@ def run_acceptance(argv=None):
                 if config.state_file.is_file():
                     _,records=read_state(config.state_file,config.run_id)
                     if records and not owned_modems_alive(records, launch.poll() is None):
+                        # 只记录进程身份数值，区分退出与监控身份变化；不放宽存活检查。
+                        report['modem_identity_failure'] = {
+                            role: dict(expected_start=record.get('start'),
+                                       expected_executable=record.get('executable'),
+                                       observed=process_identity(record['pid']),
+                                       phase=record.get('phase'))
+                            for role, record in records.items()}
                         raise RuntimeError('owned modem process exited')
                 current_address=pdu_address(config.namespace)
                 if current_address:

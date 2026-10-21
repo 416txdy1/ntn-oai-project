@@ -100,6 +100,7 @@ def main():
     missing = sorted(set(sent) - set(received))
     values = list(received.values())
     report = {'clock': 'CLOCK_MONOTONIC', 'sent': len(sent), 'received': len(received),
+              'sent_monotonic_ns': sent,
               'missing_sequences': missing, 'drain_timeout_s': args.timeout,
               'wall_monotonic_seconds': time.monotonic()-started,
               'rtt_ms': {'min': min(values), 'mean': sum(values)/len(values), 'max': max(values)} if values else None}

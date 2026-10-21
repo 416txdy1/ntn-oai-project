@@ -247,8 +247,17 @@ def validate(root):
             raise RuntimeError('Independent platform file missing: ' + path)
     branch = subprocess.check_output(['git', '-c', 'safe.directory=' + str(root),
                                      '-C', str(root), 'branch', '--show-current'], text=True).strip()
-    if branch != 'codex/ntn-quadriga-handover':
-        raise RuntimeError('Unexpected checkout branch: ' + branch)
+    # A new integration checkout must contain both published parents. A name
+    # alone never authorizes building or running against another checkout.
+    protected = Path('/home/kayoko/ntn-workspaces/ntn-quadriga-handover')
+    if root.resolve() == protected:
+        raise RuntimeError('Refusing to repurpose the protected original runtime')
+    for revision in ('95207d325f3272b5ba241175aac246c0b6bfa73c',
+                     'fc389626ffd7cfa3fd3b477682c1c45b0bf772da'):
+        probe = subprocess.run(['git','-c','safe.directory='+str(root),'-C',str(root),
+                                'merge-base','--is-ancestor',revision,'HEAD'],capture_output=True)
+        if probe.returncode:
+            raise RuntimeError('Runtime does not contain both verified integration parents')
     for executable in ('docker', 'cmake', 'cc', 'ip'):
         import shutil
         if not shutil.which(executable):

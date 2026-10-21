@@ -1,0 +1,108 @@
+{
+  "run_id": "miso-full-20261020-batch-rx",
+  "passed": true,
+  "wall_seconds": 1272.828770821,
+  "directions": {
+    "uplink": {
+      "sent": 15500,
+      "received_unique": 15500,
+      "duplicate_receives": 0,
+      "missing_sequences": [],
+      "late_received_sequences": [],
+      "failure_fraction": 0.0,
+      "offered_wall_bps": 99766.2062120333,
+      "receiver_ready_before_first_send_ms": 83.66098,
+      "missing_all_initial_prefix": true,
+      "missing": []
+    },
+    "downlink": {
+      "sent": 15497,
+      "received_unique": 15492,
+      "duplicate_receives": 0,
+      "missing_sequences": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "late_received_sequences": [],
+      "failure_fraction": 0.00032264309221139575,
+      "offered_wall_bps": 99757.94668566201,
+      "receiver_ready_before_first_send_ms": 88.894761,
+      "missing_all_initial_prefix": true,
+      "missing": [
+        {
+          "sequence": 1,
+          "wall_since_first_send_s": 0.0,
+          "iq_s_interpolated": 7.230965404420485,
+          "iq_bounds_s": [
+            7.155563932291667,
+            7.255567057291667
+          ],
+          "stk_s_interpolated": 8207.23096540442,
+          "stk_bounds_s": [
+            8207.155563932292,
+            8207.255567057291
+          ]
+        },
+        {
+          "sequence": 2,
+          "wall_since_first_send_s": 0.080138347,
+          "iq_s_interpolated": 7.268669641723637,
+          "iq_bounds_s": [
+            7.255567057291667,
+            7.355569401041667
+          ],
+          "stk_s_interpolated": 8207.268669641724,
+          "stk_bounds_s": [
+            8207.255567057291,
+            8207.355569401041
+          ]
+        },
+        {
+          "sequence": 3,
+          "wall_since_first_send_s": 0.160883425,
+          "iq_s_interpolated": 7.30355996656469,
+          "iq_bounds_s": [
+            7.255567057291667,
+            7.355569401041667
+          ],
+          "stk_s_interpolated": 8207.303559966565,
+          "stk_bounds_s": [
+            8207.255567057291,
+            8207.355569401041
+          ]
+        },
+        {
+          "sequence": 4,
+          "wall_since_first_send_s": 0.240968017,
+          "iq_s_interpolated": 7.338164892324292,
+          "iq_bounds_s": [
+            7.255567057291667,
+            7.355569401041667
+          ],
+          "stk_s_interpolated": 8207.338164892324,
+          "stk_bounds_s": [
+            8207.255567057291,
+            8207.355569401041
+          ]
+        },
+        {
+          "sequence": 5,
+          "wall_since_first_send_s": 0.321124602,
+          "iq_s_interpolated": 7.3744700643627485,
+          "iq_bounds_s": [
+            7.355569401041667,
+            7.455572526041666
+          ],
+          "stk_s_interpolated": 8207.374470064362,
+          "stk_bounds_s": [
+            8207.355569401041,
+            8207.455572526042
+          ]
+        }
+      ]
+    }
+  }
+}

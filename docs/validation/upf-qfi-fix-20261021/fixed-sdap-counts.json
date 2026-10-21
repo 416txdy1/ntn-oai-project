@@ -1,0 +1,71 @@
+[
+  {
+    "run_id": "miso-first-20261021-pfcp-control",
+    "logs": {
+      "gnb": {
+        "unmapped_qfi_drops": [],
+        "tun_not_attached": 0,
+        "write_failed": 0,
+        "entity_not_found": 0,
+        "pbch_errors_all_log_including_initial_sync": 0,
+        "rrc_idle": 0
+      },
+      "ue": {
+        "unmapped_qfi_drops": [
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        "tun_not_attached": 0,
+        "write_failed": 0,
+        "entity_not_found": 0,
+        "pbch_errors_all_log_including_initial_sync": 28,
+        "rrc_idle": 0
+      }
+    }
+  },
+  {
+    "run_id": "miso-first-20261021-qfi-fixed-a",
+    "logs": {
+      "gnb": {
+        "unmapped_qfi_drops": [],
+        "tun_not_attached": 0,
+        "write_failed": 0,
+        "entity_not_found": 0,
+        "pbch_errors_all_log_including_initial_sync": 0,
+        "rrc_idle": 0
+      },
+      "ue": {
+        "unmapped_qfi_drops": [],
+        "tun_not_attached": 0,
+        "write_failed": 0,
+        "entity_not_found": 0,
+        "pbch_errors_all_log_including_initial_sync": 28,
+        "rrc_idle": 0
+      }
+    }
+  },
+  {
+    "run_id": "miso-full-20261021-qfi-fixed",
+    "logs": {
+      "gnb": {
+        "unmapped_qfi_drops": [],
+        "tun_not_attached": 0,
+        "write_failed": 0,
+        "entity_not_found": 0,
+        "pbch_errors_all_log_including_initial_sync": 0,
+        "rrc_idle": 0
+      },
+      "ue": {
+        "unmapped_qfi_drops": [],
+        "tun_not_attached": 0,
+        "write_failed": 0,
+        "entity_not_found": 0,
+        "pbch_errors_all_log_including_initial_sync": 71,
+        "rrc_idle": 0
+      }
+    }
+  }
+]

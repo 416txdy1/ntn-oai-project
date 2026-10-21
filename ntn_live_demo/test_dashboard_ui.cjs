@@ -13,6 +13,7 @@ const fs=require('fs'),path=require('path'),assert=require('node:assert/strict')
    const monitor=new NTNDashboard.Monitor();window.testMonitor=monitor;
    monitor.history=Array.from({length:25},(_,i)=>({wall_s:70+i,iq_s:50+i*.7,cn_iq_s:50+i*.7,cn_db:19.887,ingress_kbps:352.79,fps:15,phase:'steady'}));
    const state={server_monotonic_ns:1e11,sampled_host_monotonic_ns:1e11,iq_s:77,phase:'steady',publisher_alive:true,
+    spatial_mode_requested:'miso4-subarray',spatial:{observed_ports:{ue:{tx:4,rx:1},gnb:{tx:1,rx:4}},observed_workers:{ue:8,gnb:8},active_tx_ports:[0,1,2,3]},
     channels:{dl:{cn_db:3.887,delay_ms:14.927,doppler_hz:22827.6,iq_s:76.9,age_ms:100,lag_iq_s:.1,valid:true},ul:{cn_db:13.62,age_ms:100}},
     ue_ingress_kbps:74.76,ue_ingress_observed_monotonic_ns:1e11};
    window.testState=state;
@@ -21,6 +22,8 @@ const fs=require('fs'),path=require('path'),assert=require('node:assert/strict')
   assert.equal(result.code,'channel_supply');
   assert.equal(await page.locator('#dlCn').textContent(),'3.89');
   assert.equal(await page.locator('#ueIngress').textContent(),'75');
+  assert.match(await page.locator('#spatialMode').textContent(),/DL 4Tx×1Rx \/ UL 1Tx×4Rx/);
+  assert.match(await page.locator('#spatialWorkers').textContent(),/有效发射端口 0, 1, 2, 3/);
   assert.match(await page.locator('#diagnosticTitle').textContent(),/信道劣化/);
   assert.ok(await page.locator('#channelChart').evaluate(el=>el.width>0&&el.height>0));
   await page.screenshot({path:path.join(__dirname,'dashboard-ui-test.png'),fullPage:true});

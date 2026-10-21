@@ -4,6 +4,7 @@ root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
 addpath(fullfile(root, 'quadriga', 'matlab'));
 options.quadriga_path = fullfile(root, '.runtime', 'quadriga');
 options.random_seed = 20260925;
+options.antenna_profile = 'satellite_16x16_ground_omni';
 for direction = {'downlink', 'uplink'}
     options.link_direction = direction{1};
     if strcmp(direction{1}, 'downlink')
@@ -11,7 +12,7 @@ for direction = {'downlink', 'uplink'}
     else
         options.center_frequency_hz = 1614900000;
     end
-    output = fullfile(root, '.runtime', 'generated-fdd', direction{1});
+    output = fullfile(root, '.runtime', 'generated-fdd-array', direction{1});
     assert(~exist(output, 'dir'), '禁止覆盖已有输出');
     export_stk_to_qdchannel(fullfile(root, 'examples', 'fdd-pass', 'trace.csv'), output, options);
 end

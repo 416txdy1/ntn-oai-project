@@ -1,5 +1,8 @@
 param(
     [string]$Distribution = 'Ubuntu-22.04',
+    [string]$ProjectRoot = '/home/kayoko/ntn-workspaces/ntn-live-miso',
+    [ValidateSet('siso','miso4-subarray')][string]$SpatialMode = 'siso',
+    [ValidateRange(1,8)][int]$QdWorkers = 8,
     [ValidateRange(1,4)][int]$Repeats = 2,
     [string]$Source,
     [switch]$Smoke,
@@ -20,7 +23,8 @@ try {
     $linuxSource = & wsl.exe -d $Distribution --exec wslpath -a ($media.FullName.Replace('\','/'))
     if ($LASTEXITCODE -ne 0) { throw 'Cannot access source media from WSL.' }
     $arguments = @('-d',$Distribution,'--exec','sudo','python3','-B','-u',($linuxScript -join "`n").Trim(),
-        '--source',($linuxSource -join "`n").Trim(),'--repeats',[string]$Repeats)
+        '--source',($linuxSource -join "`n").Trim(),'--repeats',[string]$Repeats,
+        '--root',$ProjectRoot,'--spatial-mode',$SpatialMode,'--qd-workers',[string]$QdWorkers)
     if ($Smoke) { $arguments += '--smoke' }
     if ($PrepareOnly) { $arguments += '--prepare-only' }
     Write-Host 'NTN audiovisual channel comparison: fixed / normal switching / IQ-channel intervention.'

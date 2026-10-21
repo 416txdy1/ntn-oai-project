@@ -1,0 +1,63 @@
+{
+  "sampling_rate_hz": 7680000.0,
+  "trace_rows": 621,
+  "trace_interval_s": [
+    8200.0,
+    8820.0
+  ],
+  "runs": {
+    "miso-full-20261020-repeat-a": {
+      "gnb": {
+        "checked_rows": 620,
+        "iq_interval_s": [
+          1.323,
+          619.999
+        ],
+        "stk_interval_s": [
+          8201.323,
+          8819.999
+        ],
+        "max_abs_errors": {
+          "iq_s": 0.0,
+          "stk_s": 0.0,
+          "delay_ms": 4.993361173433186e-07,
+          "doppler_hz": 0.0004995703311578836,
+          "gain_db": 0.0004999740616220549,
+          "cn_db": 0.0004992309436797626
+        }
+      },
+      "ue": {
+        "checked_rows": 620,
+        "iq_interval_s": [
+          1.3279998697916666,
+          619.9997805989583
+        ],
+        "stk_interval_s": [
+          8201.32799986979,
+          8819.999780598959
+        ],
+        "max_abs_errors": {
+          "iq_s": 4.999999987376214e-07,
+          "stk_s": 5.000001692678779e-07,
+          "delay_ms": 4.990486672795669e-07,
+          "doppler_hz": 0.0004980307203368284,
+          "gain_db": 0.0004994891330589724,
+          "cn_db": 0.0004983742647226563
+        }
+      }
+    }
+  },
+  "initial_config": {
+    "total_delay_ms": 20.276334312,
+    "ta_common_units": 4979453,
+    "ta_quantization_error_ns": 1.695627631359553
+  },
+  "tolerances_log_rounding": {
+    "iq_s": 5.1e-07,
+    "stk_s": 5.1e-07,
+    "delay_ms": 5.1e-07,
+    "doppler_hz": 0.00051,
+    "gain_db": 0.00051,
+    "cn_db": 0.00051
+  }
+}

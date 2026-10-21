@@ -1,0 +1,57 @@
+{
+  "trace_iq_command": "bash local_ntn/run_regressions.sh",
+  "trace_iq_exit_code": 0,
+  "project_command": "bash scripts/test.sh",
+  "project_exit_code": 0,
+  "qfi_cpp_cases": 18,
+  "qfi_cpp_sanitizers": [
+    "address",
+    "undefined"
+  ],
+  "configuration_cases_linux": 6,
+  "miso_independent_convolution": [
+    {
+      "tx": 4,
+      "rx": 1,
+      "checks": 1241,
+      "total": 1241,
+      "max_error": 2.54801219e-11
+    },
+    {
+      "tx": 1,
+      "rx": 4,
+      "checks": 1241,
+      "total": 1241,
+      "max_error": 1.46296729e-11
+    },
+    {
+      "tx": 4,
+      "rx": 1,
+      "checks": 141,
+      "total": 141,
+      "max_error": 2.42683456e-11
+    },
+    {
+      "tx": 1,
+      "rx": 4,
+      "checks": 141,
+      "total": 141,
+      "max_error": 1.38828341e-11
+    }
+  ],
+  "initial_attempts": [
+    {
+      "test": "configuration tests on Windows",
+      "result": "2 errors: Linux-only O_NOFOLLOW; all 6 passed in supported WSL environment"
+    },
+    {
+      "test": "first full suite",
+      "result": "interrupted by test.sh text synchronization while running; stable script passed complete rerun"
+    }
+  ],
+  "log_sha256": {
+    "trace-iq-regressions.log": "7a48c02f553a37ec3fd2c51387b6c1676c6e7b7161ace65cb58cf0038149452c",
+    "project-tests-rerun.log": "f1a94b33f7dfac24390a8194117caf8aae1bc08ab430194133985a5609bec3a6",
+    "build-fixed.log": "17b0af2ff47be8d9f0c4d5059fd716ce83a7b371c8d6e933e7b7807509c13fa8"
+  }
+}

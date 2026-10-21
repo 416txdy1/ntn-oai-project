@@ -1,0 +1,68 @@
+PASS example: load, exact metadata, interpolation, mute, provenance rejection
+PASS example: load, exact metadata, interpolation, mute, provenance rejection
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: bundle file size mismatch: coefficients.cf32
+PASS rejected malformed bundle: bundle file SHA256 mismatch: coefficients.cf32
+PASS rejected malformed bundle: delays must be finite and non-negative
+PASS rejected malformed bundle: unsafe or invalid bundle file path
+PASS rejected malformed bundle: manifest is not valid JSON
+PASS real bundle: snapshots=621 rx=1 tx=4 paths=11 direction=downlink
+PASS QDCHANNEL1 C reader regression
+PASS QD 4 Tx x 1 Rx: 1241/1241 snapshot/midpoint checks, max error 2.54801219e-11, history 5618, muted boundaries
+PASS example: load, exact metadata, interpolation, mute, provenance rejection
+PASS example: load, exact metadata, interpolation, mute, provenance rejection
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: bundle file size mismatch: coefficients.cf32
+PASS rejected malformed bundle: bundle file SHA256 mismatch: coefficients.cf32
+PASS rejected malformed bundle: delays must be finite and non-negative
+PASS rejected malformed bundle: unsafe or invalid bundle file path
+PASS rejected malformed bundle: manifest is not valid JSON
+PASS real bundle: snapshots=621 rx=4 tx=1 paths=11 direction=uplink
+PASS QDCHANNEL1 C reader regression
+PASS QD 1 Tx x 4 Rx: 1241/1241 snapshot/midpoint checks, max error 1.46296729e-11, history 3816, muted boundaries
+PASS example: load, exact metadata, interpolation, mute, provenance rejection
+PASS example: load, exact metadata, interpolation, mute, provenance rejection
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: bundle file size mismatch: coefficients.cf32
+PASS rejected malformed bundle: bundle file SHA256 mismatch: coefficients.cf32
+PASS rejected malformed bundle: delays must be finite and non-negative
+PASS rejected malformed bundle: unsafe or invalid bundle file path
+PASS rejected malformed bundle: manifest is not valid JSON
+PASS real bundle: snapshots=71 rx=1 tx=4 paths=11 direction=downlink
+PASS QDCHANNEL1 C reader regression
+PASS QD 4 Tx x 1 Rx: 141/141 snapshot/midpoint checks, max error 2.42683456e-11, history 5618, muted boundaries
+PASS example: load, exact metadata, interpolation, mute, provenance rejection
+PASS example: load, exact metadata, interpolation, mute, provenance rejection
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: invalid dimension: snapshots
+PASS rejected malformed bundle: bundle file size mismatch: coefficients.cf32
+PASS rejected malformed bundle: bundle file SHA256 mismatch: coefficients.cf32
+PASS rejected malformed bundle: delays must be finite and non-negative
+PASS rejected malformed bundle: unsafe or invalid bundle file path
+PASS rejected malformed bundle: manifest is not valid JSON
+PASS real bundle: snapshots=71 rx=4 tx=1 paths=11 direction=uplink
+PASS QDCHANNEL1 C reader regression
+PASS QD 1 Tx x 4 Rx: 141/141 snapshot/midpoint checks, max error 1.38828341e-11, history 3816, muted boundaries

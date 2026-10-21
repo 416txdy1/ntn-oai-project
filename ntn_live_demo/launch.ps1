@@ -1,5 +1,8 @@
 param(
     [string]$Distribution = 'Ubuntu-22.04',
+    [string]$ProjectRoot = '/home/kayoko/ntn-workspaces/ntn-live-miso',
+    [ValidateSet('siso','miso4-subarray')][string]$SpatialMode = 'siso',
+    [ValidateRange(1,8)][int]$QdWorkers = 8,
     [ValidateSet('static','firsthandover','full')][string]$Case = 'firsthandover',
     [switch]$Prepare,
     [switch]$Headless,
@@ -20,7 +23,9 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Ordinary-user dependency preparation failed.' }
     }
     Write-Host 'Keep this console and player open. Ctrl+C requests cleanup.'
-    $arguments = @('-d',$Distribution,'--exec','sudo','python3','-u',$linuxDemo,'--case',$Case)
+    $arguments = @('-d',$Distribution,'--exec','sudo','python3','-u',$linuxDemo,'--case',$Case,
+        '--root',$ProjectRoot,'--spatial-mode',$SpatialMode,'--qd-workers',[string]$QdWorkers)
+    Write-Host "Independent runtime: $ProjectRoot; spatial mode: $SpatialMode; requested workers: $QdWorkers (SISO uses one)"
     if ($UseConfiguredSource -and -not $Source) {
         $configuration = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'media-source.local.json'),[Text.Encoding]::UTF8) | ConvertFrom-Json
         $Source = $configuration.source

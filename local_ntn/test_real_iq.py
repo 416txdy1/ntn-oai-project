@@ -106,3 +106,7 @@ with tempfile.TemporaryDirectory(prefix='oai-stk-iq-') as d:
         if direction=='uplink':qd_env['IQ_TEST_UPLINK']='1'
         else:qd_env.pop('IQ_TEST_UPLINK',None)
         subprocess.run([str(d/'test'),str(real_trace),'--qd'],check=True,env=qd_env)
+    for profile in ('fdd-miso', 'fdd-miso4', 'fdd-miso4-subarray'):
+        for direction in ('downlink', 'uplink'):
+            bundle=base.parent/'examples'/profile/direction
+            subprocess.run([str(d/'test'),str(base.parent/'examples/fdd-pass/trace.csv'),str(bundle)],check=True)

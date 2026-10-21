@@ -16,10 +16,12 @@ import time
 import uuid
 import urllib.request
 from telemetry import RadioTelemetry
+from live_config import DEFAULT_ROOT, add_runtime_arguments, radio_environment
+from spatial_evidence import audit_live_run
 
 HERE=Path(__file__).resolve().parent
 TOOLS=Path('/home/kayoko/ntn-live-demo-tools')
-ROOT=Path('/home/kayoko/ntn-workspaces/ntn-quadriga-handover')
+ROOT=DEFAULT_ROOT
 WINDOWS_NODE='/mnt/c/Users/WSZ/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node.exe'
 
 
@@ -168,13 +170,16 @@ def analyze(output,run,root,case,audio_required=False,windows_renderer=False):
 
 
 def main(argv=None):
+    global ROOT
     parser=argparse.ArgumentParser(description=__doc__)
+    add_runtime_arguments(parser)
     parser.add_argument('--case',choices=['static','firsthandover','full'],default='firsthandover')
     parser.add_argument('--headless',action='store_true')
     parser.add_argument('--skip-regressions',action='store_true',help='for repeat demo after recorded offline regressions')
     parser.add_argument('--source',type=Path,help='read-only local video with mandatory audio; live-loop as VP8+Opus')
     parser.add_argument('--experiment',type=Path,help='isolated causal-suite configuration; defaults remain unchanged')
     args=parser.parse_args(argv)
+    ROOT=args.root.expanduser().resolve()
     if os.geteuid()!=0:raise RuntimeError('Run orchestration via sudo; media/browser themselves drop privileges')
     source=args.source.expanduser().resolve() if args.source else None
     if source is not None and not source.is_file():raise RuntimeError('Source video must be an existing regular file')
@@ -194,12 +199,10 @@ def main(argv=None):
     visible=TOOLS/'runs'/tag;visible.mkdir(parents=True,mode=0o700);os.chown(visible,user.pw_uid,user.pw_gid)
     env={k:v for k,v in os.environ.items() if not k.startswith('OAI_') and not k.lower().endswith('_proxy')}
     env.update(helpers.PARAMETERS,PLAYWRIGHT_BROWSERS_PATH=str(TOOLS/'browsers'),PYTHONUNBUFFERED='1',PYTHONDONTWRITEBYTECODE='1')
+    env.update(radio_environment(ROOT,args.case,args.spatial_mode,args.qd_workers))
     env.update(HOME=user.pw_dir,USER=user.pw_name,LOGNAME=user.pw_name,XDG_RUNTIME_DIR=f'/run/user/{user.pw_uid}')
     if Path('/mnt/wslg/PulseServer').exists():env['PULSE_SERVER']='unix:/mnt/wslg/PulseServer'
     env['PULSE_LATENCY_MSEC']='60'
-    if args.case=='firsthandover':
-        for key,value in {'OAI_STK_TRACE':'local_ntn/stk_trace_firsthandover.csv','OAI_STK_SCHEDULE':'local_ntn/satellite_schedule_firsthandover.csv',
-                          'OAI_QD_DL_CHANNEL':'examples/handover/firsthandover/downlink','OAI_QD_UL_CHANNEL':'examples/handover/firsthandover/uplink'}.items():env[key]=str(ROOT/value)
     experiment_config=None
     if args.experiment:
         experiment_config=json.loads(args.experiment.read_text())
@@ -220,6 +223,7 @@ def main(argv=None):
     checker=[sys.executable,'scripts/original_platform_check.py'];snapshot=output/'original-before.json'
     run=ROOT/'.runtime/runs/integrated-handover'/tag
     result={'tag':tag,'case':args.case,'passed':False,'stages':runner.records,'cleanup':{},'ui_directory':str(visible)}
+    result.update(spatial_mode_requested=args.spatial_mode,qd_workers_requested=int(env['OAI_QD_WORKERS']),runtime_root=str(ROOT))
     if experiment_config:result['experiment']=experiment_config
     result['source_media']={'path':str(source),'sha256':source_before,'output_video_codec':'VP8','output_audio_codec':'Opus','live_wall_paced':True,'loop':True} if source else {'synthetic':True,'audio':False}
     processes={};core_started=False;before=digest_runtime(ROOT)
@@ -297,7 +301,8 @@ def main(argv=None):
         ue_ns=['ip','netns','exec','ntn-qd-ue']
         # Capture headers only, no payload or unrelated UE traffic.
         start('ue-media-packets',ue_ns+['tcpdump','-i','oaitun_ue1','-nn','-l','-s','96']+([] if experiment_config else ['-c','40'])+['udp and host 192.168.71.135 and port 8189'])
-        state_base={'audio_required':bool(source),'render_location':'windows' if windows_renderer else 'ue-linux'}
+        state_base={'audio_required':bool(source),'render_location':'windows' if windows_renderer else 'ue-linux',
+                    'spatial_mode_requested':args.spatial_mode,'qd_workers_requested':int(env['OAI_QD_WORKERS'])}
         if experiment_config:state_base['experiment_condition']=experiment_config['condition']
         if experiment_config and 'replay_round' in experiment_config:
             state_base.update(replay_round=experiment_config['replay_round'],replay_total=experiment_config['replay_total'],
@@ -339,6 +344,7 @@ def main(argv=None):
                 state['replay_completed']=state_base['replay_round']-1+int(replay_switched)
             state['sampled_host_monotonic_ns']=time.monotonic_ns()
             state['channels']=radio.snapshot(state.get('iq_s'))
+            state['spatial']=radio.spatial_snapshot()
             state['input_dl_cn_db']=state['channels'].get('dl',{}).get('cn_db')
             state['ue_ingress_kbps']=ingress_kbps
             state['ue_ingress_observed_monotonic_ns']=ingress_observed_ns
@@ -402,6 +408,9 @@ def main(argv=None):
         else:raise RuntimeError('Demo wall timeout')
         stop('browser');time.sleep(.3);stop('telemetry-server');stop('ue-media-packets')
         result.update(analyze(output,run,ROOT,args.case,bool(source),windows_renderer))
+        evidence=audit_live_run(ROOT,run,args.spatial_mode,int(env['OAI_QD_WORKERS']))
+        atomic_json(output/'physical-spatial-audit.json',evidence)
+        result.update(numeric_audit_ok=evidence['numeric_audit_ok'],spatial_audit=evidence['spatial'])
         result['passed']=result['demo_passed']
     except (Exception,KeyboardInterrupt) as error:
         result['error']=str(error) or type(error).__name__;helpers.say('DEMO FAILED: '+result['error'])

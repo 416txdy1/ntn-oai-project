@@ -1,6 +1,6 @@
 param(
     [string]$Distribution = 'Ubuntu-22.04',
-    [string]$ProjectRoot = '/home/kayoko/ntn-workspaces/ntn-quadriga-handover',
+    [string]$ProjectRoot = '/home/kayoko/ntn-workspaces/ntn-live-miso',
     [switch]$CheckOnly
 )
 $ErrorActionPreference = 'Stop'

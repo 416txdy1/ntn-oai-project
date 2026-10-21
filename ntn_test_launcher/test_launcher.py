@@ -16,6 +16,15 @@ spec.loader.exec_module(module)
 
 
 class LauncherTests(unittest.TestCase):
+    def test_runtime_without_both_published_parents_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for name in ('scripts/handover_acceptance.py','scripts/original_platform_check.py',
+                         'local_ntn/runtime_config.py','vendor/source-manifest.json'):
+                p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.touch()
+            with mock.patch.object(module.sys,'platform','linux'), mock.patch.object(module.subprocess,'check_output',return_value='codex/untrusted'), mock.patch.object(module.subprocess,'run',return_value=mock.Mock(returncode=1)):
+                with self.assertRaisesRegex(RuntimeError,'both verified integration parents'):module.validate(root)
+
     def test_partial_lines_and_missing_file(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'events'

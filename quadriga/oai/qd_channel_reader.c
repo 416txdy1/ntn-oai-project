@@ -318,6 +318,8 @@ static int token_string(const char *text, const json_token_t *token, char *outpu
   return 1;
 }
 
+static int token_double_value(const char *text, const json_token_t *token, double *output);
+
 static int token_size_value(const char *text, const json_token_t *token, size_t *output)
 {
   if (token->type != JSON_PRIMITIVE || token->end - token->start >= 64)
@@ -326,6 +328,17 @@ static int token_size_value(const char *text, const json_token_t *token, size_t 
   const size_t length = token->end - token->start;
   memcpy(buffer, text + token->start, length);
   buffer[length] = '\0';
+  /* MATLAB 对大数组的计数/字节数使用科学计数法。保留 JSON 语法、
+   * 有限值、整数值及安全转换检查，不能截断小数或接受溢出。 */
+  if (strpbrk(buffer, ".eE") != NULL) {
+    double value;
+    if (!token_double_value(text, token, &value) || value < 0
+        || value > 9007199254740991.0 || (long double)value > (long double)SIZE_MAX
+        || floor(value) != value)
+      return 0;
+    *output = (size_t)value;
+    return 1;
+  }
   if (length == 0 || (length > 1 && buffer[0] == '0'))
     return 0;
   for (size_t index = 0; index < length; index++)
@@ -673,11 +686,13 @@ static int parse_manifest(const char *text,
   };
   if (!require_object_fields(text, tokens, token_count, composition, composition_fields, 6, error, error_size))
     goto done;
+  const int power_token = object_get(text, tokens, token_count, composition, "quadriga_coefficients");
+  channel->spatial_normalization = token_equals(text, &tokens[power_token], "unit_snapshot_mean_link_power");
   for (size_t index = 0; index < 6; index++)
     if (!require_string(text,
                         tokens,
                         object_get(text, tokens, token_count, composition, composition_fields[index]),
-                        composition_values[index],
+                        (index == 4 && channel->spatial_normalization) ? "unit_snapshot_mean_link_power" : composition_values[index],
                         error,
                         error_size))
       goto done;
@@ -802,11 +817,12 @@ static int validate_channel_data(const qd_channel_t *channel, char *error, size_
 
   const size_t links_per_snapshot = channel->rx_antennas * channel->tx_antennas;
   const size_t links = channel->snapshots * links_per_snapshot;
-  for (size_t link = 0; link < links; link++) {
+  const size_t group_links = channel->spatial_normalization ? links_per_snapshot : 1;
+  for (size_t link = 0; link < links; link += group_links) {
     const size_t start = link * channel->paths;
     double total_power = 0.0;
     double minimum_active_delay = INFINITY;
-    for (size_t path = 0; path < channel->paths; path++) {
+    for (size_t path = 0; path < channel->paths * group_links; path++) {
       const qd_complex32_t coefficient = channel->coefficients[start + path];
       const double delay = channel->delays_s[start + path];
       if (!isfinite(coefficient.real) || !isfinite(coefficient.imag))
@@ -818,7 +834,7 @@ static int validate_channel_data(const qd_channel_t *channel, char *error, size_
       if (power > 1e-12 && delay < minimum_active_delay)
         minimum_active_delay = delay;
     }
-    if (fabs(total_power - 1.0) > 1e-5)
+    if (fabs(total_power / group_links - 1.0) > 1e-5)
       return fail(error, error_size, "link %zu path power is not normalized", link);
     if (!isfinite(minimum_active_delay) || minimum_active_delay > 1e-12)
       return fail(error, error_size, "link %zu has no zero-reference active path", link);

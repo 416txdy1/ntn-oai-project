@@ -9,6 +9,8 @@ import re
 import stat
 import subprocess
 import sys
+import time
+import math
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'local_ntn'))
 from runtime_config import resolve_runtime
 
@@ -120,6 +122,27 @@ class CoreLab:
         with os.fdopen(fd,'w') as stream:json.dump(marker,stream)
         os.replace(temp,self.marker)
         return marker
+    def wait_ready(self, timeout_s: float = 120.0) -> None:
+        """只等待完整的自有服务集合就绪；不修改订户或放宽资源所有权。"""
+        if not math.isfinite(timeout_s) or timeout_s < 0:
+            raise ValueError('Invalid core readiness timeout')
+        deadline = time.monotonic() + timeout_s
+        expected = self.names()
+        while True:
+            containers, _ = self.preflight()
+            owned = {item['Name'].lstrip('/'): item for item in containers if self.own_container(item)}
+            pending = []
+            for name in sorted(expected):
+                state = owned.get(name, {}).get('State', {})
+                health = state.get('Health')
+                if not state.get('Running') or (health is not None and health.get('Status') != 'healthy'):
+                    pending.append(name)
+            if expected and not pending:
+                return
+            if time.monotonic() >= deadline:
+                raise TimeoutError('Core services not ready: ' + ', '.join(pending or sorted(expected)))
+            time.sleep(min(2.0, max(0.0, deadline - time.monotonic())))
+
     def up(self):
         before=self.preflight();before_ids={i['Id'] for group in before for i in group}
         starting_identity=self.identity()
@@ -135,6 +158,7 @@ class CoreLab:
             if self.identity()!=starting_identity:raise ValueError('Core configuration changed during startup')
             saved_owner=self.save_owner(after)
             self.preflight()
+            self.wait_ready()
         except Exception:
             # Never compose-down on partial failure: it could remove preexisting resources.
             after=self.inventory()

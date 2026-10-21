@@ -69,7 +69,7 @@
         "bulk_doppler_source": { "const": "STKTRACE2" },
         "absolute_gain_source": { "const": "STKTRACE2" },
         "quadriga_delay": { "const": "relative_excess_seconds" },
-        "quadriga_coefficients": { "const": "unit_snapshot_link_power" },
+        "quadriga_coefficients": { "enum": ["unit_snapshot_link_power", "unit_snapshot_mean_link_power"] },
         "quadriga_large_scale_gain": { "const": "zero_mean_residual_db" }
       }
     },

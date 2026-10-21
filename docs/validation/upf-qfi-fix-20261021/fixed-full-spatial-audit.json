@@ -1,0 +1,31 @@
+{
+  "run_id": "miso-full-20261021-qfi-fixed",
+  "business_passed": true,
+  "directions": {
+    "gnb": "1 Tx x 4 Rx",
+    "ue": "4 Tx x 1 Rx"
+  },
+  "tx_energy": {
+    "0": {
+      "nonzero_windows": 621,
+      "min": 3053.122,
+      "max": 28649.582
+    },
+    "1": {
+      "nonzero_windows": 618,
+      "min": 0.0,
+      "max": 22702.588
+    },
+    "2": {
+      "nonzero_windows": 618,
+      "min": 0.0,
+      "max": 22702.669
+    },
+    "3": {
+      "nonzero_windows": 618,
+      "min": 0.0,
+      "max": 22702.613
+    }
+  },
+  "passed": true
+}

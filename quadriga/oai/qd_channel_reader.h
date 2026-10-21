@@ -29,6 +29,7 @@ typedef struct {
   size_t rx_antennas;
   size_t tx_antennas;
   size_t paths;
+  int spatial_normalization; /* 全空间矩阵共用功率、时延和相位参考 */
   double center_frequency_hz;
   char link_direction[9];
   char stk_trace_sha256[65];

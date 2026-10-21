@@ -8,6 +8,7 @@ import re
 import signal
 import subprocess
 import time
+from iq_udp import packet_budget, summarize as iq_udp_summary, write_json
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / 'local_ntn'
@@ -56,6 +57,8 @@ def udp_summary(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--max-wall-seconds', type=int, default=1800)
+    parser.add_argument('--traffic-clock', choices=('wall', 'iq'), default='wall',
+                        help='100 Kbit/s UDP 的计费时钟；旧实验默认 wall')
     args = parser.parse_args()
     if args.max_wall_seconds < 120:
         parser.error('max wall seconds must be >=120')
@@ -74,7 +77,7 @@ def main():
     label = 'fullpass-' + str(time.time_ns())
     output = reports / label
     output.mkdir()
-    report = {'label': label, 'rate': 1, 'trace_duration_s': duration,
+    report = {'label': label, 'rate': 1, 'traffic_clock': args.traffic_clock, 'ping_clock': 'wall', 'trace_duration_s': duration,
               'target_last_logged_iq_s': target, 'interpolation': os.environ.get('OAI_STK_TRACE_INTERPOLATION', 'hermite'), 'blend_timing_assist': os.environ.get('OAI_STK_BLEND_TIMING_ASSIST', '0'), 'passed': False}
     processes = []
     handles = []
@@ -122,16 +125,39 @@ def main():
         iperf = ['env', 'LD_LIBRARY_PATH=' + os.environ['OAI_IPERF3_LIBRARY_PATH'], os.environ['OAI_IPERF3_BIN']]
         server_prefix = ['nsenter', '-t', str(container['State']['Pid']), '-n']
         ue_prefix = ['ip', 'netns', 'exec', 'oai-stk-ue']
-        servers = [spawn(direction + '-server', server_prefix + iperf + ['-s', '-1', '-p', str(port), '-J']) for direction, port in [('uplink', 5203), ('downlink', 5204)]]
+        servers = [spawn(direction + '-server', server_prefix + iperf + ['-s', '-1', '-p', str(port), '-J']) for direction, port in [('uplink', 5203), ('downlink', 5204)]] if args.traffic_clock == 'wall' else []
         time.sleep(.4)
         if any(p.poll() is not None for p in servers):
             raise RuntimeError('iperf server failed; inspect local private logs')
         ping = spawn('ping', ue_prefix + ['python3', str(ROOT / 'scripts/monotonic_ping.py'), '--destination', destination, '--interface', 'oaitun_ue1', '--report', str(output / 'ping.json')])
-        clients = [spawn(direction + '-client', ue_prefix + iperf + ['-c', destination, '-p', str(port), '-B', address, '-u', '-b', '100K', '-t', str(args.max_wall_seconds + 60), '-i', '10', '-J'] + flags) for direction, port, flags in [('uplink', 5203, []), ('downlink', 5204, ['-R'])]]
+        clients = [spawn(direction + '-client', ue_prefix + iperf + ['-c', destination, '-p', str(port), '-B', address, '-u', '-b', '100K', '-t', str(args.max_wall_seconds + 60), '-i', '10', '-J'] + flags) for direction, port, flags in [('uplink', 5203, []), ('downlink', 5204, ['-R'])]] if args.traffic_clock == 'wall' else []
         report['traffic_start_iq_s'] = {}
         for kind in ('gnb', 'ue'):
             records, _ = numeric_state(BASE / f'{kind}-{label}.log',actual_fs)
             report['traffic_start_iq_s'][kind] = records[-1][0] if records else None
+        if args.traffic_clock == 'iq':
+            if any(value is None for value in report['traffic_start_iq_s'].values()):
+                raise RuntimeError('missing initial IQ clock')
+            clock_path = output / 'iq-clock.json'
+            iq_start = min(report['traffic_start_iq_s'].values())
+            write_json(clock_path, {'start': iq_start, 'current': iq_start, 'running': False})
+            token = os.urandom(16).hex()
+            for role, prefix, bind, peer in [('ue', ue_prefix, address, destination), ('dn', server_prefix, destination, address)]:
+                clients.append(spawn(role + '-iq-udp', prefix + ['python3', str(ROOT / 'scripts/iq_udp.py'),
+                    '--bind', bind, '--peer', peer, '--port', '5203', '--clock', str(clock_path),
+                    '--report', str(output / (role + '-iq-udp.json')), '--token', token]))
+            ready_deadline = time.monotonic() + 30
+            while not all((output / (role + '-iq-udp.json')).exists() and
+                          json.loads((output / (role + '-iq-udp.json')).read_text()).get('peer_ready')
+                          for role in ('ue', 'dn')):
+                if time.monotonic() > ready_deadline or any(p.poll() is not None for p in clients):
+                    raise RuntimeError('IQ UDP bidirectional handshake failed')
+                time.sleep(.05)
+            # 以双方绑定完成后的时钟作为统一业务起点，不补发启动等待期间的流量。
+            iq_start = min(numeric_state(BASE / f'{kind}-{label}.log')[0][-1][0] for kind in ('gnb', 'ue'))
+            report['iq_udp_start_s'] = iq_start
+            report['iq_udp_handshake'] = {role: {key: json.loads((output / (role + '-iq-udp.json')).read_text())[key]
+                for key in ('peer_ready', 'hello_sent', 'hello_received', 'ack_received')} for role in ('ue', 'dn')}
         print(json.dumps({'label': label, 'state': 'traffic_started', 'traffic_start_iq_s': report['traffic_start_iq_s']}), flush=True)
         last_progress = time.monotonic()
         previous = -1
@@ -144,15 +170,28 @@ def main():
                 if any(valid != 1 for iq, valid in records if iq <= duration):
                     raise RuntimeError('invalid trace inside valid interval: ' + kind)
             progress = min(values.values())
+            if args.traffic_clock == 'iq':
+                write_json(clock_path, {'start': iq_start, 'current': progress, 'running': True})
             now = time.monotonic()
             if progress > previous:
                 previous = progress
                 last_progress = now
+                with (output / 'iq-observations.jsonl').open('a') as timeline:
+                    timeline.write(json.dumps({'monotonic_s': now, 'iq_s': values}) + '\n')
             if now >= next_message:
                 ping_text = (output / 'ping.log').read_text(errors='replace')
                 print(json.dumps({'wall_s': round(now - started, 1), 'iq_s': values, 'ping_replies': ping_text.count('bytes from')}), flush=True)
                 next_message = now + 30
             if progress >= target:
+                if args.traffic_clock == 'iq':
+                    delivery_deadline = time.monotonic() + 5
+                    while True:
+                        states = [json.loads((output / (role + '-iq-udp.json')).read_text()) for role in ('ue', 'dn')]
+                        if all(state['last_iq'] == progress and len(state['sent']) == packet_budget(iq_start, progress) for state in states):
+                            break
+                        if time.monotonic() >= delivery_deadline:
+                            raise RuntimeError('IQ UDP final send budget not completed')
+                        time.sleep(.05)
                 report['end_trigger_iq_s'] = values
                 report['reached_end'] = True
                 break
@@ -192,9 +231,18 @@ def main():
             ping_text = (output / 'ping.log').read_text()
             counters = json.loads((output / 'ping.json').read_text())
             report['ping'] = {**counters, 'clock_backwards': False}
-            report['uplink'] = udp_summary(output / 'uplink-server.log')
-            report['downlink'] = udp_summary(output / 'downlink-client.log')
-            for direction, sender_log in [('uplink', 'uplink-client.log'), ('downlink', 'downlink-server.log')]:
+            if args.traffic_clock == 'iq':
+                ue_udp = json.loads((output / 'ue-iq-udp.json').read_text())
+                dn_udp = json.loads((output / 'dn-iq-udp.json').read_text())
+                if not all(item.get('complete') and not item.get('error') for item in (ue_udp, dn_udp)):
+                    raise ValueError('incomplete or failed IQ UDP probe')
+                report['uplink'] = iq_udp_summary(ue_udp, dn_udp)
+                report['downlink'] = iq_udp_summary(dn_udp, ue_udp)
+                report['iq_seconds_per_wall_second'] = report['uplink']['iq_seconds'] / report['uplink']['seconds']
+            else:
+                report['uplink'] = udp_summary(output / 'uplink-server.log')
+                report['downlink'] = udp_summary(output / 'downlink-client.log')
+            for direction, sender_log in ([('uplink', 'uplink-client.log'), ('downlink', 'downlink-server.log')] if args.traffic_clock == 'wall' else []):
                 sender_end = json.loads((output / sender_log).read_text()).get('end', {})
                 sender = sender_end.get('sum_sent') or sender_end.get('sum')
                 if not sender or not sender.get('sender') or sender.get('packets', 0) <= 0:

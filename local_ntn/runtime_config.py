@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shlex
 from ntn_timing_budget import cell_koffset_ms
+from spatial_config import spatial_mode
 from typing import Mapping, Optional
 
 
@@ -160,7 +161,13 @@ def resolve_runtime(root: Path, profile: str, run_id: str,
     if isolated and trace.is_relative_to((root / 'examples/fdd-pass').resolve()):
         raise ValueError('OAI_STK_TRACE reuses the original profile inputs')
     schedule = path('OAI_STK_SCHEDULE', root / 'local_ntn/satellite_schedule_seamless.csv') if isolated else (path('OAI_STK_SCHEDULE', environ['OAI_STK_SCHEDULE']) if environ.get('OAI_STK_SCHEDULE') else None)
-    bundle_root = root / ('examples/handover' if isolated else 'examples/fdd-pass')
+    miso = spatial_mode(environ)
+    if isolated and miso and environ['OAI_SPATIAL_MODE'] != 'miso4-subarray':
+        raise ValueError('handover MISO requires miso4-subarray')
+    if profile == 'legacy-handover' and miso:
+        raise ValueError('legacy-handover has no spatial QD channel')
+    bundle_root = root / ('examples/handover-miso4' if isolated and miso else
+                          'examples/handover' if isolated else 'examples/fdd-pass')
     dl = path('OAI_QD_DL_CHANNEL', bundle_root / 'downlink', bundle_root)
     ul = path('OAI_QD_UL_CHANNEL', bundle_root / 'uplink', bundle_root)
     qd_required = profile != 'legacy-handover'

@@ -1,0 +1,61 @@
+{
+  "scenario": "C:\\Users\\WSZ\\.codex\\visualizations\\2026\\07\\24\\019f9209-937f-7c50-8691-be0521d4eebc\\STK_LEO_Constellation_20260923_train_v2\\OAI_LEO_Constellation.sc",
+  "source_scenario": "C:\\Users\\WSZ\\.codex\\visualizations\\2026\\07\\24\\019f9209-937f-7c50-8691-be0521d4eebc\\STK_PhasedArray_20260910\\modified\\Scenario1.sc",
+  "source_satellite": "QIANFAN-166_69383",
+  "count": 6,
+  "planes": 1,
+  "per_plane": 6,
+  "acquire_elevation_deg": 10.0,
+  "release_elevation_deg": 5.0,
+  "satellites": [
+    {
+      "name": "OAI_LEO_P01_S01",
+      "path": "/Application/STK/Scenario/OAI_LEO_Constellation/Satellite/OAI_LEO_P01_S01",
+      "plane": 1,
+      "slot": 1,
+      "raan_deg": 357.8383,
+      "mean_anomaly_deg": 0.0
+    },
+    {
+      "name": "OAI_LEO_P01_S02",
+      "path": "/Application/STK/Scenario/OAI_LEO_Constellation/Satellite/OAI_LEO_P01_S02",
+      "plane": 1,
+      "slot": 2,
+      "raan_deg": 357.8383,
+      "mean_anomaly_deg": 30.0
+    },
+    {
+      "name": "OAI_LEO_P01_S03",
+      "path": "/Application/STK/Scenario/OAI_LEO_Constellation/Satellite/OAI_LEO_P01_S03",
+      "plane": 1,
+      "slot": 3,
+      "raan_deg": 357.8383,
+      "mean_anomaly_deg": 60.0
+    },
+    {
+      "name": "OAI_LEO_P01_S04",
+      "path": "/Application/STK/Scenario/OAI_LEO_Constellation/Satellite/OAI_LEO_P01_S04",
+      "plane": 1,
+      "slot": 4,
+      "raan_deg": 357.8383,
+      "mean_anomaly_deg": 90.0
+    },
+    {
+      "name": "OAI_LEO_P01_S05",
+      "path": "/Application/STK/Scenario/OAI_LEO_Constellation/Satellite/OAI_LEO_P01_S05",
+      "plane": 1,
+      "slot": 5,
+      "raan_deg": 357.8383,
+      "mean_anomaly_deg": 120.0
+    },
+    {
+      "name": "OAI_LEO_P01_S06",
+      "path": "/Application/STK/Scenario/OAI_LEO_Constellation/Satellite/OAI_LEO_P01_S06",
+      "plane": 1,
+      "slot": 6,
+      "raan_deg": 357.8383,
+      "mean_anomaly_deg": 150.0
+    }
+  ],
+  "selection_policy": "highest elevation; retain current above release mask"
+}

@@ -1,0 +1,181 @@
+{
+  "timebase": "pcap wall time relative to first downlink test packet at gNB host",
+  "events": [
+    {
+      "relative_first_dl_wall_s": -5.152666,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": null,
+      "probe_direction": null,
+      "inner_ip_version": 6
+    },
+    {
+      "relative_first_dl_wall_s": -5.152662,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": null,
+      "probe_direction": null,
+      "inner_ip_version": 6
+    },
+    {
+      "relative_first_dl_wall_s": -1.242452,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": null,
+      "probe_direction": null,
+      "inner_ip_version": 6
+    },
+    {
+      "relative_first_dl_wall_s": -1.242444,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": null,
+      "probe_direction": null,
+      "inner_ip_version": 6
+    },
+    {
+      "relative_first_dl_wall_s": 0.0,
+      "direction": "DL",
+      "qfi": 5,
+      "probe_sequence": 1,
+      "probe_direction": 2,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.080301,
+      "direction": "DL",
+      "qfi": 5,
+      "probe_sequence": 2,
+      "probe_direction": 2,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.160236,
+      "direction": "DL",
+      "qfi": 5,
+      "probe_sequence": 3,
+      "probe_direction": 2,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.240372,
+      "direction": "DL",
+      "qfi": 5,
+      "probe_sequence": 4,
+      "probe_direction": 2,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.309702,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": 1,
+      "probe_direction": 1,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.309716,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": 1,
+      "probe_direction": 1,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.320757,
+      "direction": "DL",
+      "qfi": 1,
+      "probe_sequence": 5,
+      "probe_direction": 2,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.400885,
+      "direction": "DL",
+      "qfi": 1,
+      "probe_sequence": 6,
+      "probe_direction": 2,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.42054,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": 2,
+      "probe_direction": 1,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.420555,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": 2,
+      "probe_direction": 1,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.423669,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": null,
+      "probe_direction": null,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.423683,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": null,
+      "probe_direction": null,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.479702,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": 3,
+      "probe_direction": 1,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.479717,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": 3,
+      "probe_direction": 1,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.480871,
+      "direction": "DL",
+      "qfi": 1,
+      "probe_sequence": 7,
+      "probe_direction": 2,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.502616,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": 4,
+      "probe_direction": 1,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.502628,
+      "direction": "UL",
+      "qfi": 1,
+      "probe_sequence": 4,
+      "probe_direction": 1,
+      "inner_ip_version": 4
+    },
+    {
+      "relative_first_dl_wall_s": 0.560997,
+      "direction": "DL",
+      "qfi": 1,
+      "probe_sequence": 8,
+      "probe_direction": 2,
+      "inner_ip_version": 4
+    }
+  ]
+}

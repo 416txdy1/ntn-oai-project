@@ -20,6 +20,7 @@ import time
 import uuid
 
 from demo import ROOT, HERE, load_helpers
+from live_config import add_runtime_arguments, child_arguments, bundle_root, radio_environment
 
 
 def sha(path):
@@ -30,12 +31,12 @@ def write_json(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
-def derive_inputs(root, suite, smoke, onset, duration, drop):
+def derive_inputs(root, suite, smoke, onset, duration, drop, spatial_mode='siso'):
     """Reuse identical QD taps; explicitly document the modified absolute C/N input."""
-    original = root/'examples/handover'
+    original = bundle_root(root,spatial_mode)
     trace = root/'local_ntn/stk_trace_seamless.csv'
     schedule = root/'local_ntn/satellite_schedule_seamless.csv'
-    destination = root/'examples/handover'/suite.name
+    destination = original/suite.name
     destination.mkdir(mode=0o700)
     source_hash = sha(trace)
     lines = trace.read_text().splitlines()
@@ -72,6 +73,12 @@ def derive_inputs(root, suite, smoke, onset, duration, drop):
         manifest['provenance']['stk_trace_sha256'] = sha(derived_trace)
         write_json(manifest_path,manifest)
         provenance['bundles'][direction]['manifest_sha256'] = sha(manifest_path)
+        antenna_path=destination/direction/'antenna.json'
+        if antenna_path.exists():
+            antenna=json.loads(antenna_path.read_text())
+            antenna.update(manifest_sha256=sha(manifest_path),stk_trace_sha256=sha(derived_trace))
+            write_json(antenna_path,antenna)
+            provenance['bundles'][direction]['antenna_sha256']=sha(antenna_path)
     write_json(destination/'provenance.json',provenance)
     write_json(destination/'experimental-derivation.json',derivation)
     write_json(suite/'input-derivation.json',derivation)
@@ -201,12 +208,15 @@ def export_timeline(directory, destination):
 
 
 def main(argv=None):
+    global ROOT
     parser=argparse.ArgumentParser(description=__doc__)
+    add_runtime_arguments(parser)
     parser.add_argument('--source',type=Path,required=True)
     parser.add_argument('--repeats',type=int,choices=range(1,5),default=2)
     parser.add_argument('--smoke',action='store_true',help='100 IQ seconds, first switch only; never long-run acceptance')
     parser.add_argument('--prepare-only',action='store_true',help='derive inputs, run regressions/preflight; no modems')
     args=parser.parse_args(argv)
+    args.root=args.root.expanduser().resolve();ROOT=args.root
     if os.geteuid()!=0:raise RuntimeError('Use launcher/sudo for isolated orchestration')
     if not args.source.is_file():raise ValueError('Source does not exist')
     helpers=load_helpers();helpers.validate(ROOT)
@@ -216,8 +226,9 @@ def main(argv=None):
     # Windows-accessible, sanitized summary. No UE logs or credentials copied here.
     public=HERE/'causal-results'/tag;public.mkdir(parents=True)
     target,onset,duration=(100.,70.,12.) if args.smoke else (615.,300.,12.)
-    environment,derivation=derive_inputs(ROOT,suite,args.smoke,onset,duration,16.)
+    environment,derivation=derive_inputs(ROOT,suite,args.smoke,onset,duration,16.,args.spatial_mode)
     report={'suite':tag,'mode':'SMOKE_FIRST_SWITCH_ONLY' if args.smoke else 'LONG_TWO_SWITCHES',
+            'spatial_mode':args.spatial_mode,'qd_workers':args.qd_workers,
             'target_iq_s_per_case':target,'repeats':args.repeats,'cases':[],'pairs':[],
             'intervention':derivation,'status':'INCOMPLETE',
             'limitations':['Finite paired observations, not a universal causal guarantee.',
@@ -248,16 +259,14 @@ def main(argv=None):
     def run_case(condition,repeat):
         nonlocal child
         case='static' if condition=='fixed' else 'firsthandover' if args.smoke else 'full'
-        control_environment={'OAI_STK_TRACE':str(ROOT/'local_ntn/stk_trace_seamless.csv'),
-                             'OAI_STK_SCHEDULE':str(ROOT/'local_ntn/satellite_schedule_seamless.csv'),
-                             'OAI_QD_DL_CHANNEL':str(ROOT/'examples/handover/downlink'),
-                             'OAI_QD_UL_CHANNEL':str(ROOT/'examples/handover/uplink')}
+        controls=radio_environment(ROOT,'full',args.spatial_mode,args.qd_workers)
+        control_environment={k:v for k,v in controls.items() if k not in ('OAI_SPATIAL_MODE','OAI_QD_WORKERS')}
         config={'condition':condition,'repeat':repeat,'target_iq_s':target,
                 'environment':environment if condition=='intervention' else control_environment,
                 'expected_perturbation':{'onset_iq_s':onset,'duration_iq_s':duration,'drop_db':16} if condition=='intervention' else None}
         config_path=suite/f'{repeat}-{condition}.json';write_json(config_path,config)
         command=[sys.executable,'-u',str(HERE/'demo.py'),'--case',case,'--source',str(args.source),
-                 '--skip-regressions','--experiment',str(config_path)]
+                 '--skip-regressions','--experiment',str(config_path)]+child_arguments(args)
         helpers.say(f'CASE repeat={repeat} condition={condition} target={target} IQ seconds')
         child=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
         directory=None
@@ -306,7 +315,10 @@ def main(argv=None):
         runner.stage('trace-iq-regressions',['bash','local_ntn/run_regressions.sh'])
         runner.stage('scripts-regressions',['bash','scripts/test.sh'])
         # Preflight both directions, with unchanged tap payload hashes and explicit derived provenance.
-        preflight_env=dict(os.environ,**helpers.PARAMETERS,**environment)
+        preflight_env={k:v for k,v in os.environ.items() if not k.startswith('OAI_')}
+        preflight_env.update(helpers.PARAMETERS)
+        preflight_env.update(radio_environment(ROOT,'full',args.spatial_mode,args.qd_workers))
+        preflight_env.update(environment)
         preflight_runner=helpers.Runner(ROOT,suite,preflight_env)
         preflight_runner.stage('derived-preflight',[sys.executable,'local_ntn/experiment.py','preflight','--profile','integrated-handover','--run-id',tag,'--rate','1'],timeout=120)
         for direction in ('downlink','uplink'):

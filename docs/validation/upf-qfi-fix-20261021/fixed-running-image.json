@@ -1,0 +1,7 @@
+{
+  "container_image_id": "sha256:3cdd79819b6d48751229878ba0df1ab32df8af8cead6860642ac0a1f840ca9ca",
+  "configured_image": "ntn-local/oai-upf:2.2.1-qfi-v1",
+  "running": true,
+  "image_matches_build_manifest": true,
+  "running_binary_sha256": "4ae4a05013a967eb0d55e02a31f141e40e9bcae8890dd8b9f5f81711370cf5ea"
+}

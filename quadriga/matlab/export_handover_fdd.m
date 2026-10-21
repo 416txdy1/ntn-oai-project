@@ -1,8 +1,10 @@
-function provenance_path = export_handover_fdd(trace_path, schedule_path, output_dir)
+function provenance_path = export_handover_fdd(trace_path, schedule_path, output_dir, options)
 %EXPORT_HANDOVER_FDD Export a complete two-frequency handover dataset.
 % Existing output is always refused. Failure leaves an incomplete directory,
 % without provenance.json, which integrated-handover preflight rejects.
 % The original QuaDRiGa generation and normalization math is reused unchanged.
+if nargin < 4, options = struct(); end
+if ~isfield(options, 'antenna_profile'), options.antenna_profile = 'omni'; end
 if exist(output_dir, 'file') || exist(output_dir, 'dir')
     error('QDCHANNEL1:OutputExists', 'Refusing to overwrite existing output: %s', output_dir);
 end
@@ -45,13 +47,22 @@ source_files = {
     'quadriga/matlab/read_stktrace2.m', ...
     'quadriga/matlab/ecef_to_enu_track.m', ...
     'quadriga/matlab/sha256_file.m'};
+if strcmp(options.antenna_profile, 'satellite_16x16_4port_ground_omni')
+    source_files{end+1} = 'quadriga/matlab/create_satellite_array.m';
+    source_files{end+1} = 'quadriga/matlab/satellite_beam_geometry.m';
+    source_files{end+1} = 'quadriga/matlab/combine_satellite_subarrays.m';
+    source_files{end+1} = 'quadriga/matlab/normalize_spatial_channel.m';
+    source_files{end+1} = 'quadriga/matlab/resample_stk_geometry.m';
+    source_files{end+1} = 'quadriga/matlab/certify_subarray_bandwidth.m';
+    options.array_reference_frequency_hz = 2488400000;
+end
 % containers.Map preserves slash/dot keys in JSON, unlike struct field names.
 file_hashes = containers.Map('KeyType', 'char', 'ValueType', 'char');
 for index = 1:numel(source_files)
     name = source_files{index};
     file_hashes(name) = sha256_file(fullfile(root, strrep(name, '/', filesep)));
 end
-options.quadriga_path = fullfile(root, '.runtime', 'quadriga');
+if ~isfield(options, 'quadriga_path'), options.quadriga_path = fullfile(root, '.runtime', 'quadriga'); end
 options.random_seed = 20260925;
 options.scenario = 'QuaDRiGa_NTN_Rural_LOS';
 mkdir(output_dir);
@@ -79,6 +90,13 @@ for direction = {'downlink', 'uplink'}
     % and existing exporter math are untouched; hashes survive OS checkouts.
     manifest_text = strrep(fileread(manifest_path), sprintf('\r\n'), sprintf('\n'));
     write_text(manifest_path, manifest_text);
+    % manifest 规范化换行后同步天线 sidecar 的绑定值；不改信道数值。
+    antenna_path = fullfile(bundle, 'antenna.json');
+    if exist(antenna_path, 'file')
+        antenna = jsondecode(fileread(antenna_path));
+        antenna.manifest_sha256 = sha256_file(manifest_path);
+        write_text(antenna_path, [jsonencode(antenna) sprintf('\n')]);
+    end
     manifest = jsondecode(manifest_text);
     if isempty(quadriga_version)
         quadriga_version = manifest.provenance.quadriga_version;
@@ -94,6 +112,9 @@ for direction = {'downlink', 'uplink'}
     end
     bundles.(name) = struct('path', name, 'manifest_sha256', sha256_file(manifest_path), ...
         'data_sha256', data_hashes);
+    if exist(antenna_path, 'file')
+        bundles.(name).antenna_sha256 = sha256_file(antenna_path);
+    end
 end
 provenance = struct('format', 'NTN_HANDOVER_FDD1', 'schema_version', 1, 'state', 'complete');
 descriptor = @(path) struct('sha256', sha256_file(path), 'rows', numel(trace.times_s), ...
@@ -101,6 +122,7 @@ descriptor = @(path) struct('sha256', sha256_file(path), 'rows', numel(trace.tim
 provenance.inputs = struct('trace', descriptor(trace_path), 'schedule', descriptor(schedule_path));
 provenance.tools = struct('matlab_version', version, 'quadriga_version', quadriga_version, ...
     'scenario', options.scenario, 'random_seed', options.random_seed);
+provenance.tools.antenna_profile = options.antenna_profile;
 provenance.source = struct('commit', commit, 'quadriga_archive_sha256', archive_sha, 'files', file_hashes);
 provenance.bundles = bundles;
 track_speeds = sqrt(sum(diff(trace.satellite_ecef_m, 1, 2).^2, 1)) ./ diff(trace.times_s).';

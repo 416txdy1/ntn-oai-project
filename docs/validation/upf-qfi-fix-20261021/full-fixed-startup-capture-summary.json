@@ -1,0 +1,193 @@
+{
+  "gnb-host": {
+    "groups": {
+      "gtp-to-gnb": {
+        "count_unique": 91,
+        "first_sequences": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25
+        ],
+        "missing_first_20": []
+      }
+    },
+    "capture_stats": [
+      "396 packets captured",
+      "440 packets received by filter",
+      "0 packets dropped by kernel"
+    ]
+  },
+  "oai-ext-dn": {
+    "groups": {
+      "plain-downlink": {
+        "count_unique": 91,
+        "first_sequences": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25
+        ],
+        "missing_first_20": []
+      }
+    },
+    "capture_stats": [
+      "103 packets captured",
+      "113 packets received by filter",
+      "0 packets dropped by kernel"
+    ]
+  },
+  "oai-upf": {
+    "groups": {
+      "gtp-to-gnb": {
+        "count_unique": 100,
+        "first_sequences": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25
+        ],
+        "missing_first_20": []
+      },
+      "plain-downlink": {
+        "count_unique": 100,
+        "first_sequences": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25
+        ],
+        "missing_first_20": []
+      }
+    },
+    "capture_stats": [
+      "444 packets captured",
+      "449 packets received by filter",
+      "0 packets dropped by kernel"
+    ]
+  },
+  "ue": {
+    "groups": {
+      "plain-downlink": {
+        "count_unique": 96,
+        "first_sequences": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25
+        ],
+        "missing_first_20": []
+      }
+    },
+    "capture_stats": [
+      "96 packets captured",
+      "100 packets received by filter",
+      "0 packets dropped by kernel"
+    ]
+  }
+}

@@ -11,6 +11,7 @@ import sys
 import uuid
 
 from demo import HERE, ROOT, load_helpers
+from live_config import add_runtime_arguments, child_arguments
 
 
 def confirmed_handover(root, outcome, helpers):
@@ -31,11 +32,14 @@ def confirmed_handover(root, outcome, helpers):
 
 
 def main(argv=None):
+    global ROOT
     parser=argparse.ArgumentParser(description=__doc__)
+    add_runtime_arguments(parser)
     parser.add_argument('--source',type=Path,required=True)
     parser.add_argument('--rounds',type=int,choices=range(1,9),default=4)
     parser.add_argument('--skip-regressions',action='store_true')
     args=parser.parse_args(argv)
+    args.root=args.root.expanduser().resolve();ROOT=args.root
     if os.geteuid()!=0:raise RuntimeError('Run the Windows launcher or sudo')
     if not args.source.is_file():raise ValueError('Source video does not exist')
     helpers=load_helpers();helpers.validate(ROOT)
@@ -49,6 +53,7 @@ def main(argv=None):
     private=ROOT/'.private'/tag;private.mkdir(mode=0o700)
     public=HERE/'replay-results'/tag;public.mkdir(parents=True)
     report={'series':tag,'requested_rounds':args.rounds,'completed_rounds':0,'rounds':[],
+            'spatial_mode':args.spatial_mode,'qd_workers':args.qd_workers,
             'status':'RUNNING','mode':'independent_first_handover_replays',
             'scope':'Each round has a fresh PDU/media session and IQ restarts. Not continuous multi-satellite handover or a causal control suite.'}
     runner=helpers.Runner(ROOT,private,dict(os.environ,PYTHONDONTWRITEBYTECODE='1'))
@@ -79,7 +84,7 @@ def main(argv=None):
             config={'condition':'normal','replay_round':index,'replay_total':args.rounds,'target_iq_s':65,'environment':{}}
             config_path=private/f'round-{index}.json';config_path.write_text(json.dumps(config))
             command=[sys.executable,'-B','-u',str(HERE/'demo.py'),'--case','firsthandover','--source',str(args.source),
-                     '--skip-regressions','--experiment',str(config_path)]
+                     '--skip-regressions','--experiment',str(config_path)]+child_arguments(args)
             child=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
             directory=None
             with (private/f'round-{index}.console.log').open('w') as stream:

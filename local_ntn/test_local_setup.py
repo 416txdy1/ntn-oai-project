@@ -15,7 +15,7 @@ from paths import OAI_REPO
 BASE = Path(__file__).resolve().parent
 with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
     work = Path(directory)
-    for name in ('prepare_local.py', 'paths.py', 'network_config.py', 'runtime_config.py', 'ntn_timing_budget.py', 'preflight.py'):
+    for name in ('prepare_local.py', 'paths.py', 'network_config.py', 'runtime_config.py', 'ntn_timing_budget.py', 'preflight.py', 'spatial_config.py'):
         shutil.copy2(BASE / name, work / name)
     private = work / 'identity.conf'
     private.write_text('imsi = "001010000000001"; nssai_sst = 1; dnn = "oai";\n'
@@ -24,6 +24,7 @@ with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
                OAI_AMF_IP='192.168.70.132', OAI_GNB_IP_CIDR='192.168.70.129/26', OAI_NTN_RUN_DIR=str(work))
     for key in ('OAI_GNB_CONFIG','OAI_INITIAL_DELAY_FILE','OAI_NTN_STATE_FILE'):
         env.pop(key,None)
+    env['OAI_SPATIAL_MODE'] = 'siso'
     env['OAI_STK_TRACE'] = str(work / 'stk_trace.csv')  # 测试只使用临时输入。
     template = OAI_REPO / 'ci-scripts/conf_files/gnb.sa.band254.u0.25prb.rfsim.ntn-leo.conf'
     original = template.read_bytes()
@@ -69,6 +70,7 @@ with tempfile.TemporaryDirectory(prefix='ntn-local-setup-') as directory:
     (work / 'stk_trace.csv').rename(selected)
     for key in ('OAI_GNB_CONFIG','OAI_INITIAL_DELAY_FILE','OAI_NTN_STATE_FILE'):
         env.pop(key,None)
+    env['OAI_SPATIAL_MODE'] = 'siso'
     env['OAI_STK_TRACE'] = str(selected)
     assert run(0).returncode == 0
     selected.write_text(selected.read_text().replace('STKTRACE2', '# STKTRACE2', 1))

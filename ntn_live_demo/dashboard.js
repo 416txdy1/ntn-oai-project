@@ -53,6 +53,13 @@ class Monitor{
   }
   this.events=this.events.filter(e=>state.iq_s-e.iq_s<=180);
   const $=id=>document.getElementById(id),number=(v,d=2)=>finite(v)?v.toFixed(d):'—';
+  const spatial=$('spatialMode');
+  if(spatial){
+   const s=state.spatial||{},dl=s.observed_ports?.ue,ul=s.observed_ports?.gnb;
+   const dims=p=>p?`${p.tx}Tx×${p.rx}Rx`:'待观测';
+   spatial.textContent=`${state.spatial_mode_requested||'未提供模式'} ｜ DL ${dims(dl)} / UL ${dims(ul)}`;
+   $('spatialWorkers').textContent=`实际计算线程：gNB ${s.observed_workers?.gnb??'—'} / UE ${s.observed_workers?.ue??'—'} ｜有效发射端口 ${(s.active_tx_ports||[]).join(', ')||'待观测'}`;
+  }
   $('dlCn').textContent=channelFresh?number(dl.cn_db):'—';
   $('ulCn').textContent=ul&&ul.age_ms+stateAge<3500?number(ul.cn_db):'—';
   $('propDelay').textContent=channelFresh?number(dl.delay_ms,3):'—';

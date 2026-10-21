@@ -61,6 +61,21 @@ def main() -> int:
         )
         run([str(executable), "--example", str(example), example_trace_sha256])
 
+        scientific = temporary_path / "scientific"
+        shutil.copytree(example, scientific)
+        scientific_path = scientific / "manifest.json"
+        original_text = json.dumps(manifest)
+        # 真实 MATLAB 导出格式；小夹具也必须覆盖计数和字节数的指数写法。
+        import re
+        scientific_text = re.sub(r'("(?:count|bytes|snapshots)": )(\d+)',
+                                 lambda match: match[1] + format(int(match[2]), '.8E'), original_text)
+        scientific_path.write_text(scientific_text, encoding="utf-8")
+        run([str(executable), "--example", str(scientific), example_trace_sha256])
+        for invalid in ('2.5E0', '-3E0', '1E999', 'NaN', '3E', '03E0', '9.007199254740992E15'):
+            bad_text = re.sub(r'("snapshots": )\d+', lambda match: match[1] + invalid, original_text)
+            scientific_path.write_text(bad_text, encoding="utf-8")
+            run([str(executable), "--expect-fail", str(scientific)])
+
         truncated = temporary_path / "truncated"
         shutil.copytree(example, truncated)
         coefficient_path = truncated / "coefficients.cf32"

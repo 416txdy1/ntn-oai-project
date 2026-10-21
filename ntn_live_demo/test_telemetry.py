@@ -7,6 +7,19 @@ from telemetry import RadioTelemetry
 
 
 class TelemetryTests(unittest.TestCase):
+    def test_actual_spatial_observations_are_not_requested_values(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            reader=RadioTelemetry(load_helpers(),root)
+            self.assertEqual(reader.spatial_snapshot()['observed_ports'],{})
+            (root/'gnb-live-demo.log').write_text('private never forwarded\nQDCHANNEL1 spatial ports: 1 Tx x 4 Rx\nQDCHANNEL1 compute workers: 8\nQDCHANNEL1 Tx port 2 IQ=7680000 mean_energy=42.5\n')
+            (root/'ue-live-demo.log').write_text('QDCHANNEL1 spatial ports: 4 Tx x 1 Rx\nQDCHANNEL1 compute workers: 8\n')
+            reader.poll();spatial=reader.spatial_snapshot()
+            self.assertEqual(spatial['observed_ports']['ue'],{'tx':4,'rx':1})
+            self.assertEqual(spatial['observed_workers'],{'gnb':8,'ue':8})
+            self.assertEqual(spatial['active_tx_ports'],[2])
+            self.assertNotIn('private',str(spatial))
+
     def test_direction_parameters_and_partial_log(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);log=root/'ue-live-demo.log'

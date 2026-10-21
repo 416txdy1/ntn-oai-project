@@ -1,0 +1,108 @@
+{
+  "run_id": "miso-full-20261020-repeat-a",
+  "passed": true,
+  "wall_seconds": 1249.983271097,
+  "directions": {
+    "uplink": {
+      "sent": 15220,
+      "received_unique": 15220,
+      "duplicate_receives": 0,
+      "missing_sequences": [],
+      "late_received_sequences": [],
+      "failure_fraction": 0.0,
+      "offered_wall_bps": 99762.96903989202,
+      "receiver_ready_before_first_send_ms": 80.496664,
+      "missing_all_initial_prefix": true,
+      "missing": []
+    },
+    "downlink": {
+      "sent": 15218,
+      "received_unique": 15213,
+      "duplicate_receives": 0,
+      "missing_sequences": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "late_received_sequences": [],
+      "failure_fraction": 0.000328558286239979,
+      "offered_wall_bps": 99758.38789269174,
+      "receiver_ready_before_first_send_ms": 75.555763,
+      "missing_all_initial_prefix": true,
+      "missing": [
+        {
+          "sequence": 1,
+          "wall_since_first_send_s": 0.0,
+          "iq_s_interpolated": 7.124860550296246,
+          "iq_bounds_s": [
+            7.028559375,
+            7.1285625
+          ],
+          "stk_s_interpolated": 8207.124860550297,
+          "stk_bounds_s": [
+            8207.028559375,
+            8207.1285625
+          ]
+        },
+        {
+          "sequence": 2,
+          "wall_since_first_send_s": 0.080163514,
+          "iq_s_interpolated": 7.163914705691862,
+          "iq_bounds_s": [
+            7.1285625,
+            7.228565625
+          ],
+          "stk_s_interpolated": 8207.163914705692,
+          "stk_bounds_s": [
+            8207.1285625,
+            8207.228565625
+          ]
+        },
+        {
+          "sequence": 3,
+          "wall_since_first_send_s": 0.160312018,
+          "iq_s_interpolated": 7.2030014570868515,
+          "iq_bounds_s": [
+            7.1285625,
+            7.228565625
+          ],
+          "stk_s_interpolated": 8207.203001457086,
+          "stk_bounds_s": [
+            8207.1285625,
+            8207.228565625
+          ]
+        },
+        {
+          "sequence": 4,
+          "wall_since_first_send_s": 0.240467063,
+          "iq_s_interpolated": 7.241905501678742,
+          "iq_bounds_s": [
+            7.228565625,
+            7.32856875
+          ],
+          "stk_s_interpolated": 8207.241905501678,
+          "stk_bounds_s": [
+            8207.228565625,
+            8207.32856875
+          ]
+        },
+        {
+          "sequence": 5,
+          "wall_since_first_send_s": 0.32060063,
+          "iq_s_interpolated": 7.280447864801179,
+          "iq_bounds_s": [
+            7.228565625,
+            7.32856875
+          ],
+          "stk_s_interpolated": 8207.280447864801,
+          "stk_bounds_s": [
+            8207.228565625,
+            8207.32856875
+          ]
+        }
+      ]
+    }
+  }
+}

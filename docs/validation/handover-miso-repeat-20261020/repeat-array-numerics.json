@@ -1,0 +1,126 @@
+[
+  {
+    "bundle": ".runtime\\handover-review-20261018\\examples\\handover-miso4\\downlink",
+    "dimensions": {
+      "snapshots": 621,
+      "rx_antennas": 1,
+      "tx_antennas": 4,
+      "paths": 11
+    },
+    "port_elements": {
+      "1": 64,
+      "2": 64,
+      "3": 64,
+      "4": 64
+    },
+    "spacing_m": 0.06023799590098055,
+    "carrier_spacing_wavelengths": 0.5,
+    "time_range_s": [
+      8200.0,
+      8820.0
+    ],
+    "max_snapshot_mean_link_power_error": 5.5045338842596436e-08,
+    "midpoint_mean_link_power_range": [
+      0.9649937894694042,
+      0.9999742024389676
+    ],
+    "delay_range_s": [
+      0.0,
+      0.0007305930145969693
+    ],
+    "all_hashes_finite_and_layout_ok": true
+  },
+  {
+    "bundle": ".runtime\\handover-review-20261018\\examples\\handover-miso4\\uplink",
+    "dimensions": {
+      "snapshots": 621,
+      "rx_antennas": 4,
+      "tx_antennas": 1,
+      "paths": 11
+    },
+    "port_elements": {
+      "1": 64,
+      "2": 64,
+      "3": 64,
+      "4": 64
+    },
+    "spacing_m": 0.06023799590098055,
+    "carrier_spacing_wavelengths": 0.32448561324545894,
+    "time_range_s": [
+      8200.0,
+      8820.0
+    ],
+    "max_snapshot_mean_link_power_error": 6.450090150877941e-08,
+    "midpoint_mean_link_power_range": [
+      0.9715695495666369,
+      0.9999857047950407
+    ],
+    "delay_range_s": [
+      0.0,
+      0.0004958377964783146
+    ],
+    "all_hashes_finite_and_layout_ok": true
+  },
+  {
+    "bundle": ".runtime\\handover-review-20261018\\examples\\handover-miso4\\firsthandover\\downlink",
+    "dimensions": {
+      "snapshots": 71,
+      "rx_antennas": 1,
+      "tx_antennas": 4,
+      "paths": 11
+    },
+    "port_elements": {
+      "1": 64,
+      "2": 64,
+      "3": 64,
+      "4": 64
+    },
+    "spacing_m": 0.06023799590098055,
+    "carrier_spacing_wavelengths": 0.5,
+    "time_range_s": [
+      8200.0,
+      8270.0
+    ],
+    "max_snapshot_mean_link_power_error": 3.9009016461477586e-08,
+    "midpoint_mean_link_power_range": [
+      0.9846823428860334,
+      0.9999654614950312
+    ],
+    "delay_range_s": [
+      0.0,
+      0.0007305930145969693
+    ],
+    "all_hashes_finite_and_layout_ok": true
+  },
+  {
+    "bundle": ".runtime\\handover-review-20261018\\examples\\handover-miso4\\firsthandover\\uplink",
+    "dimensions": {
+      "snapshots": 71,
+      "rx_antennas": 4,
+      "tx_antennas": 1,
+      "paths": 11
+    },
+    "port_elements": {
+      "1": 64,
+      "2": 64,
+      "3": 64,
+      "4": 64
+    },
+    "spacing_m": 0.06023799590098055,
+    "carrier_spacing_wavelengths": 0.32448561324545894,
+    "time_range_s": [
+      8200.0,
+      8270.0
+    ],
+    "max_snapshot_mean_link_power_error": 3.7147562359507447e-08,
+    "midpoint_mean_link_power_range": [
+      0.9857574801645027,
+      0.9999339566803478
+    ],
+    "delay_range_s": [
+      0.0,
+      0.0004958377964783146
+    ],
+    "all_hashes_finite_and_layout_ok": true
+  }
+]

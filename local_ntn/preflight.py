@@ -8,11 +8,13 @@ import os
 from pathlib import Path
 import re
 import sys
+import subprocess
 
 # Radio constants are invariant; runtime paths are resolved only after CLI selection.
 DL_FREQUENCY_HZ = 2488400000
 UL_FREQUENCY_HZ = 1614900000
 from network_config import addresses
+from spatial_config import spatial_mode, spatial_ports
 
 
 def channel_environments(environment: dict[str, str], *, qd_required: bool = False) -> dict[str, dict[str, str]]:
@@ -92,6 +94,15 @@ HANDOVER_SOURCE_FILES = (
 )
 
 
+HANDOVER_SPATIAL_SOURCE_FILES = (
+    'quadriga/matlab/create_satellite_array.m',
+    'quadriga/matlab/satellite_beam_geometry.m',
+    'quadriga/matlab/combine_satellite_subarrays.m',
+    'quadriga/matlab/normalize_spatial_channel.m',
+    'quadriga/matlab/resample_stk_geometry.m',
+    'quadriga/matlab/certify_subarray_bandwidth.m',
+)
+
 def check_handover_bundles(dl: Path, ul: Path, trace: Path, schedule: Path) -> dict:
     """Require one complete export, tied to the exact trace and identity schedule."""
     def require(condition, message):
@@ -169,14 +180,31 @@ def check_handover_bundles(dl: Path, ul: Path, trace: Path, schedule: Path) -> d
     require(source.get('quadriga_archive_sha256') == checksums['quadriga-source.tar.gz'],
             'handover QuaDRiGa archive provenance mismatch')
     source_files = source.get('files', {})
-    require(set(source_files) == set(HANDOVER_SOURCE_FILES), 'handover exporter source files missing')
-    for name in HANDOVER_SOURCE_FILES:
-        require(source_files[name] == sha(root / name), f'handover exporter source SHA256 mismatch: {name}')
+    spatial_export = tools.get('antenna_profile') == 'satellite_16x16_4port_ground_omni'
+    expected_sources = HANDOVER_SOURCE_FILES + (HANDOVER_SPATIAL_SOURCE_FILES if spatial_export else ())
+    require(set(source_files) == set(expected_sources), 'handover exporter source files missing')
+    # 保留已审阅 SISO 数据的真实历史生成器；MISO 必须匹配当前完整生成链。
+    historical_revision = '65bc517a0ec5bfb4e9e2f665876ea5d188cac1a5'
+    current_sources = all(source_files[name] == sha(root / name) for name in expected_sources)
+    if not current_sources:
+        require(not spatial_export, 'handover spatial exporter source SHA256 mismatch')
+        for name in expected_sources:
+            try:
+                historical = subprocess.check_output(
+                    ['git', '-c', f'safe.directory={root}', '-C', str(root), 'show',
+                     f'{historical_revision}:{name}'], stderr=subprocess.DEVNULL)
+            except subprocess.CalledProcessError:
+                raise ValueError('verified historical SISO exporter unavailable') from None
+            require(source_files[name] == hashlib.sha256(historical).hexdigest(),
+                    f'handover exporter source SHA256 mismatch: {name}')
     recorded_bundles = metadata.get('bundles', {})
     require(set(recorded_bundles) == {'downlink', 'uplink'}, 'handover completion requires both directions')
     audits = {}
     for direction, bundle, frequency in (('downlink', dl, DL_FREQUENCY_HZ), ('uplink', ul, UL_FREQUENCY_HZ)):
         record = recorded_bundles[direction]
+        if spatial_export:
+            require(record.get('antenna_sha256') == sha(bundle / 'antenna.json'),
+                    f'handover {direction} antenna SHA256 mismatch')
         require(record.get('path') == direction, 'handover bundle path is not its standard direction')
         manifest_path = bundle / 'manifest.json'
         require(record.get('manifest_sha256') == sha(manifest_path),
@@ -192,6 +220,9 @@ def check_handover_bundles(dl: Path, ul: Path, trace: Path, schedule: Path) -> d
                 and provenance.get('random_seed') == tools['random_seed'],
                 f'handover {direction} tool provenance differs from completion record')
         audits[direction] = check_bundle(bundle, trace, direction, frequency)
+        if not spatial_export:
+            require(audits[direction]['tx_antennas'] == audits[direction]['rx_antennas'] == 1,
+                    'historical SISO provenance cannot authorize spatial data')
     return {'path': str(sidecar), 'trace_sha256': inputs['trace']['sha256'],
             'schedule_sha256': inputs['schedule']['sha256'], 'warnings': warning_record, 'audits': audits}
 
@@ -213,7 +244,11 @@ def preflight(rate: float, environment: dict[str, str] | None = None, runtime=No
         if runtime.profile == 'legacy-handover':
             for key in ('OAI_QD_CHANNEL','OAI_QD_DL_CHANNEL','OAI_QD_UL_CHANNEL'):
                 env.pop(key, None)
+    miso = spatial_mode(env)
+    ports = spatial_ports(env)
     children = channel_environments(env, qd_required=qd_required)
+    if miso and "OAI_QD_CHANNEL" not in children["gnb"]:
+        raise ValueError("MISO 必须提供双向空间 bundle")
     amf_ip, gnb_ip_cidr = addresses(env)
     required = [STK_TRACE, UE_CONFIG] + [BUILD_DIR / name for name in ('nr-softmodem', 'nr-uesoftmodem', 'librfsimulator.so', 'libparams_libconfig.so', 'libldpc.so', 'libdfts.so')]
     missing = [str(path) for path in required if not path.is_file()]
@@ -254,7 +289,27 @@ def preflight(rate: float, environment: dict[str, str] | None = None, runtime=No
         result['mode'] = 'STK+QuaDRiGa'
         for kind, direction, frequency in (('gnb', 'uplink', UL_FREQUENCY_HZ), ('ue', 'downlink', DL_FREQUENCY_HZ)):
             bundle = Path(children[kind]['OAI_QD_CHANNEL'])
-            result['bundles'][kind] = {'path': str(bundle), 'audit': check_bundle(bundle, STK_TRACE, direction, frequency)}
+            audit = check_bundle(bundle, STK_TRACE, direction, frequency)
+            expected = ((1, ports) if kind == 'gnb' else (ports, 1)) if miso else (1, 1)
+            if miso:
+                expected_profile = {'miso2':'satellite_2port_ground_omni',
+                                    'miso4':'satellite_4port_ground_omni',
+                                    'miso4-subarray':'satellite_16x16_4port_ground_omni'}[env['OAI_SPATIAL_MODE']]
+                antenna = json.loads((bundle/'antenna.json').read_text())
+                if antenna.get('profile') != expected_profile:
+                    raise ValueError(f'{kind} 天线 profile 与空间模式不一致')
+            actual = (audit['tx_antennas'], audit['rx_antennas'])
+            if actual != expected:
+                raise ValueError(f'{kind} bundle Tx/Rx {actual} != 配置 {expected}')
+            result['bundles'][kind] = {'path': str(bundle), 'audit': audit}
+        if miso and b'QDCHANNEL1 spatial ports' not in (BUILD_DIR / 'librfsimulator.so').read_bytes():
+            raise ValueError('RFsim 库不支持多端口，请重新构建')
+    if env.get('OAI_SPATIAL_MODE') == 'miso4-subarray':
+        arrays = [json.loads((Path(children[k]['OAI_QD_CHANNEL'])/'antenna.json').read_text()) for k in ('gnb','ue')]
+        for key in ('array_reference_frequency_hz','element_spacing_m','element_port_map'):
+            if arrays[0][key] != arrays[1][key]:
+                raise ValueError(f'FDD 双向子阵物理几何不一致: {key}')
+    result['spatial_mode'] = env.get('OAI_SPATIAL_MODE', 'siso')
     return result
 
 

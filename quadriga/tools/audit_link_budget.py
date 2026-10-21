@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import bisect
 import cmath
 import csv
 import hashlib
@@ -50,6 +51,31 @@ def _read_stktrace2(path: Path) -> tuple[list[str], list[dict[str, float]]]:
     return names, rows
 
 
+def _sample_trace(rows: list[dict[str, float]], times: Sequence[float]) -> list[dict[str, float]]:
+    """在 bundle 独立时间轴上验算 Hermite 几何，拒绝外推。"""
+    source = [row["time"] for row in rows]
+    _require(all(b > a for a, b in zip(source, source[1:])), "STK 时间必须递增")
+    _require(all(source[0] <= t <= source[-1] for t in times), "bundle 时间超出 STKTRACE2 范围")
+    result: list[dict[str, float]] = []
+    for time in times:
+        i = min(bisect.bisect_right(source, time) - 1, len(source) - 2)
+        a, b = rows[i], rows[i + 1]
+        dt = b["time"] - a["time"]
+        u = (time - a["time"]) / dt
+        row = {key: (1-u)*a[key] + u*b[key] for key in a}
+        row["time"] = time
+        for axis in ("x", "y", "z"):
+            velocity = "v" + axis
+            row[axis] = ((2*u**3-3*u**2+1)*a[axis] + (u**3-2*u**2+u)*dt*a[velocity]
+                         + (-2*u**3+3*u**2)*b[axis] + (u**3-u**2)*dt*b[velocity])
+            row[velocity] = ((6*u**2-6*u)*a[axis]/dt + (3*u**2-4*u+1)*a[velocity]
+                             + (-6*u**2+6*u)*b[axis]/dt + (3*u**2-2*u)*b[velocity])
+        for key in ("dl_valid", "ul_valid"):
+            row[key] = a[key] if u == 0 else b[key] if u == 1 else float(bool(a[key] and b[key]))
+        result.append(row)
+    return result
+
+
 def _read_scalars(path: Path, code: str) -> list[float]:
     payload = path.read_bytes()
     item_size = struct.calcsize("<" + code)
@@ -88,10 +114,9 @@ def audit_link_budget(bundle_dir: Path, trace_path: Path) -> dict[str, float | i
     summary = validate_bundle(bundle_dir)
     manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
     dimensions = manifest["dimensions"]
-    _require(
-        dimensions["rx_antennas"] == 1 and dimensions["tx_antennas"] == 1,
-        "当前链路预算审计仅支持卫星—UE SISO bundle",
-    )
+    links = dimensions["rx_antennas"] * dimensions["tx_antennas"]
+    spatial = manifest["composition"]["quadriga_coefficients"] == "unit_snapshot_mean_link_power"
+    _require(links == 1 or spatial, "多端口审计要求空间共同参考")
 
     trace_sha256 = hashlib.sha256(trace_path.read_bytes()).hexdigest()
     _require(
@@ -100,8 +125,8 @@ def audit_link_budget(bundle_dir: Path, trace_path: Path) -> dict[str, float | i
     )
     _, rows = _read_stktrace2(trace_path)
     snapshots = dimensions["snapshots"]
-    paths = dimensions["paths"]
-    _require(len(rows) == snapshots, "STKTRACE2 与 bundle 快照数量不一致")
+    paths = dimensions["paths"] * links
+
 
     files = manifest["files"]
     times = _read_scalars(bundle_dir / files["times"]["path"], "d")
@@ -113,8 +138,8 @@ def audit_link_budget(bundle_dir: Path, trace_path: Path) -> dict[str, float | i
         for index in range(0, len(interleaved), 2)
     ]
 
+    rows = _sample_trace(rows, times)
     max_time_error_s = max(abs(time - row["time"]) for time, row in zip(times, rows))
-    _require(max_time_error_s <= 1e-9, "bundle 时间轴与 STKTRACE2 不对齐")
 
     max_power_error = 0.0
     max_zero_delay_error_s = 0.0
@@ -125,7 +150,7 @@ def audit_link_budget(bundle_dir: Path, trace_path: Path) -> dict[str, float | i
         group = coefficients[start : start + paths]
         group_delays = delays[start : start + paths]
         powers = [abs(value) ** 2 for value in group]
-        max_power_error = max(max_power_error, abs(math.fsum(powers) - 1.0))
+        max_power_error = max(max_power_error, abs(math.fsum(powers) / links - 1.0))
         active = [index for index, power in enumerate(powers) if power > 1e-12]
         _require(bool(active), f"快照 {snapshot} 没有激活路径")
         earliest = min(group_delays[index] for index in active)
@@ -133,7 +158,7 @@ def audit_link_budget(bundle_dir: Path, trace_path: Path) -> dict[str, float | i
         candidates = [
             index
             for index in active
-            if math.isclose(group_delays[index], earliest, abs_tol=1e-12)
+            if math.isclose(group_delays[index], earliest, rel_tol=0, abs_tol=1e-15)
         ]
         reference_index = max(candidates, key=powers.__getitem__)
         current_phase = group[reference_index] / abs(group[reference_index])
@@ -159,7 +184,8 @@ def audit_link_budget(bundle_dir: Path, trace_path: Path) -> dict[str, float | i
     stk_power_dbw = []
     residual_gain_db = []
     radial_velocity_m_s = []
-    for row, residual in zip(rows, gains):
+    _require(all(abs(gain) <= 1e-6 for gain in gains), "residual_gain_db 非零，可能重复 STK 大尺度增益")
+    for row, residual in zip(rows, gains[::links]):
         if int(row[valid_name]) != 1:
             continue
         displacement = (
@@ -207,7 +233,9 @@ def audit_link_budget(bundle_dir: Path, trace_path: Path) -> dict[str, float | i
         "format": summary["format"],
         "link_direction": direction,
         "snapshots": snapshots,
-        "paths": paths,
+        "paths": dimensions["paths"],
+        "tx_antennas": dimensions["tx_antennas"],
+        "rx_antennas": dimensions["rx_antennas"],
         "max_time_error_s": max_time_error_s,
         "max_tap_power_error": max_power_error,
         "max_zero_delay_error_s": max_zero_delay_error_s,

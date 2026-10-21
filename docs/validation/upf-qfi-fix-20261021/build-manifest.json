@@ -1,0 +1,14 @@
+{
+  "source": "451c27daa4b38bd03a5cb5b92412743364ff8ae0",
+  "base": "oaisoftwarealliance/oai-upf@sha256:03985036c2477a75755ded9b7fe9508b62f49e4ce9e9f059bbb68af63932e7f7",
+  "image": "ntn-local/oai-upf:2.2.1-qfi-v1",
+  "image_id": "sha256:3cdd79819b6d48751229878ba0df1ab32df8af8cead6860642ac0a1f840ca9ca",
+  "binary_sha256": "4ae4a05013a967eb0d55e02a31f141e40e9bcae8890dd8b9f5f81711370cf5ea",
+  "patch_sha256": "22e9cea44b3475e5e391e9ae6d82807771613ac5ecae87e2337e2dceca4ecc81",
+  "header_sha256": "ae93b165f20d1927d797c83de19c110c37378fde8a5334fcbfd1ebc7ff018da6",
+  "submodules": [
+    " bcd6a99284a71f4d47a613ef5d661b10fbf5b033 build/common-build (bcd6a99)",
+    "-20de484fa9025c9c342b8b945d89a10797ec2503 ci-scripts/common",
+    " ce8dca5fecd3f4fb8a31a70ec518c03db87fbab2 src/common-src (ce8dca5)"
+  ]
+}

@@ -1,5 +1,8 @@
 param(
     [string]$Distribution = 'Ubuntu-22.04',
+    [string]$ProjectRoot = '/home/kayoko/ntn-workspaces/ntn-live-miso',
+    [ValidateSet('siso','miso4-subarray')][string]$SpatialMode = 'siso',
+    [ValidateRange(1,8)][int]$QdWorkers = 8,
     [ValidateRange(1,8)][int]$Rounds = 4,
     [string]$Source,
     [switch]$SkipRegressions
@@ -19,7 +22,8 @@ try {
     $linuxSource = & wsl.exe -d $Distribution --exec wslpath -a ($media.FullName.Replace('\','/'))
     if ($LASTEXITCODE -ne 0) { throw 'Cannot access video from WSL.' }
     $arguments = @('-d',$Distribution,'--exec','sudo','python3','-B','-u',($linuxScript -join "`n").Trim(),
-        '--source',($linuxSource -join "`n").Trim(),'--rounds',[string]$Rounds)
+        '--source',($linuxSource -join "`n").Trim(),'--rounds',[string]$Rounds,
+        '--root',$ProjectRoot,'--spatial-mode',$SpatialMode,'--qd-workers',[string]$QdWorkers)
     if ($SkipRegressions) { $arguments += '--skip-regressions' }
     Write-Host "Repeated handover demo: $Rounds rounds; no fixed-channel waiting group."
     Write-Host 'Each round reconnects and replays the verified S06 -> S05 transition; this is not one continuous trajectory.'
