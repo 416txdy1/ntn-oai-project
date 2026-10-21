@@ -14,6 +14,7 @@ python3 scripts/test_handover_metrics.py
 python3 scripts/test_physical_start.py
 python3 scripts/test_handover_driver.py
 python3 scripts/test_core_lab.py
+bash scripts/test_upf_qfi.sh
 python3 local_ntn/test_manifest_provenance.py
 python3 local_ntn/test_numeric_audit.py
 python3 scripts/test_full_pass.py

@@ -1,0 +1,93 @@
+{
+  "run_id": "miso-first-20261020-startup-capture",
+  "passed": true,
+  "wall_seconds": 145.32957746499997,
+  "directions": {
+    "uplink": {
+      "sent": 1464,
+      "received_unique": 1464,
+      "duplicate_receives": 0,
+      "missing_sequences": [],
+      "late_received_sequences": [],
+      "failure_fraction": 0.0,
+      "offered_wall_bps": 99762.11444571964,
+      "receiver_ready_before_first_send_ms": 87.6603,
+      "missing_all_initial_prefix": true,
+      "missing": []
+    },
+    "downlink": {
+      "sent": 1463,
+      "received_unique": 1459,
+      "duplicate_receives": 0,
+      "missing_sequences": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "late_received_sequences": [],
+      "failure_fraction": 0.002734107997265892,
+      "offered_wall_bps": 99750.02377184172,
+      "receiver_ready_before_first_send_ms": 87.389675,
+      "missing_all_initial_prefix": true,
+      "missing": [
+        {
+          "sequence": 1,
+          "wall_since_first_send_s": 0.0,
+          "iq_s_interpolated": 7.330032066857866,
+          "iq_bounds_s": [
+            7.248566145833333,
+            7.348569270833333
+          ],
+          "stk_s_interpolated": 8207.330032066859,
+          "stk_bounds_s": [
+            8207.248566145834,
+            8207.348569270833
+          ]
+        },
+        {
+          "sequence": 2,
+          "wall_since_first_send_s": 0.080186355,
+          "iq_s_interpolated": 7.369809827878588,
+          "iq_bounds_s": [
+            7.348569270833333,
+            7.448572395833334
+          ],
+          "stk_s_interpolated": 8207.369809827878,
+          "stk_bounds_s": [
+            8207.348569270833,
+            8207.448572395833
+          ]
+        },
+        {
+          "sequence": 3,
+          "wall_since_first_send_s": 0.160300969,
+          "iq_s_interpolated": 7.409846777726675,
+          "iq_bounds_s": [
+            7.348569270833333,
+            7.448572395833334
+          ],
+          "stk_s_interpolated": 8207.409846777728,
+          "stk_bounds_s": [
+            8207.348569270833,
+            8207.448572395833
+          ]
+        },
+        {
+          "sequence": 4,
+          "wall_since_first_send_s": 0.240422863,
+          "iq_s_interpolated": 7.449906595561353,
+          "iq_bounds_s": [
+            7.448572395833334,
+            7.548576041666666
+          ],
+          "stk_s_interpolated": 8207.44990659556,
+          "stk_bounds_s": [
+            8207.448572395833,
+            8207.548576041667
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "run_id": "miso-first-20261021-qfi-fixed-a",
+  "passed": true,
+  "wall_seconds": 142.97297664899997,
+  "directions": {
+    "uplink": {
+      "sent": 1438,
+      "received_unique": 1436,
+      "duplicate_receives": 0,
+      "missing_sequences": [
+        858,
+        860
+      ],
+      "late_received_sequences": [],
+      "failure_fraction": 0.0013908205841446453,
+      "offered_wall_bps": 99747.526322915,
+      "receiver_ready_before_first_send_ms": 72.352403,
+      "missing_all_initial_prefix": false,
+      "missing": [
+        {
+          "sequence": 858,
+          "wall_since_first_send_s": 68.743576037,
+          "iq_s_interpolated": 41.34103926755353,
+          "iq_bounds_s": [
+            41.246,
+            41.346
+          ],
+          "stk_s_interpolated": 8241.341039267554,
+          "stk_bounds_s": [
+            8241.246,
+            8241.346
+          ]
+        },
+        {
+          "sequence": 860,
+          "wall_since_first_send_s": 68.905539328,
+          "iq_s_interpolated": 41.420688817341784,
+          "iq_bounds_s": [
+            41.346,
+            41.446
+          ],
+          "stk_s_interpolated": 8241.420688817341,
+          "stk_bounds_s": [
+            8241.346,
+            8241.446
+          ]
+        }
+      ]
+    },
+    "downlink": {
+      "sent": 1437,
+      "received_unique": 1437,
+      "duplicate_receives": 0,
+      "missing_sequences": [],
+      "late_received_sequences": [],
+      "failure_fraction": 0.0,
+      "offered_wall_bps": 99734.7303824414,
+      "receiver_ready_before_first_send_ms": 69.612804,
+      "missing_all_initial_prefix": true,
+      "missing": []
+    }
+  }
+}

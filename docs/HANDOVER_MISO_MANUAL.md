@@ -41,6 +41,23 @@ python3 scripts/init_lab.py --profile integrated-handover
 
 固定隔离资源：Docker项目`ntn-qd-integrated`，核心网网段192.168.71.128/26，UE PDU池12.2.1.0/24，UE namespace `ntn-qd-ue`，RFsim端口4044。多个实验不能同时占用这些资源。使用本机已配置的Docker及网络命名空间权限，运行脚本需要root。
 
+### 3.1 UPF 首包 QFI 修复镜像
+
+当前官方 v2.2.1 镜像在首个 IPv4 上行包到达前使用默认 QFI=5，导致配置为 QFI=1 的 UE 拒绝首批下行包。合并版增加本地 UPF 补丁，首包 QFI 直接来自 PFCP 控制面规则。连接、IQ 时钟、MISO 数据和墙钟验收门限保持不变。
+
+在 Linux 副本内执行；编译依赖安装在 Docker 构建镜像中，首次构建需要网络并可能耗时较长。不要与墙钟验收同时编译：
+
+```bash
+python3 scripts/build_upf_qfi.py --jobs 6
+bash scripts/test_upf_qfi.sh
+# 先用 core_lab.py down 停止本 profile（若已运行），再选择修复镜像：
+sudo python3 scripts/configure_upf_qfi.py
+```
+
+选择器只更改本工作区私有 Compose 中的 UPF image 行，并保存一次性备份；拒绝在核心网运行中切换。原始镜像及配置模板保留，新初始化的私有配置也需要执行选择器。生成镜像为 `ntn-local/oai-upf:2.2.1-qfi-v1`，源码、补丁和程序哈希记录在 `.runtime/upf-qfi/manifest.json`。不要只同步无线覆盖文件而遗漏此镜像步骤。
+
+回退：先停止本 profile，再执行 `sudo python3 scripts/configure_upf_qfi.py --rollback`，将恢复固定摘要的原 UPF 镜像。回退后原首包 QFI 问题也会恢复。构建来源与限制见 [UPF 补丁说明](../upf_patch/README.md)。
+
 ## 4. 检查输入与环境
 
 |输入|full|firsthandover|
@@ -136,6 +153,8 @@ done
 
 ## 8. 已知现象和结果边界
 
-两次MISO full均通过，最近一次1249.983墙钟秒；Ping1190/1190、UL15220/15220、DL15213/15218。DL首批1–5包丢失均计入失败，不能宣称零丢包。原SISO full也有首批1–4包丢失；启动链路根因正在排查，不能通过预热或剔除首包掩盖。
+修复前两次MISO full均通过但有首批DL1–5丢失；根因现已确定为UPF初始QFI错误。完成第3.1节的镜像步骤后，本次620 IQ秒全程为Ping1174/1174、UL15009/15009、DL15006/15006，均无丢包和5秒超期。短测下行1437/1437，但有2个切换期上行包缺失，仍满足原门限；该短测不能称双向零丢包。完整证据见[UPF QFI修复验收](UPF_QFI_FIX_VALIDATION_20261021.md)。
 
 当前保留1秒信道快照和四子阵窄带等效；数值回归通过不等于取得高密度信道保真或完整MVDR认证。已有详细证据见[合并验证](HANDOVER_MISO_INTEGRATION_20261018.md)、[再次复测](HANDOVER_MISO_REPEAT_20261020.md)。
+
+输出文件格式、旧脚本兼容性与时间单位见 [合并版输出格式说明](MERGED_OUTPUT_FORMAT_20261021.md)。

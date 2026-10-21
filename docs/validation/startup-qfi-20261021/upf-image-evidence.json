@@ -1,0 +1,9 @@
+{
+  "image_tag": "oaisoftwarealliance/oai-upf:v2.2.1",
+  "image_id": "sha256:03985036c2477a75755ded9b7fe9508b62f49e4ce9e9f059bbb68af63932e7f7",
+  "repo_digests": [
+    "oaisoftwarealliance/oai-upf@sha256:03985036c2477a75755ded9b7fe9508b62f49e4ce9e9f059bbb68af63932e7f7"
+  ],
+  "revision": "commit:451c27da",
+  "enable_bpf_datapath": "no"
+}

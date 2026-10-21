@@ -1,0 +1,31 @@
+{
+  "run_id": "miso-full-20261021-qfi-fixed",
+  "passed": true,
+  "wall_seconds": 1232.4415794840002,
+  "directions": {
+    "uplink": {
+      "sent": 15009,
+      "received_unique": 15009,
+      "duplicate_receives": 0,
+      "missing_sequences": [],
+      "late_received_sequences": [],
+      "failure_fraction": 0.0,
+      "offered_wall_bps": 99733.62834147812,
+      "receiver_ready_before_first_send_ms": 71.636874,
+      "missing_all_initial_prefix": true,
+      "missing": []
+    },
+    "downlink": {
+      "sent": 15006,
+      "received_unique": 15006,
+      "duplicate_receives": 0,
+      "missing_sequences": [],
+      "late_received_sequences": [],
+      "failure_fraction": 0.0,
+      "offered_wall_bps": 99719.14645009396,
+      "receiver_ready_before_first_send_ms": 67.982581,
+      "missing_all_initial_prefix": true,
+      "missing": []
+    }
+  }
+}

@@ -1,4 +1,4 @@
-> **合并版 handover + MISO：** 当前配置与运行请使用[手动配置指南](docs/HANDOVER_MISO_MANUAL.md)。下方旧 zky 状态与命令保留为历史/兼容入口。
+> **合并版 handover + MISO：** 当前配置与运行请使用[手动配置指南](docs/HANDOVER_MISO_MANUAL.md)。首批下行丢包修复及全程结果见[UPF QFI 验收报告](docs/UPF_QFI_FIX_VALIDATION_20261021.md)。下方旧 zky 状态与命令保留为历史/兼容入口。
 
 # NTN OAI：单仓库 STK + QuaDRiGa 回放调试
 
@@ -88,3 +88,5 @@ QuaDRiGa 随附源码许可证要求非商业使用，完整条款见 `vendor/Qu
 来源文件保留清单见 [来源说明](docs/INTEGRATION_SOURCES.md)，
 实际状态见 [测试记录](docs/INTEGRATION_TEST_RESULTS.md)。
 2026-10-16：已在明确记录的参数下通过完整620 IQ秒双切换持续业务验收、legacy/静态对照与两轮短场景，原平台最终业务和trace/IQ复验通过。原zky入口、归档、示例与既有研究限制继续保留；上文361秒调试状态描述的是原zky模式。
+
+合并版与原 handover / zky-miso 的数据格式差异见 [输出格式说明](docs/MERGED_OUTPUT_FORMAT_20261021.md)。

@@ -1,0 +1,93 @@
+{
+  "miso-first-20261021-pfcp-control": [
+    {
+      "pfcp.msg_type": [
+        50
+      ],
+      "pfcp.pdr_id": [
+        1
+      ],
+      "pfcp.source_interface": [
+        0
+      ],
+      "pfcp.qer_id": [],
+      "pfcp.qfi_value": [
+        1
+      ]
+    },
+    {
+      "pfcp.msg_type": [
+        52
+      ],
+      "pfcp.pdr_id": [
+        2
+      ],
+      "pfcp.source_interface": [
+        1
+      ],
+      "pfcp.qer_id": [],
+      "pfcp.qfi_value": []
+    }
+  ],
+  "miso-first-20261021-qfi-fixed-a": [
+    {
+      "pfcp.msg_type": [
+        50
+      ],
+      "pfcp.pdr_id": [
+        1
+      ],
+      "pfcp.source_interface": [
+        0
+      ],
+      "pfcp.qer_id": [],
+      "pfcp.qfi_value": [
+        1
+      ]
+    },
+    {
+      "pfcp.msg_type": [
+        52
+      ],
+      "pfcp.pdr_id": [
+        2
+      ],
+      "pfcp.source_interface": [
+        1
+      ],
+      "pfcp.qer_id": [],
+      "pfcp.qfi_value": []
+    }
+  ],
+  "miso-full-20261021-qfi-fixed": [
+    {
+      "pfcp.msg_type": [
+        50
+      ],
+      "pfcp.pdr_id": [
+        1
+      ],
+      "pfcp.source_interface": [
+        0
+      ],
+      "pfcp.qer_id": [],
+      "pfcp.qfi_value": [
+        1
+      ]
+    },
+    {
+      "pfcp.msg_type": [
+        52
+      ],
+      "pfcp.pdr_id": [
+        2
+      ],
+      "pfcp.source_interface": [
+        1
+      ],
+      "pfcp.qer_id": [],
+      "pfcp.qfi_value": []
+    }
+  ],
+  "control_rules_equal": true
+}

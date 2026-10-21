@@ -1,0 +1,65 @@
+{
+  "pusch_failure_threshold_override": {
+    "equal": true,
+    "value": 100
+  },
+  "pdcp_reordering_ms_override": {
+    "equal": true,
+    "value": 500
+  },
+  "oai_rngseed_requested": {
+    "equal": true,
+    "value": "20260925"
+  },
+  "qd_workers_requested": {
+    "equal": true,
+    "value": "8"
+  },
+  "spatial_mode_requested": {
+    "equal": true
+  },
+  "timing_diag_start_iq_s": {
+    "equal": true
+  },
+  "mac_ta_feedback_policy": {
+    "equal": true
+  },
+  "cell_koffset_ms_override": {
+    "equal": true,
+    "value": 80
+  },
+  "nominal_timing_budget": {
+    "equal": true
+  },
+  "binaries": {
+    "equal": true
+  },
+  "trace_sha256": {
+    "equal": true
+  },
+  "schedule_sha256": {
+    "equal": true
+  },
+  "bundles": {
+    "equal": true
+  },
+  "epoch": {
+    "equal": true
+  },
+  "rate": {
+    "equal": true
+  },
+  "interpolation": {
+    "equal": true
+  },
+  "timing_assist": {
+    "equal": true
+  },
+  "sample_rate_hz": {
+    "equal": true,
+    "value": 7680000.0
+  },
+  "initial_lead_rfsim": {
+    "equal": true
+  }
+}

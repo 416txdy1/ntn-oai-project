@@ -1,0 +1,1150 @@
+{
+  "sources": {
+    "handover": "/home/duyaya/OAI/handover-review-20261018/.runtime/runs/integrated-handover/review-full-20261018",
+    "merged": "/home/duyaya/OAI/handover-miso-integration/.runtime/runs/integrated-handover/miso-full-20261021-qfi-fixed"
+  },
+  "comparison": {
+    "run.json": {
+      "added_paths": [
+        "bundles.downlink.files.antenna.json",
+        "bundles.uplink.files.antenna.json",
+        "business_path.network_inodes.1267",
+        "business_path.network_inodes.1796",
+        "oai_source.overlay_sha256.common/utils/ntn_feedback_diagnostics.h",
+        "oai_source.overlay_sha256.openair2/LAYER2/NR_MAC_gNB/gNB_scheduler_uci.c",
+        "oai_source.overlay_sha256.openair2/NR_UE_PHY_INTERFACE/NR_IF_Module.c",
+        "qd_workers_requested",
+        "spatial_mode_requested"
+      ],
+      "removed_paths": [
+        "business_path.network_inodes.9050",
+        "business_path.network_inodes.9629"
+      ],
+      "same_top_level_keys": false
+    },
+    "acceptance/report.json": {
+      "added_paths": [
+        "business_path.network_inodes.1267",
+        "business_path.network_inodes.1796"
+      ],
+      "removed_paths": [
+        "business_path.network_inodes.9050",
+        "business_path.network_inodes.9629"
+      ],
+      "same_top_level_keys": true
+    },
+    "acceptance/ping-matched.json": {
+      "added_paths": [],
+      "removed_paths": [],
+      "same_top_level_keys": true
+    },
+    "acceptance/uplink-matched.json": {
+      "added_paths": [],
+      "removed_paths": [],
+      "same_top_level_keys": true
+    },
+    "acceptance/downlink-matched.json": {
+      "added_paths": [],
+      "removed_paths": [],
+      "same_top_level_keys": true
+    },
+    "ping.jsonl": {
+      "handover": [
+        {
+          "fields": [
+            "destination",
+            "event",
+            "interface",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1
+        },
+        {
+          "fields": [
+            "event",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1119
+        },
+        {
+          "fields": [
+            "bytes",
+            "deadline_ns",
+            "event",
+            "monotonic_ns",
+            "role",
+            "send_ns",
+            "sequence"
+          ],
+          "count": 1119
+        },
+        {
+          "fields": [
+            "bytes",
+            "duplicate",
+            "event",
+            "late",
+            "monotonic_ns",
+            "receive_ns",
+            "role",
+            "send_ns",
+            "sequence",
+            "wall_rtt_ms"
+          ],
+          "count": 1119
+        },
+        {
+          "fields": [
+            "deadline_timeouts",
+            "event",
+            "failed",
+            "monotonic_ns",
+            "received",
+            "role",
+            "sent"
+          ],
+          "count": 1
+        }
+      ],
+      "merged": [
+        {
+          "fields": [
+            "destination",
+            "event",
+            "interface",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1
+        },
+        {
+          "fields": [
+            "event",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1174
+        },
+        {
+          "fields": [
+            "bytes",
+            "deadline_ns",
+            "event",
+            "monotonic_ns",
+            "role",
+            "send_ns",
+            "sequence"
+          ],
+          "count": 1174
+        },
+        {
+          "fields": [
+            "bytes",
+            "duplicate",
+            "event",
+            "late",
+            "monotonic_ns",
+            "receive_ns",
+            "role",
+            "send_ns",
+            "sequence",
+            "wall_rtt_ms"
+          ],
+          "count": 1174
+        },
+        {
+          "fields": [
+            "deadline_timeouts",
+            "event",
+            "failed",
+            "monotonic_ns",
+            "received",
+            "role",
+            "sent"
+          ],
+          "count": 1
+        }
+      ]
+    },
+    "uplink-sender.jsonl": {
+      "handover": [
+        {
+          "fields": [
+            "bind",
+            "direction",
+            "event",
+            "monotonic_ns",
+            "offered_wall_bits_per_second",
+            "payload_bytes",
+            "peer",
+            "port",
+            "role"
+          ],
+          "count": 1
+        },
+        {
+          "fields": [
+            "event",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1146
+        },
+        {
+          "fields": [
+            "bytes",
+            "event",
+            "monotonic_ns",
+            "role",
+            "send_ns",
+            "sequence"
+          ],
+          "count": 14317
+        },
+        {
+          "fields": [
+            "event",
+            "failed",
+            "monotonic_ns",
+            "received_datagrams",
+            "role",
+            "sent",
+            "sent_bytes"
+          ],
+          "count": 1
+        }
+      ],
+      "merged": [
+        {
+          "fields": [
+            "bind",
+            "direction",
+            "event",
+            "monotonic_ns",
+            "offered_wall_bits_per_second",
+            "payload_bytes",
+            "peer",
+            "port",
+            "role"
+          ],
+          "count": 1
+        },
+        {
+          "fields": [
+            "event",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1201
+        },
+        {
+          "fields": [
+            "bytes",
+            "event",
+            "monotonic_ns",
+            "role",
+            "send_ns",
+            "sequence"
+          ],
+          "count": 15009
+        },
+        {
+          "fields": [
+            "event",
+            "failed",
+            "monotonic_ns",
+            "received_datagrams",
+            "role",
+            "sent",
+            "sent_bytes"
+          ],
+          "count": 1
+        }
+      ]
+    },
+    "uplink-receiver.jsonl": {
+      "handover": [
+        {
+          "fields": [
+            "bind",
+            "direction",
+            "event",
+            "monotonic_ns",
+            "offered_wall_bits_per_second",
+            "payload_bytes",
+            "peer",
+            "port",
+            "role"
+          ],
+          "count": 1
+        },
+        {
+          "fields": [
+            "event",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1128
+        },
+        {
+          "fields": [
+            "bytes",
+            "event",
+            "monotonic_ns",
+            "receive_ns",
+            "role",
+            "send_ns",
+            "sequence"
+          ],
+          "count": 14317
+        },
+        {
+          "fields": [
+            "event",
+            "failed",
+            "monotonic_ns",
+            "received_datagrams",
+            "role",
+            "sent",
+            "sent_bytes"
+          ],
+          "count": 1
+        }
+      ],
+      "merged": [
+        {
+          "fields": [
+            "bind",
+            "direction",
+            "event",
+            "monotonic_ns",
+            "offered_wall_bits_per_second",
+            "payload_bytes",
+            "peer",
+            "port",
+            "role"
+          ],
+          "count": 1
+        },
+        {
+          "fields": [
+            "event",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1184
+        },
+        {
+          "fields": [
+            "bytes",
+            "event",
+            "monotonic_ns",
+            "receive_ns",
+            "role",
+            "send_ns",
+            "sequence"
+          ],
+          "count": 15009
+        },
+        {
+          "fields": [
+            "event",
+            "failed",
+            "monotonic_ns",
+            "received_datagrams",
+            "role",
+            "sent",
+            "sent_bytes"
+          ],
+          "count": 1
+        }
+      ]
+    },
+    "downlink-sender.jsonl": {
+      "handover": [
+        {
+          "fields": [
+            "bind",
+            "direction",
+            "event",
+            "monotonic_ns",
+            "offered_wall_bits_per_second",
+            "payload_bytes",
+            "peer",
+            "port",
+            "role"
+          ],
+          "count": 1
+        },
+        {
+          "fields": [
+            "event",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1146
+        },
+        {
+          "fields": [
+            "bytes",
+            "event",
+            "monotonic_ns",
+            "role",
+            "send_ns",
+            "sequence"
+          ],
+          "count": 14315
+        },
+        {
+          "fields": [
+            "event",
+            "failed",
+            "monotonic_ns",
+            "received_datagrams",
+            "role",
+            "sent",
+            "sent_bytes"
+          ],
+          "count": 1
+        }
+      ],
+      "merged": [
+        {
+          "fields": [
+            "bind",
+            "direction",
+            "event",
+            "monotonic_ns",
+            "offered_wall_bits_per_second",
+            "payload_bytes",
+            "peer",
+            "port",
+            "role"
+          ],
+          "count": 1
+        },
+        {
+          "fields": [
+            "event",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1201
+        },
+        {
+          "fields": [
+            "bytes",
+            "event",
+            "monotonic_ns",
+            "role",
+            "send_ns",
+            "sequence"
+          ],
+          "count": 15006
+        },
+        {
+          "fields": [
+            "event",
+            "failed",
+            "monotonic_ns",
+            "received_datagrams",
+            "role",
+            "sent",
+            "sent_bytes"
+          ],
+          "count": 1
+        }
+      ]
+    },
+    "downlink-receiver.jsonl": {
+      "handover": [
+        {
+          "fields": [
+            "bind",
+            "direction",
+            "event",
+            "monotonic_ns",
+            "offered_wall_bits_per_second",
+            "payload_bytes",
+            "peer",
+            "port",
+            "role"
+          ],
+          "count": 1
+        },
+        {
+          "fields": [
+            "event",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1124
+        },
+        {
+          "fields": [
+            "bytes",
+            "event",
+            "monotonic_ns",
+            "receive_ns",
+            "role",
+            "send_ns",
+            "sequence"
+          ],
+          "count": 14311
+        },
+        {
+          "fields": [
+            "event",
+            "failed",
+            "monotonic_ns",
+            "received_datagrams",
+            "role",
+            "sent",
+            "sent_bytes"
+          ],
+          "count": 1
+        }
+      ],
+      "merged": [
+        {
+          "fields": [
+            "bind",
+            "direction",
+            "event",
+            "monotonic_ns",
+            "offered_wall_bits_per_second",
+            "payload_bytes",
+            "peer",
+            "port",
+            "role"
+          ],
+          "count": 1
+        },
+        {
+          "fields": [
+            "event",
+            "monotonic_ns",
+            "role"
+          ],
+          "count": 1166
+        },
+        {
+          "fields": [
+            "bytes",
+            "event",
+            "monotonic_ns",
+            "receive_ns",
+            "role",
+            "send_ns",
+            "sequence"
+          ],
+          "count": 15006
+        },
+        {
+          "fields": [
+            "event",
+            "failed",
+            "monotonic_ns",
+            "received_datagrams",
+            "role",
+            "sent",
+            "sent_bytes"
+          ],
+          "count": 1
+        }
+      ]
+    }
+  },
+  "timeline_csv": {
+    "same_columns": true,
+    "columns": [
+      "iq_start_s",
+      "iq_end_s",
+      "iq_s",
+      "stk_s",
+      "business_state",
+      "max_event_uncertainty_iq_s",
+      "gnb_real_time_factor",
+      "gnb_physical_coverage",
+      "gnb_physical_observed_iq_start_s",
+      "gnb_delay_ms",
+      "gnb_doppler_hz",
+      "gnb_cn_db",
+      "gnb_gain_db",
+      "gnb_physical_sample_iq_s",
+      "gnb_satellite_id",
+      "gnb_handover_phase",
+      "ue_real_time_factor",
+      "ue_physical_coverage",
+      "ue_physical_observed_iq_start_s",
+      "ue_delay_ms",
+      "ue_doppler_hz",
+      "ue_cn_db",
+      "ue_gain_db",
+      "ue_physical_sample_iq_s",
+      "ue_satellite_id",
+      "ue_handover_phase",
+      "ping_sent",
+      "ping_received",
+      "ping_eventual_missing",
+      "ping_deadline_timeouts",
+      "ping_late_received",
+      "ping_boundary_ambiguous_sent",
+      "ping_boundary_ambiguous_missing",
+      "ping_loss_lower_bound",
+      "ping_loss_upper_bound",
+      "ping_arrival_bytes",
+      "ping_observed_iq_bits_per_second",
+      "ping_measured_wall_bits_per_second",
+      "ping_wall_jitter_ms",
+      "ping_wall_rtt_ms",
+      "uplink_sent",
+      "uplink_received",
+      "uplink_eventual_missing",
+      "uplink_deadline_timeouts",
+      "uplink_late_received",
+      "uplink_boundary_ambiguous_sent",
+      "uplink_boundary_ambiguous_missing",
+      "uplink_loss_lower_bound",
+      "uplink_loss_upper_bound",
+      "uplink_arrival_bytes",
+      "uplink_observed_iq_bits_per_second",
+      "uplink_measured_wall_bits_per_second",
+      "uplink_wall_jitter_ms",
+      "uplink_one_way_wall_ms",
+      "downlink_sent",
+      "downlink_received",
+      "downlink_eventual_missing",
+      "downlink_deadline_timeouts",
+      "downlink_late_received",
+      "downlink_boundary_ambiguous_sent",
+      "downlink_boundary_ambiguous_missing",
+      "downlink_loss_lower_bound",
+      "downlink_loss_upper_bound",
+      "downlink_arrival_bytes",
+      "downlink_observed_iq_bits_per_second",
+      "downlink_measured_wall_bits_per_second",
+      "downlink_wall_jitter_ms",
+      "downlink_one_way_wall_ms"
+    ]
+  },
+  "zky": {
+    "report": "/home/duyaya/OAI/self-contained-test/.runtime/reports/fullpass-1792294964392103430.json",
+    "root_fields": [
+      "blend_timing_assist",
+      "downlink",
+      "end_trigger_iq_s",
+      "gnb",
+      "interpolation",
+      "iq_seconds_per_wall_second",
+      "iq_udp_handshake",
+      "iq_udp_start_s",
+      "label",
+      "passed",
+      "pdu_ready",
+      "ping",
+      "ping_clock",
+      "rate",
+      "reached_end",
+      "stop_exit",
+      "target_last_logged_iq_s",
+      "trace_duration_s",
+      "traffic_clock",
+      "traffic_start_iq_s",
+      "ue",
+      "uplink",
+      "wall_seconds"
+    ],
+    "traffic_fields": {
+      "ping": [
+        "clock",
+        "clock_backwards",
+        "drain_timeout_s",
+        "missing_sequences",
+        "received",
+        "rtt_ms",
+        "sent",
+        "sent_monotonic_ns",
+        "wall_monotonic_seconds"
+      ],
+      "uplink": [
+        "bits_per_second",
+        "clock",
+        "duplicate_packets",
+        "invalid_packets",
+        "iq_seconds",
+        "lost_packets",
+        "missing_send_iq_s",
+        "missing_sequences",
+        "packets",
+        "payload_bytes",
+        "received_bits_per_iq_second",
+        "receiver_error",
+        "seconds",
+        "sender_error",
+        "sent_bits_per_iq_second",
+        "sent_minus_received_packets",
+        "sent_packets",
+        "target_bits_per_iq_second",
+        "unexpected_sequences"
+      ],
+      "downlink": [
+        "bits_per_second",
+        "clock",
+        "duplicate_packets",
+        "invalid_packets",
+        "iq_seconds",
+        "lost_packets",
+        "missing_send_iq_s",
+        "missing_sequences",
+        "packets",
+        "payload_bytes",
+        "received_bits_per_iq_second",
+        "receiver_error",
+        "seconds",
+        "sender_error",
+        "sent_bits_per_iq_second",
+        "sent_minus_received_packets",
+        "sent_packets",
+        "target_bits_per_iq_second",
+        "unexpected_sequences"
+      ]
+    }
+  },
+  "channel_manifests": {
+    "handover": {
+      "downlink": {
+        "format": "QDCHANNEL1",
+        "schema_version": 1,
+        "byte_order": "little",
+        "axes": [
+          "snapshot",
+          "rx",
+          "tx",
+          "path"
+        ],
+        "dimensions": {
+          "snapshots": 621,
+          "rx_antennas": 1,
+          "tx_antennas": 1,
+          "paths": 11
+        },
+        "radio": {
+          "center_frequency_hz": 2488400000.0,
+          "link_direction": "downlink"
+        },
+        "time": {
+          "coordinate": "stk_trace_seconds",
+          "interpolation": "linear_complex_and_delay",
+          "out_of_range": "mute"
+        },
+        "composition": {
+          "bulk_delay_source": "STKTRACE2",
+          "bulk_doppler_source": "STKTRACE2",
+          "absolute_gain_source": "STKTRACE2",
+          "quadriga_delay": "relative_excess_seconds",
+          "quadriga_coefficients": "unit_snapshot_link_power",
+          "quadriga_large_scale_gain": "zero_mean_residual_db"
+        },
+        "provenance": {
+          "quadriga_version": "2.8.1-0",
+          "scenario": "QuaDRiGa_NTN_Rural_LOS",
+          "random_seed": 20260925,
+          "stk_trace_sha256": "b73fa3dba8eee242f5125d307ed614310ea21ccb6d32f803d8cd36c06c8db366"
+        },
+        "files": {
+          "times": {
+            "path": "times.f64",
+            "dtype": "float64",
+            "count": 621,
+            "bytes": 4968,
+            "sha256": "1f8c45f9ffdf0950772e73f063b44a1354fcbec8aa4719edbfd1f828f60f4b52"
+          },
+          "delays": {
+            "path": "delays.f64",
+            "dtype": "float64",
+            "count": 6831,
+            "bytes": 54648,
+            "sha256": "32d123681b0c629843eb388c0c14ce104b0458ce99558127911f3893fb21c543"
+          },
+          "coefficients": {
+            "path": "coefficients.cf32",
+            "dtype": "complex64_interleaved",
+            "count": 6831,
+            "bytes": 54648,
+            "sha256": "64854ce59c0afa781453e5a66cd27b2486bc51aecde26ade0b035e6a1e74a0d0"
+          },
+          "residual_gain_db": {
+            "path": "residual_gain_db.f32",
+            "dtype": "float32",
+            "count": 621,
+            "bytes": 2484,
+            "sha256": "36f535d9d2269e037aa1b7272d76ce5c2df06bb3b90cc0cc9b198375a495697c"
+          }
+        }
+      },
+      "uplink": {
+        "format": "QDCHANNEL1",
+        "schema_version": 1,
+        "byte_order": "little",
+        "axes": [
+          "snapshot",
+          "rx",
+          "tx",
+          "path"
+        ],
+        "dimensions": {
+          "snapshots": 621,
+          "rx_antennas": 1,
+          "tx_antennas": 1,
+          "paths": 11
+        },
+        "radio": {
+          "center_frequency_hz": 1614900000.0,
+          "link_direction": "uplink"
+        },
+        "time": {
+          "coordinate": "stk_trace_seconds",
+          "interpolation": "linear_complex_and_delay",
+          "out_of_range": "mute"
+        },
+        "composition": {
+          "bulk_delay_source": "STKTRACE2",
+          "bulk_doppler_source": "STKTRACE2",
+          "absolute_gain_source": "STKTRACE2",
+          "quadriga_delay": "relative_excess_seconds",
+          "quadriga_coefficients": "unit_snapshot_link_power",
+          "quadriga_large_scale_gain": "zero_mean_residual_db"
+        },
+        "provenance": {
+          "quadriga_version": "2.8.1-0",
+          "scenario": "QuaDRiGa_NTN_Rural_LOS",
+          "random_seed": 20260925,
+          "stk_trace_sha256": "b73fa3dba8eee242f5125d307ed614310ea21ccb6d32f803d8cd36c06c8db366"
+        },
+        "files": {
+          "times": {
+            "path": "times.f64",
+            "dtype": "float64",
+            "count": 621,
+            "bytes": 4968,
+            "sha256": "1f8c45f9ffdf0950772e73f063b44a1354fcbec8aa4719edbfd1f828f60f4b52"
+          },
+          "delays": {
+            "path": "delays.f64",
+            "dtype": "float64",
+            "count": 6831,
+            "bytes": 54648,
+            "sha256": "c03b144b35cad342d170bc3e4ccbd819b015f5fe44d8bd7ba66eeab7a3d3665a"
+          },
+          "coefficients": {
+            "path": "coefficients.cf32",
+            "dtype": "complex64_interleaved",
+            "count": 6831,
+            "bytes": 54648,
+            "sha256": "137ec233974ef002823a2cab8e67172b1944e978e6802604ee0774d13b253a0b"
+          },
+          "residual_gain_db": {
+            "path": "residual_gain_db.f32",
+            "dtype": "float32",
+            "count": 621,
+            "bytes": 2484,
+            "sha256": "36f535d9d2269e037aa1b7272d76ce5c2df06bb3b90cc0cc9b198375a495697c"
+          }
+        }
+      }
+    },
+    "zky": {
+      "downlink": {
+        "format": "QDCHANNEL1",
+        "schema_version": 1,
+        "byte_order": "little",
+        "axes": [
+          "snapshot",
+          "rx",
+          "tx",
+          "path"
+        ],
+        "dimensions": {
+          "snapshots": 362,
+          "rx_antennas": 1,
+          "tx_antennas": 4,
+          "paths": 11
+        },
+        "radio": {
+          "center_frequency_hz": 2488400000.0,
+          "link_direction": "downlink"
+        },
+        "time": {
+          "coordinate": "stk_trace_seconds",
+          "interpolation": "linear_complex_and_delay",
+          "out_of_range": "mute"
+        },
+        "composition": {
+          "bulk_delay_source": "STKTRACE2",
+          "bulk_doppler_source": "STKTRACE2",
+          "absolute_gain_source": "STKTRACE2",
+          "quadriga_delay": "relative_excess_seconds",
+          "quadriga_coefficients": "unit_snapshot_mean_link_power",
+          "quadriga_large_scale_gain": "zero_mean_residual_db"
+        },
+        "provenance": {
+          "quadriga_version": "2.8.1-0",
+          "scenario": "QuaDRiGa_NTN_Rural_LOS",
+          "random_seed": 20260925,
+          "stk_trace_sha256": "3d63d47a050f68bf670e4d298cc579c7f0f09b0550b58c849fdc0a12b2dbda18"
+        },
+        "files": {
+          "times": {
+            "path": "times.f64",
+            "dtype": "float64",
+            "count": 362,
+            "bytes": 2896,
+            "sha256": "397dd3b5fcedba6d4c14e3d3e3142184872095fd7ca45560f40660fe63560e12"
+          },
+          "delays": {
+            "path": "delays.f64",
+            "dtype": "float64",
+            "count": 15928,
+            "bytes": 127424,
+            "sha256": "5919bb15f6f2adff14ae9e6db5b3b482ea122da0f0400282fe432c089638e05c"
+          },
+          "coefficients": {
+            "path": "coefficients.cf32",
+            "dtype": "complex64_interleaved",
+            "count": 15928,
+            "bytes": 127424,
+            "sha256": "28dc2e728a3523a1511511fecf0d0ef9d3db6152121dc6e40146304fdaaec58e"
+          },
+          "residual_gain_db": {
+            "path": "residual_gain_db.f32",
+            "dtype": "float32",
+            "count": 1448,
+            "bytes": 5792,
+            "sha256": "616f164ac258eb96675a218a3bde1bbf1c9cc755f3b04bbddc87eb920163d0a7"
+          }
+        }
+      },
+      "uplink": {
+        "format": "QDCHANNEL1",
+        "schema_version": 1,
+        "byte_order": "little",
+        "axes": [
+          "snapshot",
+          "rx",
+          "tx",
+          "path"
+        ],
+        "dimensions": {
+          "snapshots": 362,
+          "rx_antennas": 4,
+          "tx_antennas": 1,
+          "paths": 11
+        },
+        "radio": {
+          "center_frequency_hz": 1614900000.0,
+          "link_direction": "uplink"
+        },
+        "time": {
+          "coordinate": "stk_trace_seconds",
+          "interpolation": "linear_complex_and_delay",
+          "out_of_range": "mute"
+        },
+        "composition": {
+          "bulk_delay_source": "STKTRACE2",
+          "bulk_doppler_source": "STKTRACE2",
+          "absolute_gain_source": "STKTRACE2",
+          "quadriga_delay": "relative_excess_seconds",
+          "quadriga_coefficients": "unit_snapshot_mean_link_power",
+          "quadriga_large_scale_gain": "zero_mean_residual_db"
+        },
+        "provenance": {
+          "quadriga_version": "2.8.1-0",
+          "scenario": "QuaDRiGa_NTN_Rural_LOS",
+          "random_seed": 20260925,
+          "stk_trace_sha256": "3d63d47a050f68bf670e4d298cc579c7f0f09b0550b58c849fdc0a12b2dbda18"
+        },
+        "files": {
+          "times": {
+            "path": "times.f64",
+            "dtype": "float64",
+            "count": 362,
+            "bytes": 2896,
+            "sha256": "397dd3b5fcedba6d4c14e3d3e3142184872095fd7ca45560f40660fe63560e12"
+          },
+          "delays": {
+            "path": "delays.f64",
+            "dtype": "float64",
+            "count": 15928,
+            "bytes": 127424,
+            "sha256": "0536fd613b5a8e8ea5210780e24b1afeb86ebcdf931f8185bcc994a18a74051e"
+          },
+          "coefficients": {
+            "path": "coefficients.cf32",
+            "dtype": "complex64_interleaved",
+            "count": 15928,
+            "bytes": 127424,
+            "sha256": "01e7096aec015b108172039111cb11db56e04cd9e06f8f12a898efa75e85126a"
+          },
+          "residual_gain_db": {
+            "path": "residual_gain_db.f32",
+            "dtype": "float32",
+            "count": 1448,
+            "bytes": 5792,
+            "sha256": "616f164ac258eb96675a218a3bde1bbf1c9cc755f3b04bbddc87eb920163d0a7"
+          }
+        }
+      }
+    },
+    "merged": {
+      "downlink": {
+        "format": "QDCHANNEL1",
+        "schema_version": 1,
+        "byte_order": "little",
+        "axes": [
+          "snapshot",
+          "rx",
+          "tx",
+          "path"
+        ],
+        "dimensions": {
+          "snapshots": 621,
+          "rx_antennas": 1,
+          "tx_antennas": 4,
+          "paths": 11
+        },
+        "radio": {
+          "center_frequency_hz": 2488400000.0,
+          "link_direction": "downlink"
+        },
+        "time": {
+          "coordinate": "stk_trace_seconds",
+          "interpolation": "linear_complex_and_delay",
+          "out_of_range": "mute"
+        },
+        "composition": {
+          "bulk_delay_source": "STKTRACE2",
+          "bulk_doppler_source": "STKTRACE2",
+          "absolute_gain_source": "STKTRACE2",
+          "quadriga_delay": "relative_excess_seconds",
+          "quadriga_coefficients": "unit_snapshot_mean_link_power",
+          "quadriga_large_scale_gain": "zero_mean_residual_db"
+        },
+        "provenance": {
+          "quadriga_version": "2.8.1-0",
+          "scenario": "QuaDRiGa_NTN_Rural_LOS",
+          "random_seed": 20260925,
+          "stk_trace_sha256": "b73fa3dba8eee242f5125d307ed614310ea21ccb6d32f803d8cd36c06c8db366"
+        },
+        "files": {
+          "times": {
+            "path": "times.f64",
+            "dtype": "float64",
+            "count": 621,
+            "bytes": 4968,
+            "sha256": "1f8c45f9ffdf0950772e73f063b44a1354fcbec8aa4719edbfd1f828f60f4b52"
+          },
+          "delays": {
+            "path": "delays.f64",
+            "dtype": "float64",
+            "count": 27324,
+            "bytes": 218592,
+            "sha256": "1cd61d88f2674e420f5225d2c45d9cdad7b1c8123fc646806df416fdd97b31a6"
+          },
+          "coefficients": {
+            "path": "coefficients.cf32",
+            "dtype": "complex64_interleaved",
+            "count": 27324,
+            "bytes": 218592,
+            "sha256": "313d3daadcb1ce7311ddc43a6d2c75478870988b8557c392767021e656b8314a"
+          },
+          "residual_gain_db": {
+            "path": "residual_gain_db.f32",
+            "dtype": "float32",
+            "count": 2484,
+            "bytes": 9936,
+            "sha256": "2fed0fabf6ae409d105411e456b75271312aa9a5b1333dc260f0e1ab150cc6f8"
+          }
+        }
+      },
+      "uplink": {
+        "format": "QDCHANNEL1",
+        "schema_version": 1,
+        "byte_order": "little",
+        "axes": [
+          "snapshot",
+          "rx",
+          "tx",
+          "path"
+        ],
+        "dimensions": {
+          "snapshots": 621,
+          "rx_antennas": 4,
+          "tx_antennas": 1,
+          "paths": 11
+        },
+        "radio": {
+          "center_frequency_hz": 1614900000.0,
+          "link_direction": "uplink"
+        },
+        "time": {
+          "coordinate": "stk_trace_seconds",
+          "interpolation": "linear_complex_and_delay",
+          "out_of_range": "mute"
+        },
+        "composition": {
+          "bulk_delay_source": "STKTRACE2",
+          "bulk_doppler_source": "STKTRACE2",
+          "absolute_gain_source": "STKTRACE2",
+          "quadriga_delay": "relative_excess_seconds",
+          "quadriga_coefficients": "unit_snapshot_mean_link_power",
+          "quadriga_large_scale_gain": "zero_mean_residual_db"
+        },
+        "provenance": {
+          "quadriga_version": "2.8.1-0",
+          "scenario": "QuaDRiGa_NTN_Rural_LOS",
+          "random_seed": 20260925,
+          "stk_trace_sha256": "b73fa3dba8eee242f5125d307ed614310ea21ccb6d32f803d8cd36c06c8db366"
+        },
+        "files": {
+          "times": {
+            "path": "times.f64",
+            "dtype": "float64",
+            "count": 621,
+            "bytes": 4968,
+            "sha256": "1f8c45f9ffdf0950772e73f063b44a1354fcbec8aa4719edbfd1f828f60f4b52"
+          },
+          "delays": {
+            "path": "delays.f64",
+            "dtype": "float64",
+            "count": 27324,
+            "bytes": 218592,
+            "sha256": "e4e5670d92e78e8fc88becf8df417c34b882e0a1395d63a1bbeba94372493c9b"
+          },
+          "coefficients": {
+            "path": "coefficients.cf32",
+            "dtype": "complex64_interleaved",
+            "count": 27324,
+            "bytes": 218592,
+            "sha256": "3f75529c6ee6f2ff951ae5cce2948778df76a58b6bca8ade53b9d863dbc65f76"
+          },
+          "residual_gain_db": {
+            "path": "residual_gain_db.f32",
+            "dtype": "float32",
+            "count": 2484,
+            "bytes": 9936,
+            "sha256": "2fed0fabf6ae409d105411e456b75271312aa9a5b1333dc260f0e1ab150cc6f8"
+          }
+        }
+      }
+    }
+  },
+  "handover_writer_identical": {
+    "scripts/handover_metrics.py": true,
+    "scripts/continuous_udp.py": true,
+    "scripts/continuous_ping.py": true,
+    "scripts/handover_plot.py": true
+  }
+}

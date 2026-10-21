@@ -1,0 +1,24 @@
+--- a/src/upf_app/simpleswitch/pfcp_switch.cpp
++++ b/src/upf_app/simpleswitch/pfcp_switch.cpp
+@@ -6,6 +6,7 @@
+ #include "itti.hpp"
+ #include "logger.hpp"
+ #include "pfcp_switch.hpp"
++#include "downlink_qfi.hpp"
+ #include "upf_config.hpp"
+ #include "upf_pfcp_association.hpp"
+ #include "simple_switch.hpp"
+@@ -1352,7 +1353,12 @@
+               pfcp::far_id_t far_id = {};
+               if ((*it)->get(far_id)) {
+                 std::shared_ptr<pfcp::pfcp_far> sfar = {};
+-                uint8_t qfi                          = ssession->qfi;
++                uint8_t qfi = 0;
++                if (!ntn_upf::downlink_qfi(*ssession, **it, qfi)) {
++                  Logger::pfcp_switch().warn(
++                      "Downlink QFI missing, invalid or ambiguous in PFCP rules");
++                  return;
++                }
+                 if (ssession->get(far_id.far_id, sfar)) {
+                   sfar->apply_forwarding_rules(iph, num_bytes, nocp, buff, qfi);
+                   if (buff) {
