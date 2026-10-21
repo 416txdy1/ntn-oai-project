@@ -15,7 +15,7 @@
 
 媒体配置沿用 `ntn_live_demo/media-source.example.json`：复制成被Git忽略的 `media-source.local.json` 后填本地视频路径；也可每次传 `-Source "D:\Media\video-with-audio.mp4"`。视频与音轨不随Git发布。保持播放器打开、可见、非静音，轮间由程序自动重启，不能关闭窗口来推进实验。
 
-所有直播入口支持 `-ProjectRoot`、`-SpatialMode siso|miso4-subarray` 和 `-QdWorkers 1..8`。MISO入口显式选择 `miso4-subarray`，计算线程默认8；SISO固定1计算线程。不得仅凭请求参数认定四路已生效：前端实际端口与线程来自数值日志，最终验收还要求四路均在至少两个观测窗内发送非零IQ。
+底层PowerShell及原CMD支持 `-ProjectRoot`、`-SpatialMode siso|miso4-subarray` 和 `-QdWorkers 1..8`。三个MISO CMD固定选择 `miso4-subarray`，计算线程默认8；SISO固定1计算线程。不得仅凭请求参数认定四路已生效：前端实际端口与线程来自数值日志，最终验收还要求四路均在至少两个观测窗内发送非零IQ。MISO直播同时核对实际UPF镜像ID与本副本的修复构建清单；遗漏镜像配置将拒绝通过。
 
 ## 独立运行目录与构建
 

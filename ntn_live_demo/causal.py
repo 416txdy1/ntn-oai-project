@@ -57,6 +57,7 @@ def derive_inputs(root, suite, smoke, onset, duration, drop, spatial_mode='siso'
         stream.write(lines[0]+'\n'+lines[1]+'\n')
         csv.writer(stream,lineterminator='\n').writerows(rows)
     derivation = {'kind':'controlled_absolute_downlink_cn_intervention',
+                  'spatial_mode':spatial_mode,'original_bundle_directory':str(original),
                   'original_trace':str(trace), 'original_trace_sha256':source_hash,
                   'derived_trace_sha256':sha(derived_trace),
                   'onset_iq_s':onset, 'duration_iq_s':duration, 'drop_db':drop,

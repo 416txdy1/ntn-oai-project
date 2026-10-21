@@ -269,6 +269,13 @@ def main(argv=None):
             time.sleep(1)
         else:raise RuntimeError('Core readiness timeout')
         ext=next(i for i in inventory if i['Name']=='/ntn-qd-integrated-oai-ext-dn')
+        upf=next(i for i in inventory if i['Name']=='/ntn-qd-integrated-oai-upf')
+        result['upf_image_id']=upf['Image']
+        if args.spatial_mode=='miso4-subarray':
+            image_manifest=json.loads((ROOT/'.runtime/upf-qfi/manifest.json').read_text())
+            if upf['Image']!=image_manifest['image_id']:
+                raise RuntimeError('MISO live requires the built QFI-fix UPF image; configure it while stopped')
+            result['upf_fix_image_verified']=True
         ext_pid=ext['State']['Pid'];ext_identity=helpers.process_start(ext_pid)
         media_ns=['nsenter','-t',str(ext_pid),'-n']+drop
         config=visible/'mediamtx.yml'

@@ -52,3 +52,7 @@ STK_LEO_Constellation_20260923_train_v2/*.wsptb
 
 # MISO generated runtime configuration
 local_ntn/gnb.miso.conf
+
+# Derived audiovisual intervention bundles; never publish runtime experiments
+examples/handover/causal-*/
+examples/handover-miso4/causal-*/
