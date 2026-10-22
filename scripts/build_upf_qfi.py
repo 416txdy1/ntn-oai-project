@@ -20,6 +20,8 @@ def run(args: list[str], cwd: Path | None = None) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jobs", type=int, default=6)
+    parser.add_argument('--network', choices=('default', 'host'), default='default',
+                        help='Docker build network; host can recover dependency downloads in WSL')
     args = parser.parse_args()
     if not 1 <= args.jobs <= 32:
         parser.error("jobs must be between 1 and 32")
@@ -48,7 +50,7 @@ def main() -> None:
     if "sslverify false" in dockerfile:
         raise RuntimeError("Unexpected upstream Dockerfile TLS configuration")
     (work / "Dockerfile.builder").write_text(dockerfile)
-    print(run(["docker", "build", "--target", "oai-upf-base", "--build-arg",
+    print(run(["docker", "build", "--network", args.network, "--target", "oai-upf-base", "--build-arg",
                "BASE_IMAGE=" + BASE, "-f", str(work / "Dockerfile.builder"),
                "-t", BUILDER, str(source)]))
     # 限制编译并行度；不改程序的构建选项、源码版本或运行参数。
@@ -59,7 +61,7 @@ def main() -> None:
         "RUN MAKEFLAGS=-j${UPF_BUILD_JOBS} ./build_upf --clean --Verbose --build-type Release && "
         "test -x /openair-upf/build/upf/build/upf\n")
     compiled = "ntn-local/upf-qfi-compiled:451c27da"
-    print(run(["docker", "build", "--build-arg", "UPF_BUILD_JOBS=" + str(args.jobs),
+    print(run(["docker", "build", "--network", args.network, "--build-arg", "UPF_BUILD_JOBS=" + str(args.jobs),
                "-f", str(compile_file), "-t", compiled, str(source)]))
     container = run(["docker", "create", "--entrypoint", "/bin/true", compiled]).strip()
     context = work / "image"
@@ -70,7 +72,7 @@ def main() -> None:
     finally:
         print(run(["docker", "rm", container]))
     (context / "Dockerfile").write_bytes((ROOT / "upf_patch/Dockerfile").read_bytes())
-    print(run(["docker", "build", "-t", IMAGE, str(context)]))
+    print(run(["docker", "build", "--network", args.network, "-t", IMAGE, str(context)]))
     manifest = {"source": REVISION, "base": BASE, "image": IMAGE,
                 "image_id": json.loads(run(["docker", "image", "inspect", IMAGE]))[0]["Id"],
                 "binary_sha256": hashlib.sha256((context / "oai_upf").read_bytes()).hexdigest(),
