@@ -35,6 +35,8 @@ bash scripts/test.sh
 
 仅在尚未初始化的独立副本执行初始化；拒绝覆盖已有私密配置。UPF选择器仅针对停机后的该副本私有Compose，保留回退；仅合并补丁文件不会自动启用修复镜像。详细模型和镜像步骤见 `../docs/HANDOVER_MISO_MANUAL.md`。
 
+如果Docker默认构建网络无法获取UPF依赖，可改用 `python3 scripts/build_upf_qfi.py --jobs 6 --network host`。这只选择构建阶段的网络，仍校验TLS证书；不改变实验的业务网络或UPF代码。最终运行镜像ID及二进制摘要记录在本副本 `.runtime/upf-qfi/manifest.json`。
+
 新旧实验仍使用同一组隔离网络资源、端口和Windows播放器端口，必须顺序运行。不要为启动新实验而强行接管正在运行的其他实验，不使用全局pkill或WSL shutdown清理。
 
 ## 保留的物理和业务口径
